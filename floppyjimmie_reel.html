@@ -533,9 +533,11 @@
   let matrixStarted = false;  // Track if we've started the matrix rain (global scope)
 
   // Boot overlay minimum display time - ensures GIF buffers and clip is ready
-  const BOOT_MIN_DISPLAY_MS        = 4500;  // At least 4.5 seconds for initial GIF cache
-  const BOOT_EXTRA_SETTLE_MS       = 1200;  // Extra settle after iframe loads
+  const BOOT_MIN_DISPLAY_MS        = 5500;  // At least 5.5 seconds for initial GIF cache
+  const BOOT_EXTRA_SETTLE_MS       = 1500;  // Extra settle after iframe loads
+  const GIF_PRELOAD_MIN_MS         = 3000;  // Minimum time to let GIF fully decode/buffer
   let bootShownAt = 0;
+  let gifPreloadStartedAt = 0;
 
   // Function to ensure matrix rain is running
   function ensureMatrixRunning() {
@@ -681,6 +683,8 @@
   let transitionGifBlob = null;
 
   async function preloadTransitionGifFully(){
+    gifPreloadStartedAt = Date.now();
+
     return new Promise((resolve) => {
       // Method 1: Fetch the full file into cache
       fetch(TRANSITION_GIF_BASE, { cache: "force-cache" })
@@ -695,22 +699,31 @@
             console.log("[GIF] Image decoded, dimensions:", img.naturalWidth, "x", img.naturalHeight);
 
             // Method 3: Use createImageBitmap for full decode if available
+            const finishPreload = () => {
+              transitionGifFullyLoaded = true;
+              // Set the actual transition image after everything is decoded
+              transitionImg.src = TRANSITION_GIF_BASE;
+
+              // Ensure minimum preload time has passed for GIF to buffer in memory
+              const elapsed = Date.now() - gifPreloadStartedAt;
+              const remaining = Math.max(0, GIF_PRELOAD_MIN_MS - elapsed);
+              if (remaining > 0) {
+                console.log("[GIF] Waiting additional", remaining, "ms for GIF buffer time");
+                setTimeout(() => resolve(true), remaining);
+              } else {
+                resolve(true);
+              }
+            };
+
             if (typeof createImageBitmap === 'function') {
               createImageBitmap(blob).then(bitmap => {
                 console.log("[GIF] Bitmap created:", bitmap.width, "x", bitmap.height);
-                transitionGifFullyLoaded = true;
-                // Set the actual transition image after everything is decoded
-                transitionImg.src = TRANSITION_GIF_BASE;
-                resolve(true);
+                finishPreload();
               }).catch(() => {
-                transitionGifFullyLoaded = true;
-                transitionImg.src = TRANSITION_GIF_BASE;
-                resolve(true);
+                finishPreload();
               });
             } else {
-              transitionGifFullyLoaded = true;
-              transitionImg.src = TRANSITION_GIF_BASE;
-              resolve(true);
+              finishPreload();
             }
           };
           img.onerror = () => {
@@ -726,7 +739,7 @@
         });
 
       // Timeout fallback
-      setTimeout(() => resolve(false), 6000);
+      setTimeout(() => resolve(false), 8000);
     });
   }
 
@@ -929,7 +942,7 @@
   }
 
   // Extra time to let clip video buffer after iframe loads (for first clip)
-  const FIRST_CLIP_BUFFER_MS = 2500;  // Give first clip extra time to buffer video
+  const FIRST_CLIP_BUFFER_MS = 3000;  // Give first clip extra time to buffer video
 
   function revealIframeThenFadeOut(frameToReveal, loadStartedAt) {
     const loadMs = loadStartedAt ? (Date.now() - loadStartedAt) : 0;
@@ -1310,16 +1323,23 @@
     console.log("[INIT] Boot overlay shown");
 
     // Start preloading the transition GIF immediately and fully
-    console.log("[INIT] Starting GIF preload...");
+    // This MUST complete before we load any clips
+    console.log("[INIT] Starting GIF preload (will wait at least", GIF_PRELOAD_MIN_MS, "ms)...");
     const gifPreloadPromise = preloadTransitionGifFully();
 
-    // Also do soft warmups in parallel
+    // Also do soft warmups in parallel (but don't start clip loading yet)
     preloadTransitionGifSoft(800);
     warmupTwitchEmbedSoft(900);
 
-    // Don't show transition until GIF is preloaded (or timeout)
-    await gifPreloadPromise;
-    console.log("[INIT] GIF preload complete, showing transition");
+    // CRITICAL: Wait for GIF to be fully loaded and buffered before proceeding
+    // This ensures the transition GIF plays smoothly on first use
+    const gifReady = await gifPreloadPromise;
+    console.log("[INIT] GIF preload complete (ready:", gifReady, "), elapsed:", Date.now() - gifPreloadStartedAt, "ms");
+
+    // Extra safety wait to ensure GIF is truly buffered in GPU/memory
+    await new Promise(r => setTimeout(r, 500));
+
+    console.log("[INIT] Showing transition");
     showTransition();
 
     // fetch clip list, but do not block forever
