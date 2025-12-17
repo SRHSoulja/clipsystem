@@ -1,7 +1,7 @@
 FROM php:8.2-apache
 
-# Fix MPM conflict - remove ALL MPM configs then enable only prefork
-RUN rm -f /etc/apache2/mods-enabled/mpm_*.conf /etc/apache2/mods-enabled/mpm_*.load && \
+# Fix MPM conflict - disable all MPMs first, then enable only prefork
+RUN a2dismod mpm_event mpm_worker mpm_prefork || true && \
     a2enmod mpm_prefork rewrite headers
 
 # Set working directory
