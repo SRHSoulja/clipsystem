@@ -1,5 +1,9 @@
 FROM php:8.2-apache
 
+# Disable conflicting MPM modules and enable prefork (default for php-apache)
+RUN a2dismod mpm_event 2>/dev/null || true && \
+    a2enmod mpm_prefork 2>/dev/null || true
+
 # Enable Apache mod_rewrite
 RUN a2enmod rewrite
 
