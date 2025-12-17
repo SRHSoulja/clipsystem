@@ -106,8 +106,22 @@ $entry = [
   "started_at" => $now
 ];
 
+// Ensure cache directory exists and is writable
+if (!is_dir($dir)) {
+  if (!@mkdir($dir, 0777, true)) {
+    http_response_code(500);
+    echo "Failed to create cache directory: $dir";
+    exit;
+  }
+}
+
 // Write current now playing
-@file_put_contents($jsonPath, json_encode($entry, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT), LOCK_EX);
+$writeResult = file_put_contents($jsonPath, json_encode($entry, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT), LOCK_EX);
+if ($writeResult === false) {
+  http_response_code(500);
+  echo "Failed to write to: $jsonPath - is_writable: " . (is_writable($dir) ? "yes" : "no");
+  exit;
+}
 @file_put_contents($txtPath, $url, LOCK_EX);
 
 // Append to recent list
