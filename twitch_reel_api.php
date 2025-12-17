@@ -2,7 +2,12 @@
 // twitch_reel_api.php (PHP 7 compatible, serves from local catalog index)
 // Requires: cache/clips_index_<login>.json produced by your backfill script.
 
+header("Access-Control-Allow-Origin: *");
+header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
+header("Access-Control-Allow-Headers: Content-Type");
 header('Content-Type: application/json; charset=utf-8');
+
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { exit(0); }
 
 function load_env($path) {
   if (!file_exists($path)) return;

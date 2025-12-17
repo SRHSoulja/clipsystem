@@ -5,8 +5,13 @@
  * Returns the full clip data so the player can play ANY clip,
  * not just clips in the current pool.
  */
+header("Access-Control-Allow-Origin: *");
+header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
+header("Access-Control-Allow-Headers: Content-Type");
 header("Content-Type: application/json; charset=utf-8");
 header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { exit(0); }
 
 $baseDir = __DIR__ . "/cache";
 
