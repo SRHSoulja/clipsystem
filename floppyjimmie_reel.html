@@ -316,6 +316,14 @@
   const days   = parseInt(qs.get("days") || "180", 10);
   const pool   = parseInt(qs.get("pool") || "400", 10);
 
+  // Check if GIF was previously cached (persists across OBS source refreshes within session)
+  const GIF_CACHE_KEY = `gif_cached_${login}`;
+  let gifWasPreviouslyCached = false;
+  try {
+    gifWasPreviouslyCached = sessionStorage.getItem(GIF_CACHE_KEY) === "1";
+    console.log("[INIT] GIF previously cached:", gifWasPreviouslyCached);
+  } catch {}
+
   const fastMode   = qs.get("fast") === "1";
   const fakeMobile = qs.get("mobile") === "1";
 
@@ -339,9 +347,10 @@
   const cacheWarn = document.getElementById("cacheWarn");
   const matrixCanvas = document.getElementById("matrixRain");
 
-  // Always show boot overlay immediately on load in OBS
-  // If you ever want it off: add ?boot=0
-  const bootEnabled = qs.get("boot") !== "0";
+  // Show boot overlay on first load only (not when GIF is already cached)
+  // Force it off with ?boot=0, force it on with ?boot=1
+  const bootForced = qs.get("boot");
+  const bootEnabled = bootForced === "1" ? true : bootForced === "0" ? false : !gifWasPreviouslyCached;
 
   // Debug overlay - add ?debug=1 to URL to show
   const debugEnabled = qs.get("debug") === "1";
@@ -682,10 +691,19 @@
   let transitionGifFullyLoaded = false;
   let transitionGifBlob = null;
 
+
   async function preloadTransitionGifFully(){
     gifPreloadStartedAt = Date.now();
 
+    // If GIF was previously cached in this session, use shorter wait
+    const minWait = gifWasPreviouslyCached ? 500 : GIF_PRELOAD_MIN_MS;
+    console.log("[GIF] Starting preload, previouslyCached:", gifWasPreviouslyCached, "minWait:", minWait);
+
     return new Promise((resolve) => {
+      // Set the transition image src FIRST - this starts loading immediately
+      // The browser will cache it and subsequent loads will be instant
+      transitionImg.src = TRANSITION_GIF_BASE;
+
       // Method 1: Fetch the full file into cache
       fetch(TRANSITION_GIF_BASE, { cache: "force-cache" })
         .then(r => r.blob())
@@ -693,28 +711,29 @@
           console.log("[GIF] Fetched into cache, size:", blob.size, "bytes");
           transitionGifBlob = blob;
 
-          // Method 2: Also preload via Image object to decode it
+          // Method 2: Create an offscreen Image to force full decode
           const img = new Image();
           img.onload = () => {
             console.log("[GIF] Image decoded, dimensions:", img.naturalWidth, "x", img.naturalHeight);
 
-            // Method 3: Use createImageBitmap for full decode if available
             const finishPreload = () => {
               transitionGifFullyLoaded = true;
-              // Set the actual transition image after everything is decoded
-              transitionImg.src = TRANSITION_GIF_BASE;
 
-              // Ensure minimum preload time has passed for GIF to buffer in memory
+              // Mark as cached for future loads
+              try { sessionStorage.setItem(GIF_CACHE_KEY, "1"); } catch {}
+
+              // Ensure minimum preload time has passed
               const elapsed = Date.now() - gifPreloadStartedAt;
-              const remaining = Math.max(0, GIF_PRELOAD_MIN_MS - elapsed);
+              const remaining = Math.max(0, minWait - elapsed);
               if (remaining > 0) {
-                console.log("[GIF] Waiting additional", remaining, "ms for GIF buffer time");
+                console.log("[GIF] Waiting additional", remaining, "ms for buffer time");
                 setTimeout(() => resolve(true), remaining);
               } else {
                 resolve(true);
               }
             };
 
+            // Method 3: Use createImageBitmap for full GPU decode if available
             if (typeof createImageBitmap === 'function') {
               createImageBitmap(blob).then(bitmap => {
                 console.log("[GIF] Bitmap created:", bitmap.width, "x", bitmap.height);
@@ -728,9 +747,9 @@
           };
           img.onerror = () => {
             console.warn("[GIF] Image decode failed");
-            transitionImg.src = TRANSITION_GIF_BASE;
             resolve(false);
           };
+          // Use blob URL for decode, but actual element already has regular URL
           img.src = URL.createObjectURL(blob);
         })
         .catch(err => {
@@ -738,8 +757,12 @@
           resolve(false);
         });
 
-      // Timeout fallback
-      setTimeout(() => resolve(false), 8000);
+      // Timeout fallback - shorter if previously cached
+      const timeout = gifWasPreviouslyCached ? 3000 : 8000;
+      setTimeout(() => {
+        console.warn("[GIF] Preload timeout after", timeout, "ms");
+        resolve(false);
+      }, timeout);
     });
   }
 
