@@ -1,7 +1,9 @@
 FROM php:8.2-apache
 
-# Fix MPM conflict - disable event MPM, keep prefork (required for mod_php)
-RUN a2dismod mpm_event && a2enmod mpm_prefork
+# Fix MPM conflict - remove event MPM config, ensure only prefork is enabled
+RUN rm -f /etc/apache2/mods-enabled/mpm_event.* && \
+    ln -sf /etc/apache2/mods-available/mpm_prefork.conf /etc/apache2/mods-enabled/mpm_prefork.conf && \
+    ln -sf /etc/apache2/mods-available/mpm_prefork.load /etc/apache2/mods-enabled/mpm_prefork.load
 
 # Enable required Apache modules
 RUN a2enmod rewrite headers
