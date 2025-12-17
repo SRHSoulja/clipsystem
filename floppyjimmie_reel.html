@@ -1,0 +1,1381 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>FloppyJimmie Away Reel</title>
+
+  <link rel="preload" as="image" href="/flop/transition.gif" fetchpriority="high">
+  <link rel="prefetch" as="image" href="/flop/transition.gif">
+
+  <link rel="dns-prefetch" href="//clips.twitch.tv">
+  <link rel="preconnect" href="https://clips.twitch.tv" crossorigin>
+  <link rel="preconnect" href="https://gql.twitch.tv" crossorigin>
+  <link rel="preconnect" href="https://static.twitchcdn.net" crossorigin>
+
+  <style>
+    html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+    .stage { position: relative; width: 100%; height: 100%; overflow: hidden; }
+
+    .viewport{
+      position:absolute;
+      inset:0;
+      width:100%;
+      height:100%;
+      z-index:1;
+      background:#000;
+    }
+
+    .viewport .frameWrap{
+      position:absolute;
+      inset:0;
+    }
+
+    .viewport iframe{
+      position:absolute;
+      inset:0;
+      width:100%;
+      height:100%;
+      border:0;
+      opacity:0;
+      transition: opacity 820ms linear;
+    }
+    .viewport iframe.live{ opacity:1; }
+
+    body.overscan .viewport iframe{
+      transform: scale(1.08) translateY(-3%);
+      transform-origin:center;
+    }
+
+    body.fakeMobile .viewport .frameWrap{
+      width: 1500px;
+      height: 1080px;
+      inset: auto;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%) scale(var(--embed-scale, 1));
+      transform-origin: center;
+    }
+
+    body.fakeMobile.overscan .viewport iframe{
+      transform: none;
+    }
+
+    #transition{
+      position:absolute;
+      inset:0;
+      background:#000;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      opacity:1;
+      pointer-events:none;
+      z-index:9999;
+    }
+    #transition.hide{
+      opacity:0;
+      transition: opacity 260ms linear;
+    }
+
+    #transitionImg{
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      display:block;
+    }
+
+    #ui-mask{
+      position:absolute;
+      left:0;
+      right:0;
+      bottom:0;
+      height:64px;
+      background:#000;
+      z-index:10000;
+      pointer-events:none;
+      display:none;
+    }
+    body.mask #ui-mask{ display:block; }
+
+    #cacheWarn{
+      position:absolute;
+      inset:0;
+      z-index:99999;
+      pointer-events:none;
+      display:none;
+    }
+    #cacheWarn.show{ display:block; }
+
+    #cacheWarn .veil{
+      position:absolute;
+      inset:0;
+      background: #000;
+      z-index:1;
+    }
+
+    #cacheWarn .rain{
+      position:absolute;
+      inset:0;
+      width:100%;
+      height:100%;
+      display:block;
+      z-index:2;
+    }
+
+    #cacheWarn .center{
+      position:absolute;
+      inset:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:20px;
+      z-index:3;
+    }
+
+    #cacheWarn .card{
+      pointer-events:none;
+      width:min(720px, 92vw);
+      background: #001500;
+      color:#00ff00;
+      border:3px solid #00ff00;
+      border-radius:14px;
+      padding:28px 28px;
+      font: 18px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      box-shadow: 0 0 60px #00ff00;
+      text-align:center;
+    }
+
+    #cacheWarn .title{
+      font-weight:800;
+      font-size:22px;
+      margin-bottom:10px;
+      letter-spacing:.3px;
+    }
+
+    #cacheWarn .sub{
+      font-size:16px;
+      margin-bottom:14px;
+    }
+
+    #cacheWarn .tiny{
+      opacity:0.8;
+      font-size:14px;
+    }
+
+    #cacheWarn .spinner{
+      width:32px;
+      height:32px;
+      border-radius:50%;
+      border:3px solid #004400;
+      border-top-color: #00ff00;
+      margin: 0 auto 16px auto;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    #voteHud{
+      position:absolute;
+      left:50%;
+      top:24px;
+      z-index:11000;
+      display:flex;
+      gap:14px;
+      align-items:center;
+      padding:14px 18px;
+      border-radius:14px;
+      background: rgba(0,0,0,0.75);
+      border: 2px solid rgba(255,255,255,0.25);
+      color:#fff;
+      font: 18px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      user-select:none;
+      pointer-events:none;
+      backdrop-filter: blur(8px);
+      opacity:0;
+      transform: translateX(-50%) translateY(-6px);
+      transition: opacity 180ms linear, transform 180ms linear;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    }
+    #voteHud.show{
+      opacity:1;
+      transform: translateX(-50%) translateY(0);
+    }
+    #voteHud .seq{
+      font-weight:800;
+      font-size:20px;
+      letter-spacing:.3px;
+      color:#fff;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+    }
+    #voteHud .pill{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:8px 14px;
+      border-radius:999px;
+      font-weight:700;
+      font-size:18px;
+    }
+    #voteHud .pill.up{
+      background: rgba(34,197,94,0.2);
+      border: 2px solid rgba(34,197,94,0.6);
+      color: #4ade80;
+    }
+    #voteHud .pill.down{
+      background: rgba(239,68,68,0.2);
+      border: 2px solid rgba(239,68,68,0.6);
+      color: #f87171;
+    }
+    #voteHud .hints{
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+      font-size:14px;
+      font-weight:700;
+    }
+    #voteHud .hint-like{
+      color: #4ade80;
+    }
+    #voteHud .hint-dislike{
+      color: #f87171;
+    }
+
+    /* Debug overlay - add ?debug=1 to URL to show */
+    #debugOverlay{
+      position:absolute;
+      right:10px;
+      bottom:10px;
+      z-index:999999;
+      background: rgba(0,0,0,0.95);
+      color:#0f0;
+      font: 12px/1.4 monospace;
+      padding:10px 12px;
+      border-radius:6px;
+      border: 2px solid #0f0;
+      max-width:450px;
+      max-height:250px;
+      overflow:hidden;
+      display:none;
+      pointer-events:none;
+    }
+    #debugOverlay.show{ display:block; }
+    #debugOverlay .line{ margin:2px 0; }
+    #debugOverlay .ok{ color:#4ade80; }
+    #debugOverlay .err{ color:#f87171; }
+    #debugOverlay .warn{ color:#fbbf24; }
+  </style>
+</head>
+
+<body>
+  <div class="stage">
+    <div class="viewport" id="viewport">
+      <div class="frameWrap">
+        <iframe id="frameA" allow="autoplay; fullscreen" allowfullscreen></iframe>
+        <iframe id="frameB" allow="autoplay; fullscreen" allowfullscreen></iframe>
+      </div>
+    </div>
+
+    <div id="transition" class="hide" aria-hidden="true">
+      <img id="transitionImg" src="/flop/transition.gif" alt="">
+    </div>
+
+    <div id="ui-mask"></div>
+
+    <div id="voteHud" aria-hidden="true">
+      <span class="seq" id="voteSeq">Clip</span>
+      <span class="pill up" id="voteUp">👍 0</span>
+      <span class="pill down" id="voteDown">👎 0</span>
+      <div class="hints">
+        <span class="hint-like" id="hintLike">!like #</span>
+        <span class="hint-dislike" id="hintDislike">!dislike #</span>
+      </div>
+    </div>
+
+    <div id="cacheWarn" class="show" aria-hidden="true">
+      <div class="veil"></div>
+      <canvas id="matrixRain" class="rain"></canvas>
+      <div class="center">
+        <div class="card">
+          <div class="spinner"></div>
+          <div class="title">Loading Clip Reel</div>
+          <div class="sub">First load can take a bit. This is normal. It should be fast after it finishes.</div>
+          <div class="tiny">This will disappear when the first clip starts playing.</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="debugOverlay" aria-hidden="true"></div>
+  </div>
+
+<script>
+(() => {
+  const qs = new URLSearchParams(location.search);
+
+  const login  = (qs.get("login") || "floppyjimmie").toLowerCase();
+  const parent = qs.get("parent") || location.hostname;
+  const days   = parseInt(qs.get("days") || "180", 10);
+  const pool   = parseInt(qs.get("pool") || "400", 10);
+
+  const fastMode   = qs.get("fast") === "1";
+  const fakeMobile = qs.get("mobile") === "1";
+
+  if (qs.get("overscan") === "1") document.body.classList.add("overscan");
+  if (qs.get("mask") === "1") document.body.classList.add("mask");
+  if (fakeMobile) document.body.classList.add("fakeMobile");
+
+  const apiUrl = `./twitch_reel_api.php?login=${encodeURIComponent(login)}&days=${days}&pool=${pool}`;
+
+  const RECENT_BLOCK = Math.max(10, Math.floor(pool * 0.20));
+  const storageKey = `away_reel_state_${login}`;
+
+  const viewport      = document.getElementById("viewport");
+  const frameA        = document.getElementById("frameA");
+  const frameB        = document.getElementById("frameB");
+  const transition    = document.getElementById("transition");
+  const transitionImg = document.getElementById("transitionImg");
+
+  const cacheWarn = document.getElementById("cacheWarn");
+  const matrixCanvas = document.getElementById("matrixRain");
+
+  // Always show boot overlay immediately on load in OBS
+  // If you ever want it off: add ?boot=0
+  const bootEnabled = qs.get("boot") !== "0";
+
+  // Debug overlay - add ?debug=1 to URL to show
+  const debugEnabled = qs.get("debug") === "1";
+  const debugOverlay = document.getElementById("debugOverlay");
+  const debugLines = [];
+  const MAX_DEBUG_LINES = 12;
+
+  function debugLog(msg, type = "info") {
+    if (!debugEnabled) return;
+    const time = new Date().toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    debugLines.push({ time, msg, type });
+    if (debugLines.length > MAX_DEBUG_LINES) debugLines.shift();
+    renderDebug();
+  }
+
+  function renderDebug() {
+    if (!debugEnabled || !debugOverlay) return;
+    debugOverlay.classList.add("show");
+    debugOverlay.innerHTML = debugLines.map(l => {
+      const cls = l.type === "ok" ? "ok" : l.type === "err" ? "err" : l.type === "warn" ? "warn" : "";
+      return `<div class="line ${cls}">${l.time} ${l.msg}</div>`;
+    }).join("");
+  }
+
+  // ===== Vote HUD polling =====
+  const voteHud  = document.getElementById("voteHud");
+  const voteSeq  = document.getElementById("voteSeq");
+  const voteUp   = document.getElementById("voteUp");
+  const voteDown = document.getElementById("voteDown");
+  const hintLike = document.getElementById("hintLike");
+  const hintDislike = document.getElementById("hintDislike");
+
+  const hudEnabled = qs.get("hud") !== "0";
+  const hudPollMs  = Math.max(350, Math.min(2500, parseInt(qs.get("hudpoll") || "900", 10)));
+
+  // Client-side seq tracking - updates HUD immediately without waiting for server
+  let currentHudSeq = 0;
+  let currentHudClipId = null;
+
+  // Update HUD seq immediately from local clip data (no server needed)
+  function updateHudSeqLocal(clip) {
+    if (!hudEnabled || !clip) return;
+
+    // Get seq from clip object (set by index) or fallback to array position
+    let seq = clip.seq;
+    if (!seq && clips.length) {
+      // Find clip position in array as fallback
+      const idx = clips.findIndex(c => c.id === clip.id);
+      if (idx >= 0) seq = idx + 1;
+    }
+
+    if (seq && seq > 0) {
+      currentHudSeq = seq;
+      currentHudClipId = clip.id;
+      voteSeq.textContent = `Clip #${seq}`;
+      hintLike.textContent = `!like ${seq}`;
+      hintDislike.textContent = `!dislike ${seq}`;
+      voteHud.classList.add("show");
+      debugLog("HUD seq=" + seq + " (local)", "ok");
+    }
+  }
+
+  // Render votes from server (seq comes from local tracking now)
+  function renderHudVotes(data){
+    if (!hudEnabled) return;
+
+    // Only update vote counts, not seq (seq is tracked locally)
+    voteUp.textContent = `👍 ${Number(data?.up || 0)}`;
+    voteDown.textContent = `👎 ${Number(data?.down || 0)}`;
+    voteHud.classList.add("show");
+  }
+
+  async function pollHudOnce(){
+    if (!hudEnabled) return;
+    try {
+      const res = await fetch(`./vote_status.php?login=${encodeURIComponent(login)}`, { cache: "no-store" });
+      const data = await res.json();
+      // Only use server seq if we don't have local tracking yet
+      if (data && typeof data.seq === "number" && currentHudSeq === 0) {
+        currentHudSeq = data.seq;
+        voteSeq.textContent = `Clip #${data.seq}`;
+        hintLike.textContent = `!like ${data.seq}`;
+        hintDislike.textContent = `!dislike ${data.seq}`;
+      }
+      renderHudVotes(data);
+    } catch {}
+  }
+
+  if (hudEnabled) {
+    pollHudOnce();
+    setInterval(pollHudOnce, hudPollMs);
+  }
+
+  // ===== Matrix rain (optional) =====
+  function startMatrixRain(){
+    if (!matrixCanvas) {
+      debugLog("MATRIX: no canvas!", "err");
+      return () => {};
+    }
+    const c = matrixCanvas;
+    const ctx = c.getContext("2d", { alpha: true });
+
+    if (!ctx) {
+      debugLog("MATRIX: no ctx!", "err");
+      return () => {};
+    }
+
+    // Helper to get dimensions with OBS fallback - FORCE 1920x1080 if all else fails
+    const getWidth = () => {
+      const w = window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth || 0;
+      return w > 0 ? w : 1920;
+    };
+    const getHeight = () => {
+      const h = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight || 0;
+      return h > 0 ? h : 1080;
+    };
+
+    const resize = () => {
+      const dpr = window.devicePixelRatio || 1;
+      const w = getWidth();
+      const h = getHeight();
+      c.width = Math.floor(w * dpr);
+      c.height = Math.floor(h * dpr);
+      c.style.width = w + "px";
+      c.style.height = h + "px";
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      debugLog("MATRIX resize: " + w + "x" + h);
+    };
+    resize();
+
+    // Draw initial black frame immediately to prime the canvas
+    const w = getWidth();
+    const h = getHeight();
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, w, h);
+    debugLog("MATRIX primed: " + w + "x" + h, "ok");
+
+    const chars = "01";
+    const fontSize = 16;
+    let cols = Math.floor(getWidth() / fontSize);
+    let drops = new Array(cols).fill(1).map(() => Math.random() * 30);
+
+    const onResize = () => {
+      resize();
+      cols = Math.floor(getWidth() / fontSize);
+      drops = new Array(cols).fill(1).map(() => Math.random() * 30);
+    };
+    window.addEventListener("resize", onResize);
+
+    let raf = 0;
+    let last = 0;
+
+    const tick = (t) => {
+      if (t - last < 33) { raf = requestAnimationFrame(tick); return; }
+      last = t;
+
+      const w = getWidth();
+      const h = getHeight();
+
+      ctx.fillStyle = "rgba(0,0,0,0.18)";
+      ctx.fillRect(0, 0, w, h);
+
+      ctx.font = `${fontSize}px monospace`;
+      ctx.fillStyle = "rgba(0,255,110,0.85)";
+
+      for (let i = 0; i < drops.length; i++) {
+        const text = chars[(Math.random() * chars.length) | 0];
+        const x = i * fontSize;
+        const y = drops[i] * fontSize;
+
+        ctx.fillText(text, x, y);
+
+        if (y > h && Math.random() > 0.975) drops[i] = 0;
+        drops[i] += 1;
+      }
+
+      raf = requestAnimationFrame(tick);
+    };
+
+    raf = requestAnimationFrame(tick);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", onResize);
+    };
+  }
+
+  let matrixStop = null;
+  let matrixStarted = false;  // Track if we've started the matrix rain (global scope)
+
+  // Boot overlay minimum display time - ensures GIF buffers and clip is ready
+  const BOOT_MIN_DISPLAY_MS        = 3500;  // At least 3.5 seconds
+  const BOOT_EXTRA_SETTLE_MS       = 800;   // Extra settle after iframe loads
+  let bootShownAt = 0;
+
+  // Function to ensure matrix rain is running
+  function ensureMatrixRunning() {
+    if (matrixStarted && matrixStop) {
+      debugLog("MATRIX: already running", "warn");
+      return true;
+    }
+
+    // Try to get dimensions with OBS fallbacks
+    const w = window.innerWidth || document.documentElement.clientWidth || 1920;
+    const h = window.innerHeight || document.documentElement.clientHeight || 1080;
+
+    debugLog("MATRIX ensure: " + w + "x" + h);
+
+    // Start the matrix rain
+    matrixStarted = true;
+    matrixStop = startMatrixRain();
+    if (bootShownAt === 0) bootShownAt = Date.now();
+    debugLog("MATRIX started!", "ok");
+    return true;
+  }
+
+  // Start matrix rain immediately so it's visible during initial load
+  // Use multiple methods to ensure it starts in OBS browser source
+  if (bootEnabled) {
+    debugLog("BOOT enabled, starting matrix...");
+
+    const tryStartMatrix = () => {
+      if (matrixStarted) return;
+      // Check multiple conditions - OBS sometimes reports 0 for window dimensions
+      const w = window.innerWidth || document.documentElement.clientWidth || 1920;
+      const h = window.innerHeight || document.documentElement.clientHeight || 1080;
+
+      if (w > 0 && h > 0) {
+        ensureMatrixRunning();
+      } else {
+        debugLog("MATRIX: dims 0, retry...", "warn");
+        requestAnimationFrame(tryStartMatrix);
+      }
+    };
+
+    // Try multiple times with different methods
+    requestAnimationFrame(tryStartMatrix);
+    setTimeout(tryStartMatrix, 50);
+    setTimeout(tryStartMatrix, 150);
+    setTimeout(tryStartMatrix, 300);
+
+    // Fallback: force start after 500ms regardless
+    setTimeout(() => {
+      if (!matrixStarted) {
+        debugLog("MATRIX: force start 500ms", "warn");
+        ensureMatrixRunning();
+      }
+    }, 500);
+  } else {
+    debugLog("BOOT disabled", "warn");
+  }
+
+  function showBoot(){
+    if (!bootEnabled) return;
+    cacheWarn.classList.add("show");
+    // Always try to ensure matrix is running when showBoot is called
+    ensureMatrixRunning();
+  }
+
+  function hideBoot(){
+    cacheWarn.classList.remove("show");
+    if (matrixStop) { matrixStop(); matrixStop = null; }
+  }
+
+  // ===== Timing knobs =====
+  const TRANSITION_PREROLL_MS      = 120;
+  const TRANSITION_MIN_MS          = 380;
+  const TRANSITION_AFTER_REVEAL_MS = 120;
+  const IFRAME_LOAD_FAILSAFE_MS    = 8000;
+
+  const IFRAME_SETTLE_PAD_MS       = 350;
+  const LOAD_SLOW_THRESHOLD_MS     = 1200;
+  const LOAD_SLOW_EXTRA_MS         = 500;
+
+  let transitionShownAt = 0;
+
+  let liveFrame = frameA;
+  let backFrame = frameB;
+
+  let clips = [];
+  let advanceTimer = null;
+  let transitionTimer = null;
+  let prepareTimer = null;
+
+  let nextClip = null;
+  let nextToken = 0;
+
+  let firstTransitionShown = false;
+
+  // ===== RESUME / BLACK-SCREEN RECOVERY =====
+  let hasStartedPlayback = false;
+  let isSwitching = false;
+
+  function anyLiveVisible(){
+    return frameA.classList.contains("live") || frameB.classList.contains("live");
+  }
+
+  function recoverFromBlack(){
+    if (!hasStartedPlayback) return;
+    if (isSwitching) return;
+    if (!transition.classList.contains("hide")) return;
+    if (!anyLiveVisible() && clips.length) {
+      showTransition();
+    }
+  }
+
+  setInterval(recoverFromBlack, 700);
+
+  function applyFakeMobileScale() {
+    if (!fakeMobile) return;
+    const baseW = 390, baseH = 844;
+    const s = Math.min(window.innerWidth / baseW, window.innerHeight / baseH);
+    viewport.style.setProperty("--embed-scale", String(s));
+  }
+  window.addEventListener("resize", applyFakeMobileScale);
+  applyFakeMobileScale();
+
+  function loadState() {
+    try { return JSON.parse(localStorage.getItem(storageKey) || "{}"); }
+    catch { return {}; }
+  }
+  function saveState(state) { localStorage.setItem(storageKey, JSON.stringify(state)); }
+  function nowMs(){ return Date.now(); }
+
+  const TRANSITION_GIF_BASE = "/flop/transition.gif";
+
+  // ===== Transition gif restart that actually replays in OBS =====
+  function restartGifHard(url){
+    transitionImg.src = "";
+    requestAnimationFrame(() => {
+      transitionImg.src = url;
+    });
+  }
+
+  // Preload the transition GIF fully into browser cache
+  let transitionGifFullyLoaded = false;
+
+  async function preloadTransitionGifFully(){
+    return new Promise((resolve) => {
+      // Method 1: Fetch the full file into cache
+      fetch(TRANSITION_GIF_BASE, { cache: "force-cache" })
+        .then(r => r.blob())
+        .then(blob => {
+          console.log("[GIF] Fetched into cache, size:", blob.size, "bytes");
+          // Method 2: Also preload via Image object to decode it
+          const img = new Image();
+          img.onload = () => {
+            console.log("[GIF] Image decoded, dimensions:", img.naturalWidth, "x", img.naturalHeight);
+            transitionGifFullyLoaded = true;
+            resolve(true);
+          };
+          img.onerror = () => {
+            console.warn("[GIF] Image decode failed");
+            resolve(false);
+          };
+          img.src = URL.createObjectURL(blob);
+          // Also set the actual transition image
+          transitionImg.src = TRANSITION_GIF_BASE;
+        })
+        .catch(err => {
+          console.warn("[GIF] Fetch failed:", err);
+          resolve(false);
+        });
+
+      // Timeout fallback
+      setTimeout(() => resolve(false), 5000);
+    });
+  }
+
+  async function preloadTransitionGifSoft(timeoutMs){
+    const t0 = Date.now();
+    try { fetch(TRANSITION_GIF_BASE, { cache: "force-cache" }); } catch {}
+    while (Date.now() - t0 < timeoutMs) {
+      if (transitionImg.complete) break;
+      await new Promise(r => setTimeout(r, 30));
+    }
+  }
+
+  async function warmupTwitchEmbedSoft(timeoutMs){
+    const warmUrl = `https://clips.twitch.tv/embed?clip=InvalidClip&parent=${encodeURIComponent(parent)}&autoplay=false&muted=true`;
+    return await Promise.race([
+      (async () => {
+        await new Promise(resolve => {
+          const f = document.createElement("iframe");
+          f.style.position = "absolute";
+          f.style.width = "1px";
+          f.style.height = "1px";
+          f.style.left = "-9999px";
+          f.style.top = "-9999px";
+          f.setAttribute("aria-hidden", "true");
+          f.setAttribute("tabindex", "-1");
+          f.allow = "autoplay; fullscreen";
+          f.src = warmUrl;
+
+          let done = false;
+          const finish = () => {
+            if (done) return;
+            done = true;
+            try { f.onload = null; } catch {}
+            setTimeout(() => { try { f.remove(); } catch {} }, 250);
+            resolve();
+          };
+
+          f.onload = finish;
+          setTimeout(finish, 900);
+          document.body.appendChild(f);
+        });
+      })(),
+      new Promise(r => setTimeout(r, timeoutMs))
+    ]);
+  }
+
+  function showTransition(){
+    transitionShownAt = Date.now();
+    restartGifHard(TRANSITION_GIF_BASE);
+    transition.classList.remove("hide");
+  }
+
+  function hideTransitionAfterHold() {
+    const elapsed = Date.now() - transitionShownAt;
+    const waitToMin = Math.max(0, TRANSITION_MIN_MS - elapsed);
+    setTimeout(() => transition.classList.add("hide"), waitToMin);
+  }
+
+  function clearTimers() {
+    if (advanceTimer) { clearTimeout(advanceTimer); advanceTimer = null; }
+    if (transitionTimer) { clearTimeout(transitionTimer); transitionTimer = null; }
+    if (prepareTimer) { clearTimeout(prepareTimer); prepareTimer = null; }
+  }
+
+  function clipSrc(id, autoplay) {
+    const ap = autoplay ? "true" : "false";
+    return `https://clips.twitch.tv/embed?clip=${encodeURIComponent(id)}&parent=${encodeURIComponent(parent)}&autoplay=${ap}&muted=false`;
+  }
+
+  // Track what we've set as now playing to avoid duplicate calls
+  let lastSetNowPlayingId = null;
+  let nowPlayingCallCount = 0;  // Debug counter
+
+  // Rate limiting for now_playing_set to avoid 403 from Porkbun
+  const NP_MIN_INTERVAL_MS = 5000;  // Minimum 5 seconds between API calls
+  let lastNpCallTime = 0;
+  let pendingNpClip = null;
+  let npQueueTimer = null;
+
+  async function setNowPlaying(c, forceSet = false) {
+    const callNum = ++nowPlayingCallCount;
+    try {
+      const url = (c && c.url) ? String(c.url) : "";
+      const clipId = (c && c.id) ? String(c.id) : "";
+      if (!clipId) {
+        debugLog("NP#" + callNum + " NO CLIP_ID", "err");
+        return false;
+      }
+
+      // Skip if we already set this clip (prevents duplicate calls) - unless forced
+      if (!forceSet && clipId === lastSetNowPlayingId) {
+        debugLog("NP#" + callNum + " skip (same)", "warn");
+        return true;
+      }
+
+      debugLog("NP#" + callNum + " GET " + clipId.substring(0, 20));
+      // Use GET instead of POST - some hosts rate-limit POST more aggressively
+      const params = new URLSearchParams({
+        login: login,
+        url: url,
+        clip_id: clipId
+      });
+      const res = await fetch("./now_playing_set.php?" + params.toString(), {
+        method: "GET",
+        cache: "no-store"
+      });
+      const text = await res.text();
+
+      if (res.ok && text.trim() === "ok") {
+        lastSetNowPlayingId = clipId;
+        lastNpCallTime = Date.now();  // Track successful call time
+        debugLog("NP#" + callNum + " OK seq updated", "ok");
+        return true;
+      } else {
+        debugLog("NP#" + callNum + " FAIL " + res.status + " " + text.substring(0, 20), "err");
+        return false;
+      }
+    } catch (err) {
+      debugLog("NP#" + callNum + " ERR " + String(err).substring(0, 30), "err");
+      return false;
+    }
+  }
+
+  // Rate-limited version that queues calls to avoid 403 rate limiting
+  // Only ONE call will be made per NP_MIN_INTERVAL_MS, using the most recent clip
+  function setNowPlayingWithRetry(c) {
+    const clipId = (c && c.id) ? String(c.id) : "";
+    if (!clipId) {
+      debugLog("NP: no clip_id!", "err");
+      return;
+    }
+
+    const now = Date.now();
+    const timeSinceLastCall = now - lastNpCallTime;
+
+    // If enough time has passed, make the call immediately
+    if (timeSinceLastCall >= NP_MIN_INTERVAL_MS) {
+      debugLog("NP: immediate " + clipId.substring(0, 15));
+      lastSetNowPlayingId = null;  // Force the call to go through
+      setNowPlaying(c, true);
+      return;
+    }
+
+    // Otherwise, queue it for later (replacing any previous pending)
+    pendingNpClip = c;
+    const waitMs = NP_MIN_INTERVAL_MS - timeSinceLastCall + 100;  // Add 100ms buffer
+    debugLog("NP: queued " + clipId.substring(0, 15) + " wait=" + waitMs + "ms", "warn");
+
+    // Only set timer if not already waiting
+    if (!npQueueTimer) {
+      npQueueTimer = setTimeout(() => {
+        npQueueTimer = null;
+        if (pendingNpClip) {
+          const queued = pendingNpClip;
+          pendingNpClip = null;
+          debugLog("NP: dequeue " + (queued.id || "?").substring(0, 15));
+          lastSetNowPlayingId = null;
+          setNowPlaying(queued, true);
+        }
+      }, waitMs);
+    }
+  }
+
+  function computeRevealDelayMs(loadMs) {
+    let d = 950;
+    if (loadMs > 900)  d += 300;
+    if (loadMs > 1500) d += 450;
+    return Math.min(1800, Math.max(850, d));
+  }
+
+  // Check if the transition GIF is properly loaded
+  function isTransitionGifReady() {
+    // Check both the flag from full preload AND the image element state
+    return transitionGifFullyLoaded || (transitionImg.complete && transitionImg.naturalWidth > 0);
+  }
+
+  // Wait for transition GIF to be ready
+  async function waitForTransitionGif(maxMs = 3000) {
+    const start = Date.now();
+    // First check if already fully loaded
+    if (transitionGifFullyLoaded) {
+      console.log("[GIF] Already fully loaded");
+      return true;
+    }
+    // Otherwise wait for it
+    while (Date.now() - start < maxMs) {
+      if (transitionGifFullyLoaded) {
+        console.log("[GIF] Fully loaded after", Date.now() - start, "ms");
+        return true;
+      }
+      if (transitionImg.complete && transitionImg.naturalWidth > 0) {
+        // Image element says complete, give it a bit more time to fully decode
+        await new Promise(r => setTimeout(r, 200));
+        return true;
+      }
+      await new Promise(r => setTimeout(r, 50));
+    }
+    console.warn("[GIF] Wait timeout after", maxMs, "ms, proceeding anyway");
+    return isTransitionGifReady();
+  }
+
+  // Extra time to let clip video buffer after iframe loads (for first clip)
+  const FIRST_CLIP_BUFFER_MS = 1800;  // Give first clip extra time to buffer
+
+  function revealIframeThenFadeOut(frameToReveal, loadStartedAt) {
+    const loadMs = loadStartedAt ? (Date.now() - loadStartedAt) : 0;
+    const revealDelay = computeRevealDelayMs(loadMs);
+
+    let extra = IFRAME_SETTLE_PAD_MS;
+    if (loadMs > LOAD_SLOW_THRESHOLD_MS) extra += LOAD_SLOW_EXTRA_MS;
+
+    setTimeout(async () => {
+      // Hide boot overlay when first clip actually reveals - but wait for everything to be ready
+      if (!firstTransitionShown) {
+        // Ensure boot was shown for minimum time
+        const bootElapsed = Date.now() - bootShownAt;
+        const bootRemaining = Math.max(0, BOOT_MIN_DISPLAY_MS - bootElapsed);
+
+        // Wait for transition GIF to be ready
+        await waitForTransitionGif(2000);
+
+        // If we need more time for boot minimum, wait
+        if (bootRemaining > 0) {
+          console.log("[BOOT] Waiting additional", bootRemaining, "ms for minimum boot time");
+          await new Promise(r => setTimeout(r, bootRemaining));
+        }
+
+        // Extra settle time to ensure clip video is buffered
+        await new Promise(r => setTimeout(r, BOOT_EXTRA_SETTLE_MS));
+
+        console.log("[BOOT] Boot requirements met, hiding overlay");
+        hideBoot();
+        firstTransitionShown = true;
+
+        // For first clip, add extra buffer time before fading out transition
+        // This lets the video actually buffer before we reveal it
+        console.log("[BOOT] Waiting", FIRST_CLIP_BUFFER_MS, "ms for first clip to buffer");
+        await new Promise(r => setTimeout(r, FIRST_CLIP_BUFFER_MS));
+      }
+
+      frameToReveal.classList.add("live");
+      setTimeout(() => hideTransitionAfterHold(), TRANSITION_AFTER_REVEAL_MS + extra);
+    }, revealDelay);
+  }
+
+  const POP_WEIGHT = 0.55;
+  const POP_CAP = 1.8;
+  function log10Safe(x){ return Math.log10 ? Math.log10(x) : (Math.log(x) / Math.LN10); }
+
+  function pickNextClip() {
+    const state = loadState();
+    state.recent = Array.isArray(state.recent) ? state.recent : [];
+    state.playCounts = state.playCounts || {};
+    state.lastPlayedAt = state.lastPlayedAt || {};
+    state.lastGameRecent = Array.isArray(state.lastGameRecent) ? state.lastGameRecent : [];
+
+    const recentSet = new Set(state.recent.slice(-RECENT_BLOCK));
+    const recentGames = state.lastGameRecent.slice(-6);
+
+    const candidates = clips.filter(c => !recentSet.has(c.id));
+    const usable = candidates.length ? candidates : clips.slice();
+
+    const scored = usable.map(c => {
+      const plays = state.playCounts[c.id] || 0;
+      const lastAt = state.lastPlayedAt[c.id] || 0;
+      const minutesAgo = (nowMs() - lastAt) / 60000;
+
+      let score = 1;
+      score += Math.min(5, minutesAgo / 15);
+      score += Math.max(0, 3 - plays);
+      if (c.game_id && recentGames.includes(c.game_id)) score -= 2;
+
+      const views = Number(c.view_count || 0);
+      const pop = log10Safe(views + 1);
+      score += Math.min(POP_CAP, pop * POP_WEIGHT);
+
+      return { c, score };
+    }).filter(x => x.score > 0.1);
+
+    scored.sort((a,b) => b.score - a.score);
+    const top = scored.slice(0, Math.min(25, scored.length));
+
+    const total = top.reduce((s, x) => s + x.score, 0);
+    let r = Math.random() * total;
+    for (const x of top) { r -= x.score; if (r <= 0) return x.c; }
+    return top[0]?.c || clips[0];
+  }
+
+  function markPlayed(c) {
+    const state = loadState();
+    state.recent = Array.isArray(state.recent) ? state.recent : [];
+    state.playCounts = state.playCounts || {};
+    state.lastPlayedAt = state.lastPlayedAt || {};
+    state.lastGameRecent = Array.isArray(state.lastGameRecent) ? state.lastGameRecent : [];
+
+    state.recent.push(c.id);
+    if (state.recent.length > 2000) state.recent = state.recent.slice(-800);
+
+    state.playCounts[c.id] = (state.playCounts[c.id] || 0) + 1;
+    state.lastPlayedAt[c.id] = nowMs();
+
+    if (c.game_id) {
+      state.lastGameRecent.push(c.game_id);
+      if (state.lastGameRecent.length > 50) state.lastGameRecent = state.lastGameRecent.slice(-20);
+    }
+    saveState(state);
+  }
+
+  function scheduleNext(durationSec) {
+    clearTimers();
+    const d = Math.max(6, Number(durationSec) || 20);
+    console.log("[SCHEDULE] Scheduling next clip in", d, "seconds (duration was:", durationSec, ")");
+
+    const preAt = Math.max(0, (d * 1000) - TRANSITION_PREROLL_MS);
+
+    prepareTimer = setTimeout(() => {
+      console.log("[SCHEDULE] Prepare timer fired");
+    }, Math.max(0, preAt - 450));
+
+    transitionTimer = setTimeout(() => {
+      console.log("[SCHEDULE] Transition timer fired, showing transition");
+      showTransition();
+    }, preAt);
+
+    if (fastMode) {
+      const preloadAtMs = Math.min(
+        Math.max(1500, Math.floor(d * 0.85) * 1000),
+        Math.max(1500, (d - 3) * 1000)
+      );
+      setTimeout(() => {
+        console.log("[SCHEDULE] Preload timer fired");
+        preloadNext();
+      }, preloadAtMs);
+    }
+
+    advanceTimer = setTimeout(() => {
+      console.log("[SCHEDULE] Advance timer fired, switching to next clip");
+      if (fastMode) switchFast();
+      else switchSmoothBuffered();
+    }, (d + 1) * 1000);
+  }
+
+  function bindOnloadWithFailsafe(targetFrame, onReady) {
+    let done = false;
+    try { targetFrame.onload = null; } catch {}
+
+    const t = setTimeout(() => {
+      if (done) return;
+      done = true;
+      try { targetFrame.onload = null; } catch {}
+      onReady(true);
+    }, IFRAME_LOAD_FAILSAFE_MS);
+
+    targetFrame.onload = () => {
+      if (done) return;
+      done = true;
+      clearTimeout(t);
+      onReady(false);
+    };
+  }
+
+  // Track current clip for verification
+  let currentClipId = null;
+
+  let switchCount = 0;  // Debug counter
+
+  function switchToClip(c) {
+    const switchNum = ++switchCount;
+    if (!c) {
+      debugLog("SW#" + switchNum + " null clip!", "err");
+      return;
+    }
+    debugLog("SW#" + switchNum + " -> " + (c.id || "?").substring(0, 15) + " dur=" + c.duration);
+
+    // Clear any pending timers when starting a new switch
+    clearTimers();
+    isSwitching = true;
+
+    // Store clip reference to ensure we use the right one
+    const clipToPlay = c;
+    currentClipId = c.id;
+
+    if (transition.classList.contains("hide")) {
+      console.log("[SWITCH] Showing transition");
+      showTransition();
+    }
+    const token = ++nextToken;
+    const switchStartedAt = Date.now();
+
+    backFrame.classList.remove("live");
+
+    const loadStartedAt = Date.now();
+    bindOnloadWithFailsafe(backFrame, (wasFailsafe) => {
+      // Check if we were superseded by another switch
+      if (token !== nextToken) {
+        debugLog("SW#" + switchNum + " token mismatch, skipped", "warn");
+        // Don't set isSwitching=false here, the newer switch will handle it
+        return;
+      }
+      debugLog("SW#" + switchNum + " loaded" + (wasFailsafe ? " (failsafe)" : ""), "ok");
+
+      liveFrame.classList.remove("live");
+      revealIframeThenFadeOut(backFrame, loadStartedAt);
+
+      const tmp = liveFrame;
+      liveFrame = backFrame;
+      backFrame = tmp;
+
+      try { backFrame.onload = null; } catch {}
+      setTimeout(() => { try { backFrame.src = "about:blank"; } catch {} }, 300);
+
+      markPlayed(clipToPlay);
+
+      // Update HUD seq immediately from local data (no server round-trip needed)
+      updateHudSeqLocal(clipToPlay);
+
+      // Also try to update server (for !pb command) - may fail due to rate limits
+      debugLog("SW#" + switchNum + " calling setNowPlaying");
+      setNowPlayingWithRetry(clipToPlay);
+
+      // Ensure we have a valid duration
+      const dur = (clipToPlay.duration && clipToPlay.duration > 0) ? clipToPlay.duration : 30;
+      scheduleNext(dur);
+      debugLog("SW#" + switchNum + " next in " + dur + "s");
+
+      isSwitching = false;
+      hasStartedPlayback = true;
+
+      // Check for pending forced clip after switch completes
+      if (pendingForced && pendingForced.clip) {
+        debugLog("SW#" + switchNum + " has pending forced", "warn");
+        const forced = pendingForced.clip;
+        pendingForced = null;
+        setTimeout(() => switchToClip(forced), 100);
+      }
+    });
+
+    backFrame.src = clipSrc(clipToPlay.id, true);
+    console.log("[SWITCH] Iframe src set, token:", token);
+
+    // Safety: reset isSwitching after a reasonable timeout if callback never fires
+    setTimeout(() => {
+      if (token === nextToken && isSwitching) {
+        console.warn("[SWITCH] Safety timeout - callback never fired after", Date.now() - switchStartedAt, "ms");
+
+        // Even on timeout, try to set now playing so the HUD stays in sync
+        console.log("[SWITCH] Safety: setting now playing for:", clipToPlay.id);
+        setNowPlayingWithRetry(clipToPlay);
+
+        isSwitching = false;
+        // Force advancement to recover
+        if (clips.length) {
+          console.log("[SWITCH] Attempting recovery by switching to next clip");
+          switchToClip(pickNextClip());
+        }
+      }
+    }, 15000); // 15 second safety timeout
+  }
+
+  function switchSmoothBuffered() {
+    console.log("[SMOOTH] switchSmoothBuffered called, clips.length:", clips.length, "isSwitching:", isSwitching);
+    if (!clips.length) {
+      console.warn("[SMOOTH] No clips available!");
+      return;
+    }
+    const next = pickNextClip();
+    console.log("[SMOOTH] Picked next clip:", next?.id, next?.title);
+    switchToClip(next);
+  }
+
+  function preloadNext() {
+    if (!clips.length) return;
+    if (nextClip) return;
+    // Don't preload if we're currently switching - it will mess up the token
+    if (isSwitching) return;
+
+    nextClip = pickNextClip();
+    if (!nextClip) return;
+
+    // Clear any existing onload handler before preloading
+    // This prevents the preload from triggering the switch callback
+    try { backFrame.onload = null; } catch {}
+
+    // Don't increment nextToken here - only switchToClip should do that
+    // Just quietly load the clip in the background
+    backFrame.src = clipSrc(nextClip.id, false);
+  }
+
+  function switchFast() {
+    if (!clips.length) return;
+
+    if (!nextClip) preloadNext();
+    const c = nextClip || pickNextClip();
+    if (!c) return;
+
+    switchToClip(c);
+    nextClip = null;
+    setTimeout(preloadNext, 900);
+  }
+
+  // ===== pclip support, switch by clip_id first =====
+  const pclipEnabled = qs.get("pclip") !== "0";
+  const pclipPollMs = Math.max(350, Math.min(2500, parseInt(qs.get("pclippoll") || "700", 10)));
+
+  let lastPclipNonce = null;
+  let pendingForced = null;
+
+  function clipBySeq(seq){
+    const n = parseInt(seq, 10);
+    if (!Number.isFinite(n)) return null;
+    if (n < 1 || n > clips.length) return null;
+    return clips[n - 1];
+  }
+
+  function clipById(id){
+    const s = (id == null) ? "" : String(id).trim();
+    if (!s) return null;
+    return clips.find(c => String(c.id) === s) || null;
+  }
+
+  async function pollPclipOnce(){
+    if (!pclipEnabled) return;
+    try {
+      const res = await fetch(`./force_play_get.php?login=${encodeURIComponent(login)}`, { cache: "no-store" });
+      const data = await res.json();
+      if (!data || Object.keys(data).length === 0) return;
+
+      const nonce = (data.nonce != null) ? String(data.nonce) : null;
+      if (!nonce || nonce === lastPclipNonce) return;
+      lastPclipNonce = nonce;
+      console.log("[PCLIP] Force play command received:", data);
+
+      // Try to find in current pool first
+      let c = clipById(data.clip_id);
+
+      // If not in pool, use full clip data from server response
+      if (!c && data.clip) {
+        console.log("[PCLIP] Clip not in current pool, using server data");
+        c = data.clip;
+        // Ensure the clip has a duration, default to 30 seconds if missing
+        if (!c.duration || c.duration <= 0) {
+          console.warn("[PCLIP] Clip missing duration, defaulting to 30s");
+          c.duration = 30;
+        }
+      }
+
+      if (!c) {
+        console.warn("[PCLIP] Could not find clip for:", data.clip_id, data.seq);
+        return;
+      }
+
+      // If currently switching, queue this clip for later
+      if (isSwitching) {
+        console.log("[PCLIP] Switch in progress, queuing forced clip for later");
+        pendingForced = { clip: c };
+        return;
+      }
+
+      // Force the switch immediately
+      console.log("[PCLIP] Switching to forced clip:", c.id, "duration:", c.duration, "isSwitching:", isSwitching);
+      switchToClip(c);
+
+      // Clear the force_play file so it doesn't replay on refresh
+      try {
+        fetch(`./force_play_clear.php?login=${encodeURIComponent(login)}`, { cache: "no-store" });
+      } catch {}
+    } catch (err) {
+      console.error("[PCLIP] Poll error:", err);
+    }
+  }
+
+  function startPclipPolling(){
+    if (!pclipEnabled) return;
+    pollPclipOnce();
+    setInterval(pollPclipOnce, pclipPollMs);
+  }
+
+  async function init() {
+    console.log("[INIT] Starting init...");
+    showBoot();                 // show immediately, always
+    console.log("[INIT] Boot overlay shown");
+
+    // Start preloading the transition GIF immediately and fully
+    console.log("[INIT] Starting GIF preload...");
+    const gifPreloadPromise = preloadTransitionGifFully();
+
+    // Also do soft warmups in parallel
+    preloadTransitionGifSoft(800);
+    warmupTwitchEmbedSoft(900);
+
+    // Don't show transition until GIF is preloaded (or timeout)
+    await gifPreloadPromise;
+    console.log("[INIT] GIF preload complete, showing transition");
+    showTransition();
+
+    // fetch clip list, but do not block forever
+    let data = null;
+    console.log("[INIT] Fetching clip list from:", apiUrl);
+    try {
+      data = await Promise.race([
+        fetch(apiUrl, { cache: "no-store" }).then(r => r.json()),
+        new Promise((_, rej) => setTimeout(() => rej(new Error("clip list timeout")), 9000))
+      ]);
+      console.log("[INIT] Clip list fetched, count:", data?.clips?.length || 0);
+    } catch (err) {
+      console.error("[INIT] FAILED to fetch clip list:", err);
+      return;
+    }
+
+    clips = Array.isArray(data.clips) ? data.clips : [];
+    if (!clips.length) {
+      console.error("[INIT] No clips in response, aborting");
+      return;
+    }
+
+    const first = pickNextClip();
+    if (!first) {
+      console.error("[INIT] pickNextClip returned null, aborting");
+      return;
+    }
+    console.log("[INIT] First clip selected:", first.id, first.title);
+
+    liveFrame.classList.remove("live");
+
+    const loadStartedAt = Date.now();
+    console.log("[INIT] Loading first clip into iframe...");
+    bindOnloadWithFailsafe(liveFrame, (wasFailsafe) => {
+      console.log("[INIT] Iframe loaded (failsafe=%s), revealing...", wasFailsafe);
+      revealIframeThenFadeOut(liveFrame, loadStartedAt);
+      markPlayed(first);
+      updateHudSeqLocal(first);  // Update HUD immediately from local data
+      setNowPlayingWithRetry(first);
+
+      try { backFrame.src = "about:blank"; } catch {}
+
+      // Ensure valid duration
+      const dur = (first.duration && first.duration > 0) ? first.duration : 30;
+      scheduleNext(dur);
+      console.log("[INIT] Scheduled next clip in", dur, "seconds (clip duration was:", first.duration, ")");
+
+      if (fastMode) setTimeout(preloadNext, 900);
+
+      hasStartedPlayback = true;
+      isSwitching = false;
+
+      if (pendingForced && pendingForced.clip) {
+        const c = pendingForced.clip;
+        pendingForced = null;
+        switchToClip(c);
+      }
+      console.log("[INIT] Playback started successfully!");
+    });
+
+    liveFrame.src = clipSrc(first.id, true);
+    console.log("[INIT] Iframe src set to:", liveFrame.src);
+
+    startPclipPolling();
+    console.log("[INIT] pclip polling started");
+
+    setInterval(async () => {
+      try {
+        const r = await fetch(apiUrl, { cache: "no-store" });
+        const d = await r.json();
+        if (Array.isArray(d.clips) && d.clips.length) clips = d.clips;
+      } catch {}
+    }, 10 * 60 * 1000);
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>

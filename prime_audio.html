@@ -1,0 +1,51 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Enable Audio</title>
+  <style>
+    html,body{height:100%;margin:0;background:#000;color:#fff;font:600 18px system-ui,Arial}
+    .wrap{height:100%;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px}
+    button{font:600 18px system-ui,Arial;padding:14px 18px;border-radius:12px;border:0;cursor:pointer}
+    .small{opacity:.8;font-weight:400;font-size:14px;max-width:520px;text-align:center;line-height:1.3}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div>Enable sound for the clip reel</div>
+    <button id="go">Enable and continue</button>
+    <div class="small">
+      This is a one time tap per device to help browsers allow audio later.
+      Some mobile browsers may still require interaction.
+    </div>
+  </div>
+
+<script>
+document.getElementById("go").addEventListener("click", async () => {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (AC) {
+      const ctx = new AC();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      gain.gain.value = 0.00001;
+      osc.connect(gain).connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.03);
+      await ctx.resume();
+    }
+  } catch {}
+
+  localStorage.setItem("gmgn_audio_primed", "1");
+
+  // carry through whatever you want (login/playlist/days/pool/parent)
+  const qs = new URLSearchParams(location.search);
+  if (!qs.get("login")) qs.set("login", "floppyjimmie");
+  if (!qs.get("parent")) qs.set("parent", location.hostname);
+
+  location.href = "/flop/floppyjimmie_reel.html?" + qs.toString();
+});
+</script>
+</body>
+</html>
