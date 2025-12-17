@@ -2,7 +2,8 @@
 /**
  * vote_submit.php - Record a vote for a clip by its permanent seq number
  *
- * Looks up the clip by seq from the full index, so ANY clip can be voted on.
+ * Uses PostgreSQL for persistent storage when DATABASE_URL is set.
+ * Falls back to file storage (ephemeral on Railway) otherwise.
  */
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
@@ -12,9 +13,11 @@ header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { exit(0); }
 
+require_once __DIR__ . '/db_config.php';
+
 // Static data (clips_index) is in ./cache (read-only on Railway)
 $staticDir = __DIR__ . "/cache";
-// Runtime data goes to /tmp on Railway
+// Runtime data goes to /tmp on Railway (fallback only)
 $runtimeDir = is_writable("/tmp") ? "/tmp/clipsystem_cache" : __DIR__ . "/cache";
 if (!is_dir($runtimeDir)) @mkdir($runtimeDir, 0777, true);
 
@@ -86,6 +89,66 @@ if (!$clipId) {
   exit;
 }
 
+// Try database first, fall back to file storage
+$pdo = get_db_connection();
+
+if ($pdo) {
+  // Use PostgreSQL for persistent storage
+  init_votes_tables($pdo);
+
+  try {
+    // Check if user already voted
+    $stmt = $pdo->prepare("SELECT id FROM vote_ledger WHERE login = ? AND clip_id = ? AND username = ?");
+    $stmt->execute([$login, $clipId, strtolower($user)]);
+    if ($stmt->fetch()) {
+      // Already voted - get current counts
+      $stmt = $pdo->prepare("SELECT up_votes, down_votes FROM votes WHERE login = ? AND clip_id = ?");
+      $stmt->execute([$login, $clipId]);
+      $row = $stmt->fetch();
+      $up = $row ? (int)$row['up_votes'] : 0;
+      $down = $row ? (int)$row['down_votes'] : 0;
+      echo "Already voted for Clip #{$seq}. 👍{$up} 👎{$down}";
+      exit;
+    }
+
+    // Record the vote
+    $pdo->beginTransaction();
+
+    // Insert or update votes aggregate
+    $column = ($dir === "up") ? "up_votes" : "down_votes";
+    $stmt = $pdo->prepare("
+      INSERT INTO votes (login, clip_id, seq, title, {$column}, updated_at)
+      VALUES (?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
+      ON CONFLICT (login, clip_id) DO UPDATE SET
+        {$column} = votes.{$column} + 1,
+        updated_at = CURRENT_TIMESTAMP
+    ");
+    $stmt->execute([$login, $clipId, $seq, $clipTitle]);
+
+    // Record in ledger to prevent duplicate votes
+    $stmt = $pdo->prepare("INSERT INTO vote_ledger (login, clip_id, username, vote_dir) VALUES (?, ?, ?, ?)");
+    $stmt->execute([$login, $clipId, strtolower($user), $dir]);
+
+    $pdo->commit();
+
+    // Get final counts
+    $stmt = $pdo->prepare("SELECT up_votes, down_votes FROM votes WHERE login = ? AND clip_id = ?");
+    $stmt->execute([$login, $clipId]);
+    $row = $stmt->fetch();
+    $up = $row ? (int)$row['up_votes'] : 0;
+    $down = $row ? (int)$row['down_votes'] : 0;
+
+    echo "Voted {$dir} for Clip #{$seq}. 👍{$up} 👎{$down}";
+    exit;
+
+  } catch (PDOException $e) {
+    if ($pdo->inTransaction()) $pdo->rollBack();
+    error_log("Vote database error: " . $e->getMessage());
+    // Fall through to file storage
+  }
+}
+
+// Fallback: File-based storage (ephemeral on Railway)
 $votesFile  = $runtimeDir . "/votes_" . $login . ".json";
 $ledgerFile = $runtimeDir . "/votes_ledger_" . $login . ".json";
 
