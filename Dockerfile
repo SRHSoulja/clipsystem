@@ -1,12 +1,8 @@
 FROM php:8.2-apache
 
-# Fix MPM conflict - remove event MPM config, ensure only prefork is enabled
-RUN rm -f /etc/apache2/mods-enabled/mpm_event.* && \
-    ln -sf /etc/apache2/mods-available/mpm_prefork.conf /etc/apache2/mods-enabled/mpm_prefork.conf && \
-    ln -sf /etc/apache2/mods-available/mpm_prefork.load /etc/apache2/mods-enabled/mpm_prefork.load
-
-# Enable required Apache modules
-RUN a2enmod rewrite headers
+# Fix MPM conflict - remove ALL MPM configs then enable only prefork
+RUN rm -f /etc/apache2/mods-enabled/mpm_*.conf /etc/apache2/mods-enabled/mpm_*.load && \
+    a2enmod mpm_prefork rewrite headers
 
 # Set working directory
 WORKDIR /var/www/html
