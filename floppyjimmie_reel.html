@@ -316,11 +316,17 @@
   const days   = parseInt(qs.get("days") || "180", 10);
   const pool   = parseInt(qs.get("pool") || "400", 10);
 
-  // Check if GIF was previously cached (persists across OBS source refreshes within session)
+  // Check if GIF was previously cached (localStorage persists across OBS restarts)
   const GIF_CACHE_KEY = `gif_cached_${login}`;
   let gifWasPreviouslyCached = false;
   try {
-    gifWasPreviouslyCached = sessionStorage.getItem(GIF_CACHE_KEY) === "1";
+    const cached = localStorage.getItem(GIF_CACHE_KEY);
+    // Consider cached if loaded successfully in the last 24 hours
+    if (cached) {
+      const cachedTime = parseInt(cached, 10);
+      const hoursSinceCached = (Date.now() - cachedTime) / (1000 * 60 * 60);
+      gifWasPreviouslyCached = hoursSinceCached < 24;
+    }
     console.log("[INIT] GIF previously cached:", gifWasPreviouslyCached);
   } catch {}
 
@@ -348,9 +354,8 @@
   const matrixCanvas = document.getElementById("matrixRain");
 
   // Show boot overlay on first load only (not when GIF is already cached)
-  // Force it off with ?boot=0, force it on with ?boot=1
-  const bootForced = qs.get("boot");
-  const bootEnabled = bootForced === "1" ? true : bootForced === "0" ? false : !gifWasPreviouslyCached;
+  // Automatically skip boot if we've loaded successfully before
+  const bootEnabled = !gifWasPreviouslyCached;
 
   // Debug overlay - add ?debug=1 to URL to show
   const debugEnabled = qs.get("debug") === "1";
@@ -719,8 +724,8 @@
             const finishPreload = () => {
               transitionGifFullyLoaded = true;
 
-              // Mark as cached for future loads
-              try { sessionStorage.setItem(GIF_CACHE_KEY, "1"); } catch {}
+              // Mark as cached for future loads (store timestamp)
+              try { localStorage.setItem(GIF_CACHE_KEY, String(Date.now())); } catch {}
 
               // Ensure minimum preload time has passed
               const elapsed = Date.now() - gifPreloadStartedAt;
