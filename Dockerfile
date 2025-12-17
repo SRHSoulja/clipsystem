@@ -1,5 +1,8 @@
 FROM php:8.2-apache
 
+# Fix MPM conflict - disable event MPM, keep prefork (required for mod_php)
+RUN a2dismod mpm_event && a2enmod mpm_prefork
+
 # Enable required Apache modules
 RUN a2enmod rewrite headers
 

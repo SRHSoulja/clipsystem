@@ -323,7 +323,9 @@
   if (qs.get("mask") === "1") document.body.classList.add("mask");
   if (fakeMobile) document.body.classList.add("fakeMobile");
 
-  const apiUrl = `./twitch_reel_api.php?login=${encodeURIComponent(login)}&days=${days}&pool=${pool}`;
+  // Railway API base URL
+  const API_BASE = "https://clipsystem-production.up.railway.app";
+  const apiUrl = `${API_BASE}/twitch_reel_api.php?login=${encodeURIComponent(login)}&days=${days}&pool=${pool}`;
 
   const RECENT_BLOCK = Math.max(10, Math.floor(pool * 0.20));
   const storageKey = `away_reel_state_${login}`;
@@ -415,7 +417,7 @@
   async function pollHudOnce(){
     if (!hudEnabled) return;
     try {
-      const res = await fetch(`./vote_status.php?login=${encodeURIComponent(login)}`, { cache: "no-store" });
+      const res = await fetch(`${API_BASE}/vote_status.php?login=${encodeURIComponent(login)}`, { cache: "no-store" });
       const data = await res.json();
       // Only use server seq if we don't have local tracking yet
       if (data && typeof data.seq === "number" && currentHudSeq === 0) {
@@ -808,7 +810,7 @@
         url: url,
         clip_id: clipId
       });
-      const res = await fetch("./now_playing_set.php?" + params.toString(), {
+      const res = await fetch(`${API_BASE}/now_playing_set.php?` + params.toString(), {
         method: "GET",
         cache: "no-store"
       });
@@ -1229,7 +1231,7 @@
   async function pollPclipOnce(){
     if (!pclipEnabled) return;
     try {
-      const res = await fetch(`./force_play_get.php?login=${encodeURIComponent(login)}`, { cache: "no-store" });
+      const res = await fetch(`${API_BASE}/force_play_get.php?login=${encodeURIComponent(login)}`, { cache: "no-store" });
       const data = await res.json();
       if (!data || Object.keys(data).length === 0) return;
 
@@ -1270,7 +1272,7 @@
 
       // Clear the force_play file so it doesn't replay on refresh
       try {
-        fetch(`./force_play_clear.php?login=${encodeURIComponent(login)}`, { cache: "no-store" });
+        fetch(`${API_BASE}/force_play_clear.php?login=${encodeURIComponent(login)}`, { cache: "no-store" });
       } catch {}
     } catch (err) {
       console.error("[PCLIP] Poll error:", err);
