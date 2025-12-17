@@ -316,18 +316,24 @@
   const days   = parseInt(qs.get("days") || "180", 10);
   const pool   = parseInt(qs.get("pool") || "400", 10);
 
-  // Check if GIF was previously cached (localStorage persists across OBS restarts)
-  const GIF_CACHE_KEY = `gif_cached_${login}`;
-  let gifWasPreviouslyCached = false;
+  // Detect if this is a fresh page load vs returning to existing source
+  // sessionStorage clears when browser source is refreshed/updated
+  // We only skip boot if GIF was loaded THIS session (not from previous)
+  const SESSION_KEY = `session_${login}`;
+  const GIF_LOADED_KEY = `gif_loaded_${login}`;
+  let gifLoadedThisSession = false;
   try {
-    const cached = localStorage.getItem(GIF_CACHE_KEY);
-    // Consider cached if loaded successfully in the last 24 hours
-    if (cached) {
-      const cachedTime = parseInt(cached, 10);
-      const hoursSinceCached = (Date.now() - cachedTime) / (1000 * 60 * 60);
-      gifWasPreviouslyCached = hoursSinceCached < 24;
+    const currentSession = sessionStorage.getItem(SESSION_KEY);
+    const gifLoaded = sessionStorage.getItem(GIF_LOADED_KEY);
+    // Only consider cached if we have BOTH a session marker AND gif loaded marker
+    // This means we've already successfully loaded the GIF in this exact browser session
+    gifLoadedThisSession = !!(currentSession && gifLoaded);
+    console.log("[INIT] Session exists:", !!currentSession, "GIF loaded:", !!gifLoaded, "Skip boot:", gifLoadedThisSession);
+
+    // Always set session marker on load
+    if (!currentSession) {
+      sessionStorage.setItem(SESSION_KEY, String(Date.now()));
     }
-    console.log("[INIT] GIF previously cached:", gifWasPreviouslyCached);
   } catch {}
 
   const fastMode   = qs.get("fast") === "1";
@@ -353,9 +359,9 @@
   const cacheWarn = document.getElementById("cacheWarn");
   const matrixCanvas = document.getElementById("matrixRain");
 
-  // Show boot overlay on first load only (not when GIF is already cached)
-  // Automatically skip boot if we've loaded successfully before
-  const bootEnabled = !gifWasPreviouslyCached;
+  // Show boot overlay on first load only (not when GIF already loaded this session)
+  // Refreshing/updating the browser source clears sessionStorage, so boot shows again
+  const bootEnabled = !gifLoadedThisSession;
 
   // Debug overlay - add ?debug=1 to URL to show
   const debugEnabled = qs.get("debug") === "1";
@@ -700,9 +706,9 @@
   async function preloadTransitionGifFully(){
     gifPreloadStartedAt = Date.now();
 
-    // If GIF was previously cached in this session, use shorter wait
-    const minWait = gifWasPreviouslyCached ? 500 : GIF_PRELOAD_MIN_MS;
-    console.log("[GIF] Starting preload, previouslyCached:", gifWasPreviouslyCached, "minWait:", minWait);
+    // If GIF was already loaded this session, use shorter wait
+    const minWait = gifLoadedThisSession ? 500 : GIF_PRELOAD_MIN_MS;
+    console.log("[GIF] Starting preload, loadedThisSession:", gifLoadedThisSession, "minWait:", minWait);
 
     return new Promise((resolve) => {
       // Set the transition image src FIRST - this starts loading immediately
@@ -724,8 +730,8 @@
             const finishPreload = () => {
               transitionGifFullyLoaded = true;
 
-              // Mark as cached for future loads (store timestamp)
-              try { localStorage.setItem(GIF_CACHE_KEY, String(Date.now())); } catch {}
+              // Mark GIF as loaded for this session
+              try { sessionStorage.setItem(GIF_LOADED_KEY, "1"); } catch {}
 
               // Ensure minimum preload time has passed
               const elapsed = Date.now() - gifPreloadStartedAt;
@@ -762,8 +768,8 @@
           resolve(false);
         });
 
-      // Timeout fallback - shorter if previously cached
-      const timeout = gifWasPreviouslyCached ? 3000 : 8000;
+      // Timeout fallback - shorter if already loaded this session
+      const timeout = gifLoadedThisSession ? 3000 : 8000;
       setTimeout(() => {
         console.warn("[GIF] Preload timeout after", timeout, "ms");
         resolve(false);
