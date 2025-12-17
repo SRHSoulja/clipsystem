@@ -12,7 +12,11 @@ header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { exit(0); }
 
-$baseDir = __DIR__ . "/cache";
+// Static data (clips_index) is in ./cache (read-only on Railway)
+$staticDir = __DIR__ . "/cache";
+// Runtime data goes to /tmp on Railway
+$runtimeDir = is_writable("/tmp") ? "/tmp/clipsystem_cache" : __DIR__ . "/cache";
+if (!is_dir($runtimeDir)) @mkdir($runtimeDir, 0777, true);
 
 function clean_login($s){
   $s = strtolower(trim((string)$s));
@@ -56,7 +60,7 @@ if ($dir !== "up" && $dir !== "down") {
 }
 
 // Look up clip by seq from the full index (not just recent)
-$indexFile = $baseDir . "/clips_index_" . $login . ".json";
+$indexFile = $staticDir . "/clips_index_" . $login . ".json";
 if (!file_exists($indexFile)) { echo "Clip index not found."; exit; }
 
 $indexRaw = @file_get_contents($indexFile);
@@ -82,8 +86,8 @@ if (!$clipId) {
   exit;
 }
 
-$votesFile  = $baseDir . "/votes_" . $login . ".json";
-$ledgerFile = $baseDir . "/votes_ledger_" . $login . ".json";
+$votesFile  = $runtimeDir . "/votes_" . $login . ".json";
+$ledgerFile = $runtimeDir . "/votes_ledger_" . $login . ".json";
 
 $votes = file_exists($votesFile) ? json_decode(@file_get_contents($votesFile), true) : [];
 if (!is_array($votes)) $votes = [];

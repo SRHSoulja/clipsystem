@@ -49,17 +49,20 @@ if ($url === "" && $clipId !== "") {
   $url = "https://clips.twitch.tv/" . $clipId;
 }
 
-$dir = __DIR__ . "/cache";
-if (!is_dir($dir)) @mkdir($dir, 0755, true);
+// Static data (clips_index) is in ./cache (read-only on Railway)
+$staticDir = __DIR__ . "/cache";
+// Runtime data goes to /tmp on Railway
+$runtimeDir = is_writable("/tmp") ? "/tmp/clipsystem_cache" : __DIR__ . "/cache";
+if (!is_dir($runtimeDir)) @mkdir($runtimeDir, 0777, true);
 
-$jsonPath   = $dir . "/now_playing_{$login}.json";
-$txtPath    = $dir . "/now_playing_{$login}.txt";
-$recentPath = $dir . "/recent_played_{$login}.json";
+$jsonPath   = $runtimeDir . "/now_playing_{$login}.json";
+$txtPath    = $runtimeDir . "/now_playing_{$login}.txt";
+$recentPath = $runtimeDir . "/recent_played_{$login}.json";
 
 // Look up the clip's permanent seq from the index
 $seq = 0;
 $title = "";
-$indexFile = $dir . "/clips_index_{$login}.json";
+$indexFile = $staticDir . "/clips_index_{$login}.json";
 if (file_exists($indexFile)) {
   $indexRaw = @file_get_contents($indexFile);
   $indexData = $indexRaw ? json_decode($indexRaw, true) : null;
@@ -76,7 +79,7 @@ if (file_exists($indexFile)) {
 
 // Fallback: if clip not in index (maybe new?), use a counter
 if ($seq === 0) {
-  $seqFile = $dir . "/seq_{$login}.txt";
+  $seqFile = $runtimeDir . "/seq_{$login}.txt";
   $fp = @fopen($seqFile, "c+");
   if ($fp) {
     flock($fp, LOCK_EX);
@@ -106,11 +109,11 @@ $entry = [
   "started_at" => $now
 ];
 
-// Ensure cache directory exists and is writable
-if (!is_dir($dir)) {
-  if (!@mkdir($dir, 0777, true)) {
+// Ensure runtime directory exists and is writable
+if (!is_dir($runtimeDir)) {
+  if (!@mkdir($runtimeDir, 0777, true)) {
     http_response_code(500);
-    echo "Failed to create cache directory: $dir";
+    echo "Failed to create cache directory: $runtimeDir";
     exit;
   }
 }
@@ -119,7 +122,7 @@ if (!is_dir($dir)) {
 $writeResult = file_put_contents($jsonPath, json_encode($entry, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT), LOCK_EX);
 if ($writeResult === false) {
   http_response_code(500);
-  echo "Failed to write to: $jsonPath - is_writable: " . (is_writable($dir) ? "yes" : "no");
+  echo "Failed to write to: $jsonPath - is_writable: " . (is_writable($runtimeDir) ? "yes" : "no");
   exit;
 }
 @file_put_contents($txtPath, $url, LOCK_EX);

@@ -5,10 +5,19 @@
  * Looks up the clip by seq from the full clips_index file, not the current pool.
  * This means ANY clip can be replayed by its permanent number.
  */
+header("Access-Control-Allow-Origin: *");
+header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
+header("Access-Control-Allow-Headers: Content-Type");
 header("Content-Type: text/plain; charset=utf-8");
 header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
 
-$baseDir = __DIR__ . "/cache";
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { exit(0); }
+
+// Static data (clips_index) is in ./cache (read-only on Railway)
+$staticDir = __DIR__ . "/cache";
+// Runtime data (force_play) goes to /tmp on Railway
+$runtimeDir = is_writable("/tmp") ? "/tmp/clipsystem_cache" : __DIR__ . "/cache";
+if (!is_dir($runtimeDir)) @mkdir($runtimeDir, 0777, true);
 
 function clean_login($s){
   $s = strtolower(trim((string)$s));
@@ -27,7 +36,7 @@ if ($key !== $ADMIN_KEY) { http_response_code(403); echo "forbidden"; exit; }
 if ($seq <= 0) { echo "Usage: !pclip <clip#>"; exit; }
 
 // Load the full clips index to find the clip by its permanent seq
-$indexFile = $baseDir . "/clips_index_" . $login . ".json";
+$indexFile = $staticDir . "/clips_index_" . $login . ".json";
 if (!file_exists($indexFile)) {
   echo "Clip index not found.";
   exit;
@@ -60,7 +69,7 @@ if (!$clip) {
 $clipId = (string)($clip["id"] ?? "");
 if ($clipId === "") { echo "Clip #{$seq} missing id."; exit; }
 
-$forcePath = $baseDir . "/force_play_" . $login . ".json";
+$forcePath = $runtimeDir . "/force_play_" . $login . ".json";
 $payload = [
   "login"    => $login,
   "seq"      => $seq,

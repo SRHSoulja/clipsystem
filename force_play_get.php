@@ -13,7 +13,8 @@ header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { exit(0); }
 
-$baseDir = __DIR__ . "/cache";
+// Use /tmp for runtime data on Railway, fall back to ./cache locally
+$baseDir = is_writable("/tmp") ? "/tmp/clipsystem_cache" : __DIR__ . "/cache";
 
 function clean_login($s){
   $s = strtolower(trim((string)$s));

@@ -14,7 +14,9 @@ function safe_login($s) {
 $login = isset($_GET['login']) ? safe_login($_GET['login']) : '';
 if ($login === '') { http_response_code(400); echo "missing login"; exit; }
 
-$path = __DIR__ . "/cache/now_playing_{$login}.json";
+// Use /tmp for runtime data on Railway, fall back to ./cache locally
+$cacheDir = is_writable("/tmp") ? "/tmp/clipsystem_cache" : __DIR__ . "/cache";
+$path = $cacheDir . "/now_playing_{$login}.json";
 $raw = @file_get_contents($path);
 if ($raw === false) { echo "No clip yet"; exit; }
 
