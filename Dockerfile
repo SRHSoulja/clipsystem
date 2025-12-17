@@ -1,7 +1,10 @@
 FROM php:8.2-apache
 
-# Fix MPM conflict - disable all MPMs first, then enable only prefork
-RUN a2dismod mpm_event mpm_worker mpm_prefork || true && \
+# Fix MPM conflict - forcefully remove mpm_event from everywhere
+RUN find /etc/apache2 -name '*mpm_event*' -delete && \
+    find /etc/apache2 -name '*mpm_worker*' -delete && \
+    sed -i '/mpm_event/d' /etc/apache2/apache2.conf || true && \
+    sed -i '/mpm_worker/d' /etc/apache2/apache2.conf || true && \
     a2enmod mpm_prefork rewrite headers
 
 # Set working directory
