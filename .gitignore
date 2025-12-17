@@ -2,15 +2,12 @@
 .env
 .env.*
 
-# Cache files (will be created at runtime)
-cache/*.json
-cache/*.txt
-
-# But include the clips index (needed for API to work)
-!cache/clips_index_*.json
-
-# Keep cache directory but ignore contents
+# Keep cache directory
 !cache/.gitkeep
+
+# Ignore runtime-generated files only
+cache/reel_*.json
+cache/now_playing_debug.txt
 
 # OS files
 .DS_Store

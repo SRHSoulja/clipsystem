@@ -1,0 +1,14 @@
+----
+2025-12-17T01:53:48+00:00
+script: /home/gmgnrepeat.com/www/flop/now_playing_set.php
+dir: /home/gmgnrepeat.com/www/flop
+login: floppyjimmie
+url: https://www.twitch.tv/floppyjimmie/clip/OptimisticSpicyWalrusThisIsSparta-jJEbPOvpR7fvr9OS
+method: GET
+----
+2025-12-17T01:56:24+00:00
+script: /home/gmgnrepeat.com/www/flop/now_playing_set.php
+dir: /home/gmgnrepeat.com/www/flop
+login: floppyjimmie
+url: 
+method: POST
