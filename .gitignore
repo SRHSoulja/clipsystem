@@ -6,6 +6,9 @@
 cache/*.json
 cache/*.txt
 
+# But include the clips index (needed for API to work)
+!cache/clips_index_*.json
+
 # Keep cache directory but ignore contents
 !cache/.gitkeep
 
