@@ -1,6 +1,5 @@
 FROM php:8.2-cli
 
-# Install built-in PHP server dependencies
 WORKDIR /var/www/html
 
 # Copy all files
@@ -10,8 +9,5 @@ COPY . .
 RUN mkdir -p /var/www/html/cache && \
     chmod -R 777 /var/www/html/cache
 
-# Expose port 80
-EXPOSE 80
-
-# Use PHP's built-in server (simpler, no Apache/nginx needed)
-CMD ["php", "-S", "0.0.0.0:80", "-t", "/var/www/html"]
+# Railway provides PORT dynamically - use shell form for variable expansion
+CMD php -S 0.0.0.0:${PORT:-8080} -t /var/www/html
