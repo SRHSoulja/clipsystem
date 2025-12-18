@@ -454,21 +454,21 @@
   // TRANSITION_PREROLL_MS: How early (ms) before clip ends to show transition
   //   - Lower = transition starts closer to when clip actually ends
   //   - 0 = transition starts exactly when clip ends
-  const TRANSITION_PREROLL_MS      = 50;
+  const TRANSITION_PREROLL_MS      = 0;
 
   // TRANSITION_MIN_MS: Minimum time (ms) the transition video/gif plays
   //   - Should roughly match your transition video length
   //   - Too short = cuts off mid-animation; Too long = delays next clip
-  const TRANSITION_MIN_MS          = 800;
+  const TRANSITION_MIN_MS          = 10;
 
   // TRANSITION_AFTER_REVEAL_MS: Extra delay (ms) after new clip loads before hiding transition
   //   - Gives the new clip time to start playing smoothly
-  const TRANSITION_AFTER_REVEAL_MS = 50;
+  const TRANSITION_AFTER_REVEAL_MS = 10;
   const IFRAME_LOAD_FAILSAFE_MS    = 8000;
 
-  const IFRAME_SETTLE_PAD_MS       = 350;
-  const LOAD_SLOW_THRESHOLD_MS     = 1200;
-  const LOAD_SLOW_EXTRA_MS         = 500;
+  const IFRAME_SETTLE_PAD_MS       = 80;
+  const LOAD_SLOW_THRESHOLD_MS     = 80;
+  const LOAD_SLOW_EXTRA_MS         = 50;
 
   let transitionShownAt = 0;
 
@@ -1079,6 +1079,13 @@
       console.log("[SWITCH] Showing transition");
       showTransition();
     }
+
+    // IMMEDIATELY kill audio from the old clip by blanking it
+    // This prevents audio bleed during the transition
+    liveFrame.classList.remove("live");
+    try { liveFrame.src = "about:blank"; } catch {}
+    console.log("[SWITCH] Old clip audio killed immediately");
+
     const token = ++nextToken;
     const switchStartedAt = Date.now();
 
@@ -1094,7 +1101,7 @@
       }
       debugLog("SW#" + switchNum + " loaded" + (wasFailsafe ? " (failsafe)" : ""), "ok");
 
-      liveFrame.classList.remove("live");
+      // liveFrame was already hidden and blanked at switch start (for instant audio kill)
       revealIframeThenFadeOut(backFrame, loadStartedAt);
 
       const tmp = liveFrame;
@@ -1102,7 +1109,6 @@
       backFrame = tmp;
 
       try { backFrame.onload = null; } catch {}
-      setTimeout(() => { try { backFrame.src = "about:blank"; } catch {} }, 300);
 
       markPlayed(clipToPlay);
 
