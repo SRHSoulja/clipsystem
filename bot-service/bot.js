@@ -132,11 +132,25 @@ const commands = {
     }
   },
 
-  // !like <seq> - Upvote a clip
+  // !like [seq] - Upvote a clip (current clip if no seq provided)
   async like(channel, tags, args) {
-    const seq = parseInt(args[0]);
+    let seq = parseInt(args[0]);
+
+    // If no seq provided, get current playing clip
     if (!seq || seq <= 0) {
-      return 'Usage: !like <clip#>';
+      try {
+        const nowUrl = `${config.apiBaseUrl}/now_playing_get.php?login=${config.clipChannel}`;
+        const nowRes = await fetchWithTimeout(nowUrl);
+        const nowData = await nowRes.json();
+        if (nowData && nowData.seq) {
+          seq = nowData.seq;
+        } else {
+          return 'No clip currently playing to like.';
+        }
+      } catch (err) {
+        console.error('!like get current error:', err.message);
+        return 'Could not get current clip.';
+      }
     }
 
     try {
@@ -150,11 +164,25 @@ const commands = {
     }
   },
 
-  // !dislike <seq> - Downvote a clip
+  // !dislike [seq] - Downvote a clip (current clip if no seq provided)
   async dislike(channel, tags, args) {
-    const seq = parseInt(args[0]);
+    let seq = parseInt(args[0]);
+
+    // If no seq provided, get current playing clip
     if (!seq || seq <= 0) {
-      return 'Usage: !dislike <clip#>';
+      try {
+        const nowUrl = `${config.apiBaseUrl}/now_playing_get.php?login=${config.clipChannel}`;
+        const nowRes = await fetchWithTimeout(nowUrl);
+        const nowData = await nowRes.json();
+        if (nowData && nowData.seq) {
+          seq = nowData.seq;
+        } else {
+          return 'No clip currently playing to dislike.';
+        }
+      } catch (err) {
+        console.error('!dislike get current error:', err.message);
+        return 'Could not get current clip.';
+      }
     }
 
     try {
