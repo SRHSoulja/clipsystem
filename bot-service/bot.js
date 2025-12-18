@@ -220,6 +220,11 @@ const commands = {
   // !clips - Alias for !clip
   async clips(channel, tags, args) {
     return commands.clip(channel, tags, args);
+  },
+
+  // !chelp - Show command help
+  async chelp(channel, tags, args) {
+    return '!clip (current) | !like / !dislike (vote) | !pclip # (play) | !cremove # (remove)';
   }
 };
 
