@@ -91,6 +91,33 @@ if (!$index || !isset($index['clips']) || !is_array($index['clips']) || !count($
 $all = $index['clips'];
 $totalAll = count($all);
 
+// ---- filter out blocked clips ----
+// Blocklist is stored in runtime dir (survives deploys on Railway via /tmp workaround)
+$runtimeDir = is_writable("/tmp") ? "/tmp/clipsystem_cache" : $cacheDir;
+$blocklistFile = $runtimeDir . "/blocklist_{$safe}.json";
+$blockedIds = [];
+if (file_exists($blocklistFile)) {
+  $blockRaw = @file_get_contents($blocklistFile);
+  $blocklist = $blockRaw ? json_decode($blockRaw, true) : [];
+  if (is_array($blocklist)) {
+    foreach ($blocklist as $b) {
+      if (isset($b["clip_id"])) {
+        $blockedIds[$b["clip_id"]] = true;
+      }
+    }
+  }
+}
+
+if (count($blockedIds) > 0) {
+  $all = array_filter($all, function($c) use ($blockedIds) {
+    $id = isset($c['id']) ? $c['id'] : '';
+    return !isset($blockedIds[$id]);
+  });
+  $all = array_values($all); // reindex
+}
+
+$blockedCount = count($blockedIds);
+
 $now = time();
 $recentCut = ($days > 0) ? ($now - ($days * 86400)) : 0;
 
