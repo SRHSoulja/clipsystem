@@ -92,8 +92,8 @@ async function fetchWithTimeout(url, timeoutMs = 5000) {
 
 // Command handlers
 const commands = {
-  // !pb - Show currently playing clip
-  async pb(channel, tags, args) {
+  // !clip - Show currently playing clip
+  async clip(channel, tags, args) {
     try {
       const url = `${config.apiBaseUrl}/now_playing_get.php?login=${config.clipChannel}`;
       const res = await fetchWithTimeout(url);
@@ -217,12 +217,7 @@ const commands = {
     }
   },
 
-  // !clip or !clips - Show info about the clip system
-  async clip(channel, tags, args) {
-    return `Use !pb to see the current clip. Mods can use !pclip <#> to play a specific clip. Vote with !like <#> or !dislike <#>`;
-  },
-
-  // Alias
+  // !clips - Alias for !clip
   async clips(channel, tags, args) {
     return commands.clip(channel, tags, args);
   }
@@ -266,7 +261,7 @@ client.on('connected', (addr, port) => {
   console.log(`Listening in channel: ${config.channel}`);
   console.log(`Using clips from: ${config.clipChannel}`);
   console.log(`Bot username: ${config.botUsername}`);
-  console.log('Commands active: !pb, !pclip, !like, !dislike, !cremove, !clip');
+  console.log('Commands active: !clip, !pclip, !like, !dislike, !cremove');
 });
 
 client.on('disconnected', (reason) => {
