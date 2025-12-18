@@ -5,8 +5,10 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>FloppyJimmie Away Reel</title>
 
+  <!-- Transition preloading is handled in JS - supports video (preferred) or GIF fallback -->
+  <link rel="preload" as="video" href="/flop/transition.mp4" fetchpriority="high">
+  <link rel="preload" as="video" href="/flop/transition.webm" fetchpriority="high">
   <link rel="preload" as="image" href="/flop/transition.gif" fetchpriority="high">
-  <link rel="prefetch" as="image" href="/flop/transition.gif">
 
   <link rel="dns-prefetch" href="//clips.twitch.tv">
   <link rel="preconnect" href="https://clips.twitch.tv" crossorigin>
@@ -77,7 +79,7 @@
       transition: opacity 260ms linear;
     }
 
-    #transitionImg{
+    #transitionImg, #transitionVideo{
       width:100%;
       height:100%;
       object-fit:cover;
@@ -97,79 +99,39 @@
     }
     body.mask #ui-mask{ display:block; }
 
-    #cacheWarn{
+    /* Simple loading overlay - shows briefly on fresh source load */
+    #loadingOverlay{
       position:absolute;
       inset:0;
       z-index:99999;
       pointer-events:none;
-      display:none;
-    }
-    #cacheWarn.show{ display:block; }
-
-    #cacheWarn .veil{
-      position:absolute;
-      inset:0;
       background: #000;
-      z-index:1;
-    }
-
-    #cacheWarn .rain{
-      position:absolute;
-      inset:0;
-      width:100%;
-      height:100%;
-      display:block;
-      z-index:2;
-    }
-
-    #cacheWarn .center{
-      position:absolute;
-      inset:0;
       display:flex;
       align-items:center;
       justify-content:center;
-      padding:20px;
-      z-index:3;
+      opacity:1;
+      transition: opacity 400ms ease-out;
     }
+    #loadingOverlay.hide{ opacity:0; pointer-events:none; }
 
-    #cacheWarn .card{
-      pointer-events:none;
-      width:min(720px, 92vw);
-      background: #001500;
-      color:#00ff00;
-      border:3px solid #00ff00;
-      border-radius:14px;
-      padding:28px 28px;
-      font: 18px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      box-shadow: 0 0 60px #00ff00;
+    #loadingOverlay .content{
       text-align:center;
+      color:#fff;
+      font: 600 24px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
     }
 
-    #cacheWarn .title{
-      font-weight:800;
-      font-size:22px;
-      margin-bottom:10px;
-      letter-spacing:.3px;
-    }
-
-    #cacheWarn .sub{
-      font-size:16px;
-      margin-bottom:14px;
-    }
-
-    #cacheWarn .tiny{
-      opacity:0.8;
-      font-size:14px;
-    }
-
-    #cacheWarn .spinner{
-      width:32px;
-      height:32px;
+    #loadingOverlay .spinner{
+      width:48px;
+      height:48px;
       border-radius:50%;
-      border:3px solid #004400;
-      border-top-color: #00ff00;
-      margin: 0 auto 16px auto;
+      border:4px solid rgba(255,255,255,0.2);
+      border-top-color: #fff;
+      margin: 0 auto 20px auto;
       animation: spin 0.8s linear infinite;
+    }
+
+    #loadingOverlay .text{
+      opacity:0.9;
     }
 
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -276,6 +238,12 @@
     </div>
 
     <div id="transition" class="hide" aria-hidden="true">
+      <!-- Use video instead of GIF for reliable loading in OBS browser source -->
+      <!-- If you have transition.mp4/webm, it will use that; falls back to GIF -->
+      <video id="transitionVideo" muted playsinline loop preload="auto" style="display:none;">
+        <source src="/flop/transition.webm" type="video/webm">
+        <source src="/flop/transition.mp4" type="video/mp4">
+      </video>
       <img id="transitionImg" src="/flop/transition.gif" alt="">
     </div>
 
@@ -291,16 +259,10 @@
       </div>
     </div>
 
-    <div id="cacheWarn" class="show" aria-hidden="true">
-      <div class="veil"></div>
-      <canvas id="matrixRain" class="rain"></canvas>
-      <div class="center">
-        <div class="card">
-          <div class="spinner"></div>
-          <div class="title">Loading Clip Reel</div>
-          <div class="sub">First load can take a bit. This is normal. It should be fast after it finishes.</div>
-          <div class="tiny">This will disappear when the first clip starts playing.</div>
-        </div>
+    <div id="loadingOverlay" aria-hidden="true">
+      <div class="content">
+        <div class="spinner"></div>
+        <div class="text">Loading Clips...</div>
       </div>
     </div>
 
@@ -355,13 +317,17 @@
   const frameB        = document.getElementById("frameB");
   const transition    = document.getElementById("transition");
   const transitionImg = document.getElementById("transitionImg");
+  const transitionVideo = document.getElementById("transitionVideo");
 
-  const cacheWarn = document.getElementById("cacheWarn");
-  const matrixCanvas = document.getElementById("matrixRain");
+  // Determine if we should use video or GIF for transitions
+  // Video is preferred as it loads much more reliably in OBS browser source
+  let useVideoTransition = false;
 
-  // Show boot overlay on first load only (not when GIF already loaded this session)
-  // Refreshing/updating the browser source clears sessionStorage, so boot shows again
-  const bootEnabled = !gifLoadedThisSession;
+  const loadingOverlay = document.getElementById("loadingOverlay");
+
+  // Show loading overlay on first load only (not when already loaded this session)
+  // Refreshing/updating the browser source clears sessionStorage, so it shows again
+  const showLoadingOnStart = !gifLoadedThisSession;
 
   // Debug overlay - add ?debug=1 to URL to show
   const debugEnabled = qs.get("debug") === "1";
@@ -455,177 +421,33 @@
     setInterval(pollHudOnce, hudPollMs);
   }
 
-  // ===== Matrix rain (optional) =====
-  function startMatrixRain(){
-    if (!matrixCanvas) {
-      debugLog("MATRIX: no canvas!", "err");
-      return () => {};
-    }
-    const c = matrixCanvas;
-    const ctx = c.getContext("2d", { alpha: true });
+  // ===== Simple loading overlay (replaces old matrix rain) =====
+  // Show for 5-10 seconds on fresh source load, then fade out
+  const LOADING_OVERLAY_MIN_MS     = 5000;   // Minimum 5 seconds display
+  const LOADING_EXTRA_SETTLE_MS    = 1000;   // Extra settle after iframe loads
+  const MEDIA_PRELOAD_MIN_MS       = 2000;   // Minimum time for video/GIF preload
+  let loadingShownAt = 0;
+  let mediaPreloadStartedAt = 0;
 
-    if (!ctx) {
-      debugLog("MATRIX: no ctx!", "err");
-      return () => {};
-    }
-
-    // Helper to get dimensions with OBS fallback - FORCE 1920x1080 if all else fails
-    const getWidth = () => {
-      const w = window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth || 0;
-      return w > 0 ? w : 1920;
-    };
-    const getHeight = () => {
-      const h = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight || 0;
-      return h > 0 ? h : 1080;
-    };
-
-    const resize = () => {
-      const dpr = window.devicePixelRatio || 1;
-      const w = getWidth();
-      const h = getHeight();
-      c.width = Math.floor(w * dpr);
-      c.height = Math.floor(h * dpr);
-      c.style.width = w + "px";
-      c.style.height = h + "px";
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      debugLog("MATRIX resize: " + w + "x" + h);
-    };
-    resize();
-
-    // Draw initial black frame immediately to prime the canvas
-    const w = getWidth();
-    const h = getHeight();
-    ctx.fillStyle = "#000";
-    ctx.fillRect(0, 0, w, h);
-    debugLog("MATRIX primed: " + w + "x" + h, "ok");
-
-    const chars = "01";
-    const fontSize = 16;
-    let cols = Math.floor(getWidth() / fontSize);
-    let drops = new Array(cols).fill(1).map(() => Math.random() * 30);
-
-    const onResize = () => {
-      resize();
-      cols = Math.floor(getWidth() / fontSize);
-      drops = new Array(cols).fill(1).map(() => Math.random() * 30);
-    };
-    window.addEventListener("resize", onResize);
-
-    let raf = 0;
-    let last = 0;
-
-    const tick = (t) => {
-      if (t - last < 33) { raf = requestAnimationFrame(tick); return; }
-      last = t;
-
-      const w = getWidth();
-      const h = getHeight();
-
-      ctx.fillStyle = "rgba(0,0,0,0.18)";
-      ctx.fillRect(0, 0, w, h);
-
-      ctx.font = `${fontSize}px monospace`;
-      ctx.fillStyle = "rgba(0,255,110,0.85)";
-
-      for (let i = 0; i < drops.length; i++) {
-        const text = chars[(Math.random() * chars.length) | 0];
-        const x = i * fontSize;
-        const y = drops[i] * fontSize;
-
-        ctx.fillText(text, x, y);
-
-        if (y > h && Math.random() > 0.975) drops[i] = 0;
-        drops[i] += 1;
-      }
-
-      raf = requestAnimationFrame(tick);
-    };
-
-    raf = requestAnimationFrame(tick);
-
-    return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener("resize", onResize);
-    };
-  }
-
-  let matrixStop = null;
-  let matrixStarted = false;  // Track if we've started the matrix rain (global scope)
-
-  // Boot overlay minimum display time - ensures GIF buffers and clip is ready
-  const BOOT_MIN_DISPLAY_MS        = 5500;  // At least 5.5 seconds for initial GIF cache
-  const BOOT_EXTRA_SETTLE_MS       = 1500;  // Extra settle after iframe loads
-  const GIF_PRELOAD_MIN_MS         = 3000;  // Minimum time to let GIF fully decode/buffer
-  let bootShownAt = 0;
-  let gifPreloadStartedAt = 0;
-
-  // Function to ensure matrix rain is running
-  function ensureMatrixRunning() {
-    if (matrixStarted && matrixStop) {
-      debugLog("MATRIX: already running", "warn");
-      return true;
-    }
-
-    // Try to get dimensions with OBS fallbacks
-    const w = window.innerWidth || document.documentElement.clientWidth || 1920;
-    const h = window.innerHeight || document.documentElement.clientHeight || 1080;
-
-    debugLog("MATRIX ensure: " + w + "x" + h);
-
-    // Start the matrix rain
-    matrixStarted = true;
-    matrixStop = startMatrixRain();
-    if (bootShownAt === 0) bootShownAt = Date.now();
-    debugLog("MATRIX started!", "ok");
-    return true;
-  }
-
-  // Start matrix rain immediately so it's visible during initial load
-  // Use multiple methods to ensure it starts in OBS browser source
-  if (bootEnabled) {
-    debugLog("BOOT enabled, starting matrix...");
-
-    const tryStartMatrix = () => {
-      if (matrixStarted) return;
-      // Check multiple conditions - OBS sometimes reports 0 for window dimensions
-      const w = window.innerWidth || document.documentElement.clientWidth || 1920;
-      const h = window.innerHeight || document.documentElement.clientHeight || 1080;
-
-      if (w > 0 && h > 0) {
-        ensureMatrixRunning();
-      } else {
-        debugLog("MATRIX: dims 0, retry...", "warn");
-        requestAnimationFrame(tryStartMatrix);
-      }
-    };
-
-    // Try multiple times with different methods
-    requestAnimationFrame(tryStartMatrix);
-    setTimeout(tryStartMatrix, 50);
-    setTimeout(tryStartMatrix, 150);
-    setTimeout(tryStartMatrix, 300);
-
-    // Fallback: force start after 500ms regardless
-    setTimeout(() => {
-      if (!matrixStarted) {
-        debugLog("MATRIX: force start 500ms", "warn");
-        ensureMatrixRunning();
-      }
-    }, 500);
+  // Show loading overlay on fresh source load
+  if (showLoadingOnStart) {
+    loadingShownAt = Date.now();
+    loadingOverlay.classList.remove("hide");
+    debugLog("LOADING: showing overlay");
   } else {
-    debugLog("BOOT disabled", "warn");
+    loadingOverlay.classList.add("hide");
+    debugLog("LOADING: skipped (session cached)");
   }
 
-  function showBoot(){
-    if (!bootEnabled) return;
-    cacheWarn.classList.add("show");
-    // Always try to ensure matrix is running when showBoot is called
-    ensureMatrixRunning();
+  function showLoadingOverlay(){
+    if (!showLoadingOnStart) return;
+    loadingOverlay.classList.remove("hide");
+    if (loadingShownAt === 0) loadingShownAt = Date.now();
   }
 
-  function hideBoot(){
-    cacheWarn.classList.remove("show");
-    if (matrixStop) { matrixStop(); matrixStop = null; }
+  function hideLoadingOverlay(){
+    loadingOverlay.classList.add("hide");
+    debugLog("LOADING: hidden");
   }
 
   // ===== Timing knobs =====
@@ -692,87 +514,163 @@
 
   // ===== Transition gif restart that actually replays in OBS =====
   function restartGifHard(url){
+    // Use blob URL if available (already in memory, no network request)
+    // Fall back to regular URL otherwise
+    const srcToUse = transitionGifBlobUrl || url;
+
     transitionImg.src = "";
     requestAnimationFrame(() => {
-      transitionImg.src = url;
+      transitionImg.src = srcToUse;
     });
   }
 
-  // Preload the transition GIF fully into browser cache
-  let transitionGifFullyLoaded = false;
-  let transitionGifBlob = null;
+  // Preload the transition media (video preferred, GIF fallback)
+  let transitionMediaReady = false;
+  let transitionGifBlobUrl = null;
 
+  // Try to load video first (much more reliable in OBS), fall back to GIF
+  async function preloadTransitionMedia(){
+    mediaPreloadStartedAt = Date.now();
 
-  async function preloadTransitionGifFully(){
-    gifPreloadStartedAt = Date.now();
-
-    // If GIF was already loaded this session, use shorter wait
-    const minWait = gifLoadedThisSession ? 500 : GIF_PRELOAD_MIN_MS;
-    console.log("[GIF] Starting preload, loadedThisSession:", gifLoadedThisSession, "minWait:", minWait);
+    const minWait = gifLoadedThisSession ? 500 : MEDIA_PRELOAD_MIN_MS;
+    console.log("[TRANSITION] Starting preload, session loaded:", gifLoadedThisSession, "minWait:", minWait);
 
     return new Promise((resolve) => {
-      // Set the transition image src FIRST - this starts loading immediately
-      // The browser will cache it and subsequent loads will be instant
-      transitionImg.src = TRANSITION_GIF_BASE;
+      let resolved = false;
+      const finish = (success, isVideo = false) => {
+        if (resolved) return;
+        resolved = true;
 
-      // Method 1: Fetch the full file into cache
-      fetch(TRANSITION_GIF_BASE, { cache: "force-cache" })
-        .then(r => r.blob())
-        .then(blob => {
-          console.log("[GIF] Fetched into cache, size:", blob.size, "bytes");
-          transitionGifBlob = blob;
+        if (success) {
+          transitionMediaReady = true;
+          useVideoTransition = isVideo;
+          try { sessionStorage.setItem(GIF_LOADED_KEY, "1"); } catch {}
+        }
 
-          // Method 2: Create an offscreen Image to force full decode
-          const img = new Image();
-          img.onload = () => {
-            console.log("[GIF] Image decoded, dimensions:", img.naturalWidth, "x", img.naturalHeight);
+        console.log("[TRANSITION] Preload complete. Success:", success, "Using video:", isVideo);
 
-            const finishPreload = () => {
-              transitionGifFullyLoaded = true;
+        // Show/hide appropriate element
+        if (isVideo) {
+          transitionVideo.style.display = "block";
+          transitionImg.style.display = "none";
+        } else {
+          transitionVideo.style.display = "none";
+          transitionImg.style.display = "block";
+        }
 
-              // Mark GIF as loaded for this session
-              try { sessionStorage.setItem(GIF_LOADED_KEY, "1"); } catch {}
+        // Ensure minimum preload time has passed
+        const elapsed = Date.now() - mediaPreloadStartedAt;
+        const remaining = Math.max(0, minWait - elapsed);
+        if (remaining > 0) {
+          console.log("[TRANSITION] Waiting additional", remaining, "ms for buffer time");
+          setTimeout(() => resolve(success), remaining);
+        } else {
+          resolve(success);
+        }
+      };
 
-              // Ensure minimum preload time has passed
-              const elapsed = Date.now() - gifPreloadStartedAt;
-              const remaining = Math.max(0, minWait - elapsed);
-              if (remaining > 0) {
-                console.log("[GIF] Waiting additional", remaining, "ms for buffer time");
-                setTimeout(() => resolve(true), remaining);
-              } else {
-                resolve(true);
-              }
+      // FIRST: Try video (much more reliable in OBS browser source)
+      if (transitionVideo) {
+        console.log("[TRANSITION] Trying video sources first...");
+
+        let videoTimeout = setTimeout(() => {
+          console.log("[TRANSITION] Video load timeout, falling back to GIF");
+          tryGifFallback();
+        }, 5000);
+
+        // Check if video can play
+        transitionVideo.oncanplaythrough = () => {
+          clearTimeout(videoTimeout);
+          console.log("[TRANSITION] Video ready to play through!");
+          transitionVideo.oncanplaythrough = null;
+          transitionVideo.onerror = null;
+          finish(true, true);
+        };
+
+        transitionVideo.onerror = (e) => {
+          clearTimeout(videoTimeout);
+          console.log("[TRANSITION] Video error, falling back to GIF:", e);
+          transitionVideo.oncanplaythrough = null;
+          transitionVideo.onerror = null;
+          tryGifFallback();
+        };
+
+        // Trigger video load
+        transitionVideo.load();
+
+        // Also check if already ready (cached)
+        if (transitionVideo.readyState >= 4) {
+          clearTimeout(videoTimeout);
+          transitionVideo.oncanplaythrough = null;
+          transitionVideo.onerror = null;
+          console.log("[TRANSITION] Video already cached and ready!");
+          finish(true, true);
+          return;
+        }
+      } else {
+        tryGifFallback();
+      }
+
+      function tryGifFallback() {
+        console.log("[TRANSITION] Loading GIF fallback...");
+
+        // Fetch GIF as blob for reliable loading
+        fetch(TRANSITION_GIF_BASE, { cache: "force-cache" })
+          .then(r => {
+            if (!r.ok) throw new Error("HTTP " + r.status);
+            return r.blob();
+          })
+          .then(blob => {
+            console.log("[TRANSITION] GIF downloaded, size:", blob.size, "bytes");
+
+            if (blob.size < 1000) throw new Error("Blob too small");
+
+            const blobUrl = URL.createObjectURL(blob);
+            transitionGifBlobUrl = blobUrl;
+
+            // Load into image element
+            transitionImg.onload = () => {
+              console.log("[TRANSITION] GIF loaded:", transitionImg.naturalWidth, "x", transitionImg.naturalHeight);
+
+              // Force decode by drawing to canvas
+              try {
+                const canvas = document.createElement('canvas');
+                canvas.width = transitionImg.naturalWidth;
+                canvas.height = transitionImg.naturalHeight;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(transitionImg, 0, 0);
+                console.log("[TRANSITION] GIF decoded via canvas");
+              } catch (e) {}
+
+              finish(true, false);
             };
 
-            // Method 3: Use createImageBitmap for full GPU decode if available
-            if (typeof createImageBitmap === 'function') {
-              createImageBitmap(blob).then(bitmap => {
-                console.log("[GIF] Bitmap created:", bitmap.width, "x", bitmap.height);
-                finishPreload();
-              }).catch(() => {
-                finishPreload();
-              });
-            } else {
-              finishPreload();
-            }
-          };
-          img.onerror = () => {
-            console.warn("[GIF] Image decode failed");
-            resolve(false);
-          };
-          // Use blob URL for decode, but actual element already has regular URL
-          img.src = URL.createObjectURL(blob);
-        })
-        .catch(err => {
-          console.warn("[GIF] Fetch failed:", err);
-          resolve(false);
-        });
+            transitionImg.onerror = () => {
+              console.warn("[TRANSITION] GIF blob load failed, trying direct URL");
+              transitionImg.src = TRANSITION_GIF_BASE;
+              setTimeout(() => finish(transitionImg.complete, false), 1000);
+            };
 
-      // Timeout fallback - shorter if already loaded this session
-      const timeout = gifLoadedThisSession ? 3000 : 8000;
+            transitionImg.src = blobUrl;
+          })
+          .catch(err => {
+            console.warn("[TRANSITION] GIF fetch failed:", err);
+            transitionImg.src = TRANSITION_GIF_BASE;
+            transitionImg.onload = () => finish(transitionImg.complete, false);
+            transitionImg.onerror = () => finish(false, false);
+          });
+      }
+
+      // Final timeout fallback
+      const timeout = gifLoadedThisSession ? 6000 : 12000;
       setTimeout(() => {
-        console.warn("[GIF] Preload timeout after", timeout, "ms");
-        resolve(false);
+        if (!resolved) {
+          console.warn("[TRANSITION] Preload timeout after", timeout, "ms");
+          // Use whatever we have
+          const videoReady = transitionVideo && transitionVideo.readyState >= 2;
+          const gifReady = transitionImg.complete && transitionImg.naturalWidth > 0;
+          finish(videoReady || gifReady, videoReady);
+        }
       }, timeout);
     });
   }
@@ -822,7 +720,16 @@
 
   function showTransition(){
     transitionShownAt = Date.now();
-    restartGifHard(TRANSITION_GIF_BASE);
+
+    if (useVideoTransition && transitionVideo) {
+      // Video mode - restart and play the video
+      transitionVideo.currentTime = 0;
+      transitionVideo.play().catch(e => console.warn("[TRANSITION] Video play failed:", e));
+    } else {
+      // GIF mode - restart the GIF animation
+      restartGifHard(TRANSITION_GIF_BASE);
+    }
+
     transition.classList.remove("hide");
   }
 
@@ -944,39 +851,43 @@
     return Math.min(1800, Math.max(850, d));
   }
 
-  // Check if the transition GIF is properly loaded
-  function isTransitionGifReady() {
-    // Check both the flag from full preload AND the image element state
-    return transitionGifFullyLoaded || (transitionImg.complete && transitionImg.naturalWidth > 0);
+  // Check if the transition media (video or GIF) is properly loaded
+  function isTransitionMediaReady() {
+    if (useVideoTransition && transitionVideo) {
+      return transitionVideo.readyState >= 2;
+    }
+    return transitionMediaReady || (transitionImg.complete && transitionImg.naturalWidth > 0);
   }
 
-  // Wait for transition GIF to be ready
-  async function waitForTransitionGif(maxMs = 3000) {
+  // Wait for transition media to be ready
+  async function waitForTransitionMedia(maxMs = 3000) {
     const start = Date.now();
     // First check if already fully loaded
-    if (transitionGifFullyLoaded) {
-      console.log("[GIF] Already fully loaded");
+    if (transitionMediaReady) {
+      console.log("[TRANSITION] Already ready");
       return true;
     }
     // Otherwise wait for it
     while (Date.now() - start < maxMs) {
-      if (transitionGifFullyLoaded) {
-        console.log("[GIF] Fully loaded after", Date.now() - start, "ms");
+      if (transitionMediaReady) {
+        console.log("[TRANSITION] Ready after", Date.now() - start, "ms");
         return true;
       }
-      if (transitionImg.complete && transitionImg.naturalWidth > 0) {
-        // Image element says complete, give it a bit more time to fully decode
+      if (useVideoTransition && transitionVideo && transitionVideo.readyState >= 2) {
+        return true;
+      }
+      if (!useVideoTransition && transitionImg.complete && transitionImg.naturalWidth > 0) {
         await new Promise(r => setTimeout(r, 200));
         return true;
       }
       await new Promise(r => setTimeout(r, 50));
     }
-    console.warn("[GIF] Wait timeout after", maxMs, "ms, proceeding anyway");
-    return isTransitionGifReady();
+    console.warn("[TRANSITION] Wait timeout after", maxMs, "ms, proceeding anyway");
+    return isTransitionMediaReady();
   }
 
   // Extra time to let clip video buffer after iframe loads (for first clip)
-  const FIRST_CLIP_BUFFER_MS = 3000;  // Give first clip extra time to buffer video
+  const FIRST_CLIP_BUFFER_MS = 1500;  // Give first clip extra time to buffer video
 
   function revealIframeThenFadeOut(frameToReveal, loadStartedAt) {
     const loadMs = loadStartedAt ? (Date.now() - loadStartedAt) : 0;
@@ -986,31 +897,29 @@
     if (loadMs > LOAD_SLOW_THRESHOLD_MS) extra += LOAD_SLOW_EXTRA_MS;
 
     setTimeout(async () => {
-      // Hide boot overlay when first clip actually reveals - but wait for everything to be ready
+      // Hide loading overlay when first clip actually reveals
       if (!firstTransitionShown) {
-        // Ensure boot was shown for minimum time
-        const bootElapsed = Date.now() - bootShownAt;
-        const bootRemaining = Math.max(0, BOOT_MIN_DISPLAY_MS - bootElapsed);
+        // Ensure loading overlay was shown for minimum time (5-10 seconds)
+        const loadingElapsed = Date.now() - loadingShownAt;
+        const loadingRemaining = Math.max(0, LOADING_OVERLAY_MIN_MS - loadingElapsed);
 
-        // Wait for transition GIF to be ready
-        await waitForTransitionGif(2000);
+        // Wait for transition media (video or GIF) to be ready
+        await waitForTransitionMedia(2000);
 
-        // If we need more time for boot minimum, wait
-        if (bootRemaining > 0) {
-          console.log("[BOOT] Waiting additional", bootRemaining, "ms for minimum boot time");
-          await new Promise(r => setTimeout(r, bootRemaining));
+        // If we need more time for loading minimum, wait
+        if (loadingRemaining > 0) {
+          console.log("[LOADING] Waiting additional", loadingRemaining, "ms for minimum display");
+          await new Promise(r => setTimeout(r, loadingRemaining));
         }
 
         // Extra settle time to ensure clip video is buffered
-        await new Promise(r => setTimeout(r, BOOT_EXTRA_SETTLE_MS));
+        await new Promise(r => setTimeout(r, LOADING_EXTRA_SETTLE_MS));
 
-        console.log("[BOOT] Boot requirements met, hiding overlay");
-        hideBoot();
+        console.log("[LOADING] Requirements met, hiding overlay");
+        hideLoadingOverlay();
         firstTransitionShown = true;
 
         // For first clip, add extra buffer time before fading out transition
-        // This lets the video actually buffer before we reveal it
-        console.log("[BOOT] Waiting", FIRST_CLIP_BUFFER_MS, "ms for first clip to buffer");
         await new Promise(r => setTimeout(r, FIRST_CLIP_BUFFER_MS));
       }
 
@@ -1353,22 +1262,22 @@
 
   async function init() {
     console.log("[INIT] Starting init...");
-    showBoot();                 // show immediately, always
-    console.log("[INIT] Boot overlay shown");
+    showLoadingOverlay();       // show immediately on fresh load
+    console.log("[INIT] Loading overlay shown");
 
-    // Start preloading the transition GIF immediately and fully
+    // Start preloading the transition media (video preferred, GIF fallback)
     // This MUST complete before we load any clips
-    console.log("[INIT] Starting GIF preload (will wait at least", GIF_PRELOAD_MIN_MS, "ms)...");
-    const gifPreloadPromise = preloadTransitionGifFully();
+    console.log("[INIT] Starting transition preload (will wait at least", MEDIA_PRELOAD_MIN_MS, "ms)...");
+    const mediaPreloadPromise = preloadTransitionMedia();
 
     // Also do soft warmups in parallel (but don't start clip loading yet)
     preloadTransitionGifSoft(800);
     warmupTwitchEmbedSoft(900);
 
-    // CRITICAL: Wait for GIF to be fully loaded and buffered before proceeding
-    // This ensures the transition GIF plays smoothly on first use
-    const gifReady = await gifPreloadPromise;
-    console.log("[INIT] GIF preload complete (ready:", gifReady, "), elapsed:", Date.now() - gifPreloadStartedAt, "ms");
+    // CRITICAL: Wait for media to be fully loaded and buffered before proceeding
+    // This ensures the transition plays smoothly on first use
+    const mediaReady = await mediaPreloadPromise;
+    console.log("[INIT] Media preload complete (ready:", mediaReady, "), elapsed:", Date.now() - mediaPreloadStartedAt, "ms");
 
     // Extra safety wait to ensure GIF is truly buffered in GPU/memory
     await new Promise(r => setTimeout(r, 500));
