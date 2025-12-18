@@ -1,0 +1,15 @@
+{
+  "name": "clipsystem-bot",
+  "version": "1.0.0",
+  "description": "Twitch chat bot for FloppyJimmie clip system",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js"
+  },
+  "dependencies": {
+    "tmi.js": "^1.8.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
