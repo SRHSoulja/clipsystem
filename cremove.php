@@ -3,7 +3,7 @@
  * cremove.php - Remove a clip from the pool by its seq number
  *
  * Mod-only command to permanently remove unwanted clips.
- * Adds the clip to a blocklist so it won't appear again.
+ * Uses PostgreSQL for persistent storage (survives Railway redeploys).
  */
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
@@ -13,9 +13,11 @@ header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { exit(0); }
 
+require_once __DIR__ . '/db_config.php';
+
 // Static data (clips_index) is in ./cache (read-only on Railway)
 $staticDir = __DIR__ . "/cache";
-// Runtime data goes to /tmp on Railway
+// Runtime data goes to /tmp on Railway (fallback only)
 $runtimeDir = is_writable("/tmp") ? "/tmp/clipsystem_cache" : __DIR__ . "/cache";
 if (!is_dir($runtimeDir)) @mkdir($runtimeDir, 0777, true);
 
@@ -69,7 +71,43 @@ if (!$clip) {
 $clipId = (string)($clip["id"] ?? "");
 if ($clipId === "") { echo "Clip #{$seq} missing id."; exit; }
 
-// Load existing blocklist
+$title = $clip["title"] ?? "(no title)";
+
+// Try PostgreSQL first for permanent storage
+$pdo = get_db_connection();
+
+if ($pdo) {
+  init_votes_tables($pdo); // This also creates blocklist table
+
+  try {
+    // Check if already blocked
+    $stmt = $pdo->prepare("SELECT id FROM blocklist WHERE login = ? AND clip_id = ?");
+    $stmt->execute([$login, $clipId]);
+    if ($stmt->fetch()) {
+      echo "Clip #{$seq} already removed: {$title}";
+      exit;
+    }
+
+    // Add to blocklist
+    $stmt = $pdo->prepare("INSERT INTO blocklist (login, clip_id, seq, title) VALUES (?, ?, ?, ?)");
+    $stmt->execute([$login, $clipId, $seq, $title]);
+
+    // Get total count
+    $stmt = $pdo->prepare("SELECT COUNT(*) as cnt FROM blocklist WHERE login = ?");
+    $stmt->execute([$login]);
+    $row = $stmt->fetch();
+    $count = $row ? (int)$row['cnt'] : 1;
+
+    echo "Removed Clip #{$seq}: {$title} ({$count} total blocked)";
+    exit;
+
+  } catch (PDOException $e) {
+    error_log("cremove db error: " . $e->getMessage());
+    // Fall through to file storage
+  }
+}
+
+// Fallback: File-based storage (ephemeral on Railway)
 $blocklistFile = $runtimeDir . "/blocklist_" . $login . ".json";
 $blocklist = [];
 if (file_exists($blocklistFile)) {
@@ -80,7 +118,6 @@ if (file_exists($blocklistFile)) {
 
 // Check if already blocked
 if (in_array($clipId, array_column($blocklist, "clip_id"))) {
-  $title = $clip["title"] ?? "(no title)";
   echo "Clip #{$seq} already removed: {$title}";
   exit;
 }
@@ -89,13 +126,12 @@ if (in_array($clipId, array_column($blocklist, "clip_id"))) {
 $blocklist[] = [
   "clip_id"    => $clipId,
   "seq"        => $seq,
-  "title"      => $clip["title"] ?? "",
+  "title"      => $title,
   "removed_at" => gmdate("c"),
 ];
 
 // Save blocklist
 @file_put_contents($blocklistFile, json_encode($blocklist, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT), LOCK_EX);
 
-$title = $clip["title"] ?? "(no title)";
 $count = count($blocklist);
 echo "Removed Clip #{$seq}: {$title} ({$count} total blocked)";

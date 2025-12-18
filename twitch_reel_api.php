@@ -46,6 +46,8 @@ function parse_iso_time($iso) {
 // ---- env (optional, kept for consistency) ----
 load_env(__DIR__ . '/.env');
 
+require_once __DIR__ . '/db_config.php';
+
 // ---- query params ----
 $login = isset($_GET['login']) ? strtolower(trim($_GET['login'])) : 'floppyjimmie';
 
@@ -92,10 +94,26 @@ $all = $index['clips'];
 $totalAll = count($all);
 
 // ---- filter out blocked clips ----
-// Blocklist is stored in runtime dir (survives deploys on Railway via /tmp workaround)
+// Try PostgreSQL first for permanent blocklist, fall back to file
+$blockedIds = [];
+$pdo = get_db_connection();
+
+if ($pdo) {
+  try {
+    $stmt = $pdo->prepare("SELECT clip_id FROM blocklist WHERE login = ?");
+    $stmt->execute([$login]);
+    while ($row = $stmt->fetch()) {
+      $blockedIds[$row['clip_id']] = true;
+    }
+  } catch (PDOException $e) {
+    error_log("blocklist db error: " . $e->getMessage());
+    // Fall through to file storage
+  }
+}
+
+// Fallback: Also check file-based blocklist (for backwards compatibility)
 $runtimeDir = is_writable("/tmp") ? "/tmp/clipsystem_cache" : $cacheDir;
 $blocklistFile = $runtimeDir . "/blocklist_{$safe}.json";
-$blockedIds = [];
 if (file_exists($blocklistFile)) {
   $blockRaw = @file_get_contents($blocklistFile);
   $blocklist = $blockRaw ? json_decode($blockRaw, true) : [];

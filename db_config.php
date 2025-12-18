@@ -82,6 +82,21 @@ function init_votes_tables($pdo) {
         $pdo->exec("CREATE INDEX IF NOT EXISTS idx_votes_seq ON votes(login, seq)");
         $pdo->exec("CREATE INDEX IF NOT EXISTS idx_ledger_lookup ON vote_ledger(login, clip_id, username)");
 
+        // Blocklist table - stores permanently removed clips
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS blocklist (
+                id SERIAL PRIMARY KEY,
+                login VARCHAR(64) NOT NULL,
+                clip_id VARCHAR(255) NOT NULL,
+                seq INTEGER NOT NULL,
+                title TEXT,
+                removed_by VARCHAR(64),
+                removed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(login, clip_id)
+            )
+        ");
+        $pdo->exec("CREATE INDEX IF NOT EXISTS idx_blocklist_login ON blocklist(login)");
+
         return true;
     } catch (PDOException $e) {
         error_log("Failed to create tables: " . $e->getMessage());
