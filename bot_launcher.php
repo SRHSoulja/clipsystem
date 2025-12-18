@@ -7,6 +7,7 @@
 
 $pidFile = '/tmp/clipsystem_bot.pid';
 $logFile = '/tmp/clipsystem_bot.log';
+$installedFlag = '/tmp/clipsystem_npm_installed';
 
 // Check if bot is already running
 if (file_exists($pidFile)) {
@@ -17,8 +18,31 @@ if (file_exists($pidFile)) {
     }
 }
 
+// Check if node is available
+$nodeCheck = trim(shell_exec('which node 2>/dev/null'));
+if (!$nodeCheck) {
+    error_log("Bot launcher: Node.js not found");
+    return;
+}
+
+$dir = __DIR__;
+
+// Install npm dependencies if not done yet
+if (!file_exists($installedFlag)) {
+    // Restore package.json from .bot backup
+    if (file_exists("$dir/package.json.bot") && !file_exists("$dir/package.json")) {
+        copy("$dir/package.json.bot", "$dir/package.json");
+    }
+
+    if (file_exists("$dir/package.json")) {
+        shell_exec("cd " . escapeshellarg($dir) . " && npm install --production 2>&1");
+        file_put_contents($installedFlag, date('c'));
+        error_log("Bot launcher: npm install complete");
+    }
+}
+
 // Launch bot in background
-$cmd = "cd " . escapeshellarg(__DIR__) . " && node bot.js >> $logFile 2>&1 & echo $!";
+$cmd = "cd " . escapeshellarg($dir) . " && node bot.js >> $logFile 2>&1 & echo $!";
 $pid = trim(shell_exec($cmd));
 
 if ($pid) {

@@ -1,9 +1,0 @@
-# Minimal config - let Railway auto-detect PHP
-[phases.setup]
-nixPkgs = ["nodejs_20"]
-
-[phases.install]
-cmds = ["npm install"]
-
-[variables]
-PORT = "8080"
