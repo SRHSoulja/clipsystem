@@ -227,7 +227,7 @@ const commands = {
 
   // !chelp - Show command help
   async chelp(channel, tags, args) {
-    return '!clip (current) | !like / !dislike (vote) | !pclip # (play) | !cremove # (remove)';
+    return '!clip (shows current clip) | !like / !dislike to vote on current clip or !like # !dislike # to vote for specific clip | Mod Commands - !pclip # (plays specific clip) | !cremove # (permanently removes specific clip)';
   }
 };
 
