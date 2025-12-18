@@ -29,8 +29,8 @@ $login = clean_login($_GET["login"] ?? "");
 $seq   = (int)($_GET["seq"] ?? 0);
 $key   = (string)($_GET["key"] ?? "");
 
-// IMPORTANT: set a real secret here
-$ADMIN_KEY = "CHANGE_ME";
+// IMPORTANT: set a real secret here (used in Nightbot command)
+$ADMIN_KEY = "flopjim2024";
 
 if ($key !== $ADMIN_KEY) { http_response_code(403); echo "forbidden"; exit; }
 if ($seq <= 0) { echo "Usage: !pclip <clip#>"; exit; }
