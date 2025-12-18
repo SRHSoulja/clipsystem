@@ -1,5 +1,15 @@
+# Only use PHP provider, we'll handle Node ourselves
+providers = ["php"]
+
+[phases.setup]
+nixPkgs = ["nodejs_20"]
+
+[phases.install]
+cmds = ["npm install"]
+
 [start]
 cmd = "chmod +x start.sh && ./start.sh"
 
 [variables]
 PORT = "8080"
+NIXPACKS_NODE_VERSION = "20"
