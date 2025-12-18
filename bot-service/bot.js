@@ -6,7 +6,8 @@
  * Environment variables (set in Railway):
  *   TWITCH_BOT_USERNAME - Bot's Twitch username
  *   TWITCH_OAUTH_TOKEN  - OAuth token (from twitchtokengenerator.com)
- *   TWITCH_CHANNEL      - Channel to join (e.g., "floppyjimmie")
+ *   TWITCH_CHANNEL      - Channel to join for commands (e.g., "thearsondragon")
+ *   CLIP_CHANNEL        - Channel whose clips to use (e.g., "floppyjimmie") - defaults to TWITCH_CHANNEL
  *   API_BASE_URL        - Base URL for PHP endpoints (e.g., "https://clipsystem-production.up.railway.app")
  *   ADMIN_KEY           - Admin key for mod commands
  */
@@ -18,6 +19,7 @@ const config = {
   botUsername: process.env.TWITCH_BOT_USERNAME || '',
   oauthToken: process.env.TWITCH_OAUTH_TOKEN || '',
   channel: process.env.TWITCH_CHANNEL || 'floppyjimmie',
+  clipChannel: process.env.CLIP_CHANNEL || process.env.TWITCH_CHANNEL || 'floppyjimmie',
   apiBaseUrl: process.env.API_BASE_URL || 'https://clipsystem-production.up.railway.app',
   adminKey: process.env.ADMIN_KEY || 'flopjim2024'
 };
@@ -93,7 +95,7 @@ const commands = {
   // !pb - Show currently playing clip
   async pb(channel, tags, args) {
     try {
-      const url = `${config.apiBaseUrl}/now_playing_get.php?login=${config.channel}`;
+      const url = `${config.apiBaseUrl}/now_playing_get.php?login=${config.clipChannel}`;
       const res = await fetchWithTimeout(url);
       const data = await res.json();
 
@@ -121,7 +123,7 @@ const commands = {
     }
 
     try {
-      const url = `${config.apiBaseUrl}/pclip.php?login=${config.channel}&key=${config.adminKey}&seq=${seq}`;
+      const url = `${config.apiBaseUrl}/pclip.php?login=${config.clipChannel}&key=${config.adminKey}&seq=${seq}`;
       const res = await fetchWithTimeout(url);
       return await res.text();
     } catch (err) {
@@ -139,7 +141,7 @@ const commands = {
 
     try {
       const user = tags.username || 'anonymous';
-      const url = `${config.apiBaseUrl}/vote_submit.php?login=${config.channel}&user=${user}&seq=${seq}&vote=like`;
+      const url = `${config.apiBaseUrl}/vote_submit.php?login=${config.clipChannel}&user=${user}&seq=${seq}&vote=like`;
       const res = await fetchWithTimeout(url);
       return await res.text();
     } catch (err) {
@@ -157,7 +159,7 @@ const commands = {
 
     try {
       const user = tags.username || 'anonymous';
-      const url = `${config.apiBaseUrl}/vote_submit.php?login=${config.channel}&user=${user}&seq=${seq}&vote=dislike`;
+      const url = `${config.apiBaseUrl}/vote_submit.php?login=${config.clipChannel}&user=${user}&seq=${seq}&vote=dislike`;
       const res = await fetchWithTimeout(url);
       return await res.text();
     } catch (err) {
@@ -178,7 +180,7 @@ const commands = {
     }
 
     try {
-      const url = `${config.apiBaseUrl}/cremove.php?login=${config.channel}&key=${config.adminKey}&seq=${seq}`;
+      const url = `${config.apiBaseUrl}/cremove.php?login=${config.clipChannel}&key=${config.adminKey}&seq=${seq}`;
       const res = await fetchWithTimeout(url);
       return await res.text();
     } catch (err) {
@@ -233,7 +235,8 @@ client.on('message', async (channel, tags, message, self) => {
 // Connection events
 client.on('connected', (addr, port) => {
   console.log(`Connected to Twitch IRC at ${addr}:${port}`);
-  console.log(`Joined channel: ${config.channel}`);
+  console.log(`Listening in channel: ${config.channel}`);
+  console.log(`Using clips from: ${config.clipChannel}`);
   console.log(`Bot username: ${config.botUsername}`);
   console.log('Commands active: !pb, !pclip, !like, !dislike, !cremove, !clip');
 });
