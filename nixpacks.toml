@@ -1,14 +1,11 @@
-# Use PHP provider with Node added
+# Let Railway handle PHP, just add Node
 providers = ["php"]
 
 [phases.setup]
-nixPkgs = ["nodejs_20", "nginx"]
+nixPkgs = ["nodejs_20"]
 
 [phases.install]
-cmds = ["npm install", "mkdir -p /app/storage/logs"]
-
-[start]
-cmd = "node bot.js & node /assets/scripts/prestart.mjs /assets/nginx.template.conf /nginx.conf && (php-fpm -y /assets/php-fpm.conf & nginx -c /nginx.conf)"
+cmds = ["npm install"]
 
 [variables]
 PORT = "8080"
