@@ -451,9 +451,19 @@
   }
 
   // ===== Timing knobs =====
-  const TRANSITION_PREROLL_MS      = 120;
-  const TRANSITION_MIN_MS          = 380;
-  const TRANSITION_AFTER_REVEAL_MS = 120;
+  // TRANSITION_PREROLL_MS: How early (ms) before clip ends to show transition
+  //   - Lower = transition starts closer to when clip actually ends
+  //   - 0 = transition starts exactly when clip ends
+  const TRANSITION_PREROLL_MS      = 50;
+
+  // TRANSITION_MIN_MS: Minimum time (ms) the transition video/gif plays
+  //   - Should roughly match your transition video length
+  //   - Too short = cuts off mid-animation; Too long = delays next clip
+  const TRANSITION_MIN_MS          = 800;
+
+  // TRANSITION_AFTER_REVEAL_MS: Extra delay (ms) after new clip loads before hiding transition
+  //   - Gives the new clip time to start playing smoothly
+  const TRANSITION_AFTER_REVEAL_MS = 50;
   const IFRAME_LOAD_FAILSAFE_MS    = 8000;
 
   const IFRAME_SETTLE_PAD_MS       = 350;
