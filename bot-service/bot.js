@@ -97,14 +97,13 @@ const commands = {
     try {
       const url = `${config.apiBaseUrl}/now_playing_get.php?login=${config.clipChannel}`;
       const res = await fetchWithTimeout(url);
-      const data = await res.json();
+      const text = await res.text();
 
-      if (!data || !data.seq) {
+      if (!text || text === 'No clip yet') {
         return 'No clip currently playing.';
       }
 
-      const title = data.title || 'Unknown';
-      return `Now playing Clip #${data.seq}: ${title}`;
+      return `Now playing ${text}`;
     } catch (err) {
       console.error('!pb error:', err.message);
       return 'Could not fetch current clip.';
@@ -141,9 +140,11 @@ const commands = {
       try {
         const nowUrl = `${config.apiBaseUrl}/now_playing_get.php?login=${config.clipChannel}`;
         const nowRes = await fetchWithTimeout(nowUrl);
-        const nowData = await nowRes.json();
-        if (nowData && nowData.seq) {
-          seq = nowData.seq;
+        const nowText = await nowRes.text();
+        // Parse "Clip #123: url" format
+        const match = nowText.match(/Clip #(\d+)/);
+        if (match) {
+          seq = parseInt(match[1]);
         } else {
           return 'No clip currently playing to like.';
         }
@@ -173,9 +174,11 @@ const commands = {
       try {
         const nowUrl = `${config.apiBaseUrl}/now_playing_get.php?login=${config.clipChannel}`;
         const nowRes = await fetchWithTimeout(nowUrl);
-        const nowData = await nowRes.json();
-        if (nowData && nowData.seq) {
-          seq = nowData.seq;
+        const nowText = await nowRes.text();
+        // Parse "Clip #123: url" format
+        const match = nowText.match(/Clip #(\d+)/);
+        if (match) {
+          seq = parseInt(match[1]);
         } else {
           return 'No clip currently playing to dislike.';
         }
