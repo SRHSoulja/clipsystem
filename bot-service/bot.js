@@ -6,20 +6,26 @@
  * Environment variables (set in Railway):
  *   TWITCH_BOT_USERNAME - Bot's Twitch username
  *   TWITCH_OAUTH_TOKEN  - OAuth token (from twitchtokengenerator.com)
- *   TWITCH_CHANNEL      - Channel to join for commands (e.g., "thearsondragon")
- *   CLIP_CHANNEL        - Channel whose clips to use (e.g., "floppyjimmie") - defaults to TWITCH_CHANNEL
+ *   TWITCH_CHANNEL      - Channel(s) to join for commands, comma-separated (e.g., "thearsondragon,floppyjimmie")
+ *   CLIP_CHANNEL        - Channel whose clips to use (e.g., "floppyjimmie") - defaults to first TWITCH_CHANNEL
  *   API_BASE_URL        - Base URL for PHP endpoints (e.g., "https://clipsystem-production.up.railway.app")
  *   ADMIN_KEY           - Admin key for mod commands
  */
 
 const tmi = require('tmi.js');
 
+// Parse channels (comma-separated)
+const channelList = (process.env.TWITCH_CHANNEL || 'floppyjimmie')
+  .split(',')
+  .map(c => c.trim().toLowerCase())
+  .filter(c => c.length > 0);
+
 // Configuration from environment
 const config = {
   botUsername: process.env.TWITCH_BOT_USERNAME || '',
   oauthToken: process.env.TWITCH_OAUTH_TOKEN || '',
-  channel: process.env.TWITCH_CHANNEL || 'floppyjimmie',
-  clipChannel: process.env.CLIP_CHANNEL || process.env.TWITCH_CHANNEL || 'floppyjimmie',
+  channels: channelList,
+  clipChannel: process.env.CLIP_CHANNEL || channelList[0] || 'floppyjimmie',
   apiBaseUrl: process.env.API_BASE_URL || 'https://clipsystem-production.up.railway.app',
   adminKey: process.env.ADMIN_KEY || 'flopjim2024'
 };
@@ -50,7 +56,7 @@ const client = new tmi.Client({
     username: config.botUsername,
     password: oauthToken
   },
-  channels: [config.channel]
+  channels: config.channels
 });
 
 // Rate limiting - prevent spam
@@ -266,7 +272,7 @@ client.on('message', async (channel, tags, message, self) => {
 // Connection events
 client.on('connected', (addr, port) => {
   console.log(`Connected to Twitch IRC at ${addr}:${port}`);
-  console.log(`Listening in channel: ${config.channel}`);
+  console.log(`Listening in channels: ${config.channels.join(', ')}`);
   console.log(`Using clips from: ${config.clipChannel}`);
   console.log(`Bot username: ${config.botUsername}`);
   console.log('Commands active: !clip, !pclip, !like, !dislike, !cremove');
