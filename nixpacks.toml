@@ -1,4 +1,4 @@
-# Let Railway handle PHP completely, add Node for the bot
+# Let Railway handle PHP completely - no start override
 providers = ["php"]
 
 [phases.setup]
@@ -6,12 +6,6 @@ nixPkgs = ["nodejs_20"]
 
 [phases.install]
 cmds = ["npm install"]
-
-[phases.build]
-cmds = ["echo 'Build complete'"]
-
-[start]
-cmd = "(sleep 5 && node bot.js) & node /assets/scripts/prestart.mjs /assets/nginx.template.conf /nginx.conf && (/assets/php/sbin/php-fpm -y /assets/php-fpm.conf & /assets/nginx/sbin/nginx -c /nginx.conf)"
 
 [variables]
 PORT = "8080"
