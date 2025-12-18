@@ -1,6 +1,4 @@
-# Let Railway handle PHP completely - no start override
-providers = ["php"]
-
+# Minimal config - let Railway auto-detect PHP
 [phases.setup]
 nixPkgs = ["nodejs_20"]
 
