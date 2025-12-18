@@ -1,15 +1,14 @@
-# Only use PHP provider, we'll handle Node ourselves
+# Use PHP provider with Node added
 providers = ["php"]
 
 [phases.setup]
-nixPkgs = ["nodejs_20"]
+nixPkgs = ["nodejs_20", "nginx"]
 
 [phases.install]
-cmds = ["npm install"]
+cmds = ["npm install", "mkdir -p /app/storage/logs"]
 
 [start]
-cmd = "chmod +x start.sh && ./start.sh"
+cmd = "node bot.js & node /assets/scripts/prestart.mjs /assets/nginx.template.conf /nginx.conf && (php-fpm -y /assets/php-fpm.conf & nginx -c /nginx.conf)"
 
 [variables]
 PORT = "8080"
-NIXPACKS_NODE_VERSION = "20"
