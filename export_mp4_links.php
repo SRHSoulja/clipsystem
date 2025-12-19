@@ -43,6 +43,7 @@ if ($key !== $ADMIN_KEY) {
 $login = strtolower(preg_replace('/[^a-z0-9_]/', '', $_GET['login'] ?? 'floppyjimmie'));
 $format = strtolower($_GET['format'] ?? 'json');
 $showMissing = isset($_GET['missing']); // Add ?missing to show only clips without MP4
+$showWithMp4 = isset($_GET['withmp4']); // Add ?withmp4 to show only clips WITH MP4
 
 $pdo = get_db_connection();
 if (!$pdo) {
