@@ -19,8 +19,8 @@ const config = {
   oauthToken: process.env.TWITCH_OAUTH_TOKEN || '',
   channel: process.env.TWITCH_CHANNEL || 'floppyjimmie',
   clipChannel: process.env.CLIP_CHANNEL || '',
-  apiBaseUrl: process.env.API_BASE_URL || 'https://clipsystem-production.up.railway.app',
-  adminKey: process.env.ADMIN_KEY || ''
+  apiBaseUrl: (process.env.API_BASE_URL || 'https://clipsystem-production.up.railway.app').trim().replace(/\/+$/, ''),
+  adminKey: (process.env.ADMIN_KEY || '').trim()
 };
 
 // Validate required config
@@ -288,16 +288,20 @@ const commands = {
       // Use fresh https request to avoid any connection reuse issues
       const https = require('https');
       const cacheBuster = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-      const url = `${config.apiBaseUrl}/cfind.php?login=${clipChannel}&key=${config.adminKey}&q=${encodeURIComponent(query)}&_cb=${cacheBuster}`;
 
-      console.log(`!cfind request: ${query}`);
+      // Build URL parts separately to avoid encoding issues
+      const encodedQuery = encodeURIComponent(query);
+      const encodedLogin = encodeURIComponent(clipChannel);
+      const encodedKey = encodeURIComponent(config.adminKey);
+      const path = `/cfind.php?login=${encodedLogin}&key=${encodedKey}&q=${encodedQuery}&_cb=${cacheBuster}`;
+
+      console.log(`!cfind request: ${query} -> path: ${path.substring(0, 80)}...`);
 
       return new Promise((resolve, reject) => {
-        const urlObj = new URL(url);
         const options = {
-          hostname: urlObj.hostname,
+          hostname: 'clipsystem-production.up.railway.app',
           port: 443,
-          path: urlObj.pathname + urlObj.search,
+          path: path,
           method: 'GET',
           headers: {
             'Cache-Control': 'no-cache',
