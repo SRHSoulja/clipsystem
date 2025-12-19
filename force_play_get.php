@@ -39,6 +39,7 @@ if (!is_array($data) || !isset($data["clip_id"])) { echo "{}"; exit; }
 $clipId = $data["clip_id"];
 $indexFile = $staticDir . "/clips_index_" . $login . ".json";
 
+$foundInIndex = false;
 if (file_exists($indexFile)) {
   $indexRaw = @file_get_contents($indexFile);
   $indexData = $indexRaw ? json_decode($indexRaw, true) : null;
@@ -47,10 +48,21 @@ if (file_exists($indexFile)) {
       if (isset($c["id"]) && $c["id"] === $clipId) {
         // Merge full clip data into response so player can use it directly
         $data["clip"] = $c;
+        $foundInIndex = true;
         break;
       }
     }
   }
+}
+
+// If clip not found in index (e.g., playlist clip), create clip data from force_play data
+if (!$foundInIndex && isset($data["clip_id"])) {
+  $data["clip"] = [
+    "id" => $data["clip_id"],
+    "title" => $data["title"] ?? "",
+    "duration" => $data["duration"] ?? 30,
+    "seq" => $data["seq"] ?? 0,
+  ];
 }
 
 echo json_encode($data, JSON_UNESCAPED_SLASHES);

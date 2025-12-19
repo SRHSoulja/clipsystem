@@ -239,7 +239,7 @@ switch ($action) {
 
       // Get clips in order
       $stmt = $pdo->prepare("
-        SELECT pc.clip_seq as seq, c.clip_id, c.title
+        SELECT pc.clip_seq as seq, c.clip_id, c.title, c.duration
         FROM playlist_clips pc
         LEFT JOIN clips c ON c.login = ? AND c.seq = pc.clip_seq
         WHERE pc.playlist_id = ?

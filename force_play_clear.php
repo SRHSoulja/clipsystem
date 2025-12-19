@@ -63,6 +63,7 @@ if ($playlistId && file_exists($queuePath)) {
         "seq" => (int)$nextClip['seq'],
         "clip_id" => $nextClip['clip_id'],
         "title" => $nextClip['title'] ?? "",
+        "duration" => (float)($nextClip['duration'] ?? 30),
         "nonce" => (string)(time() . "_" . bin2hex(random_bytes(4))),
         "set_at" => gmdate("c"),
         "playlist_id" => $playlistId,
