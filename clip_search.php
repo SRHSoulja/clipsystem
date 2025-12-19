@@ -203,6 +203,11 @@ if ($pdo) {
       default => 'view_count DESC',
     };
 
+    // If searching by number, prioritize exact seq match first
+    if ($isClipNumber) {
+      $orderBy = "CASE WHEN seq = " . (int)$query . " THEN 0 ELSE 1 END, " . $orderBy;
+    }
+
     $paginatedParams = array_merge($params, [$perPage, $offset]);
     $stmt = $pdo->prepare("
       SELECT seq, clip_id, title, view_count, created_at, duration, game_id, thumbnail_url, creator_name
