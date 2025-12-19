@@ -230,9 +230,23 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
     }
     .clip-card:hover { border-color: #9147ff55; }
     .clip-card.selected { border-color: #9147ff; background: #9147ff22; }
+    .clip-card .clip-header {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    .clip-card .thumbnail {
+      width: 80px;
+      height: 45px;
+      border-radius: 4px;
+      background: #26262c;
+      object-fit: cover;
+      flex-shrink: 0;
+    }
+    .clip-card .clip-info { flex: 1; min-width: 0; }
     .clip-card .seq { color: #9147ff; font-weight: bold; }
     .clip-card .title {
-      margin: 8px 0;
+      margin: 4px 0;
       font-size: 14px;
       line-height: 1.4;
       display: -webkit-box;
@@ -329,6 +343,24 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
       padding: 0 12px;
       color: #efeff1;
     }
+    .pagination-controls .page-input {
+      width: 60px;
+      padding: 6px 8px;
+      border: 1px solid #3a3a3d;
+      border-radius: 4px;
+      background: #0e0e10;
+      color: #efeff1;
+      font-size: 14px;
+      text-align: center;
+    }
+    .pagination-controls .page-goto {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-left: 16px;
+      padding-left: 16px;
+      border-left: 1px solid #3a3a3d;
+    }
   </style>
 </head>
 <body>
@@ -358,7 +390,11 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
         <div class="current-playlist" id="currentPlaylist" style="display:none;">
           <h3>
             <span id="currentPlaylistName">Playlist</span>
-            <button class="btn-primary" style="padding:6px 12px;font-size:12px;" onclick="playPlaylist()">Play All</button>
+            <div style="display:flex;gap:4px;">
+              <button class="btn-primary" style="padding:6px 10px;font-size:12px;" onclick="playPlaylist()" title="Play All">▶ Play</button>
+              <button class="btn-secondary" style="padding:6px 8px;font-size:12px;" onclick="showRenameModal()" title="Rename">✏️</button>
+              <button class="btn-danger" style="padding:6px 8px;font-size:12px;" onclick="confirmDeletePlaylist()" title="Delete">🗑️</button>
+            </div>
           </h3>
           <div class="playlist-clips" id="playlistClips"></div>
         </div>
@@ -392,6 +428,28 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
       <div class="modal-actions">
         <button class="btn-secondary" onclick="closeModal()">Cancel</button>
         <button class="btn-primary" onclick="createPlaylist()">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="renamePlaylistModal">
+    <div class="modal-content">
+      <h2>Rename Playlist</h2>
+      <input type="text" id="renamePlaylistName" placeholder="New name" onkeypress="if(event.key==='Enter')renamePlaylist()">
+      <div class="modal-actions">
+        <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+        <button class="btn-primary" onclick="renamePlaylist()">Rename</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="confirmDeleteModal">
+    <div class="modal-content">
+      <h2>Delete Playlist?</h2>
+      <p style="margin-bottom:16px;color:#adadb8;">Are you sure you want to delete "<span id="deletePlaylistName"></span>"? This cannot be undone.</p>
+      <div class="modal-actions">
+        <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+        <button class="btn-danger" onclick="deletePlaylist()">Delete</button>
       </div>
     </div>
   </div>
@@ -525,8 +583,13 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
         <div class="clip-card ${selectedClips.has(c.seq) ? 'selected' : ''}"
              onclick="toggleClip(${c.seq})"
              ondblclick="playClip(${c.seq})">
-          <div class="seq">#${c.seq}</div>
-          <div class="title">${escapeHtml(c.title || '(no title)')}</div>
+          <div class="clip-header">
+            <img class="thumbnail" src="${c.thumbnail_url || ''}" alt="" loading="lazy" onerror="this.style.display='none'">
+            <div class="clip-info">
+              <div class="seq">#${c.seq}</div>
+              <div class="title">${escapeHtml(c.title || '(no title)')}</div>
+            </div>
+          </div>
           <div class="meta">
             <span>${c.view_count ? Number(c.view_count).toLocaleString() + ' views' : ''}</span>
             <span>${c.game_id ? (gameNames[c.game_id] || c.game_id) : ''}</span>
@@ -544,11 +607,16 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
           paginationHtml += `<button onclick="goToPage(1)" class="btn-secondary">First</button>`;
           paginationHtml += `<button onclick="goToPage(${currentPage - 1})" class="btn-secondary">Prev</button>`;
         }
-        paginationHtml += `<span class="page-num">Page ${currentPage}</span>`;
+        paginationHtml += `<span class="page-num">Page ${currentPage} of ${totalPages}</span>`;
         if (currentPage < totalPages) {
           paginationHtml += `<button onclick="goToPage(${currentPage + 1})" class="btn-secondary">Next</button>`;
           paginationHtml += `<button onclick="goToPage(${totalPages})" class="btn-secondary">Last</button>`;
         }
+        paginationHtml += `<div class="page-goto">
+          <span>Go to:</span>
+          <input type="number" class="page-input" id="pageInput" min="1" max="${totalPages}" value="${currentPage}" onkeypress="if(event.key==='Enter')jumpToPage()">
+          <button class="btn-secondary" onclick="jumpToPage()">Go</button>
+        </div>`;
         paginationHtml += '</div>';
       }
 
@@ -566,6 +634,17 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
     function goToPage(page) {
       if (page < 1 || page > totalPages || page === currentPage) return;
       loadClips(page);
+    }
+
+    function jumpToPage() {
+      const input = document.getElementById('pageInput');
+      if (!input) return;
+      const page = parseInt(input.value);
+      if (!isNaN(page) && page >= 1 && page <= totalPages) {
+        goToPage(page);
+      } else {
+        input.value = currentPage;
+      }
     }
 
     function renderPlaylists() {
@@ -713,7 +792,7 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
     }
 
     function closeModal() {
-      document.getElementById('newPlaylistModal').classList.remove('active');
+      document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
     }
 
     async function createPlaylist() {
@@ -733,6 +812,62 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
         }
       } catch (err) {
         console.error('Error creating playlist:', err);
+      }
+    }
+
+    function showRenameModal() {
+      if (!currentPlaylist) return;
+      document.getElementById('renamePlaylistName').value = currentPlaylist.name;
+      document.getElementById('renamePlaylistModal').classList.add('active');
+      document.getElementById('renamePlaylistName').focus();
+      document.getElementById('renamePlaylistName').select();
+    }
+
+    async function renamePlaylist() {
+      if (!currentPlaylist) return;
+      const newName = document.getElementById('renamePlaylistName').value.trim();
+      if (!newName) return;
+
+      try {
+        const res = await fetch(`${API_BASE}/playlist_api.php?action=rename&login=${LOGIN}&key=${encodeURIComponent(adminKey)}&id=${currentPlaylist.id}&name=${encodeURIComponent(newName)}`);
+        const data = await res.json();
+
+        if (data.success) {
+          closeModal();
+          currentPlaylist.name = newName;
+          document.getElementById('currentPlaylistName').textContent = newName;
+          await loadPlaylists();
+        } else if (data.error) {
+          alert(data.error);
+        }
+      } catch (err) {
+        console.error('Error renaming playlist:', err);
+      }
+    }
+
+    function confirmDeletePlaylist() {
+      if (!currentPlaylist) return;
+      document.getElementById('deletePlaylistName').textContent = currentPlaylist.name;
+      document.getElementById('confirmDeleteModal').classList.add('active');
+    }
+
+    async function deletePlaylist() {
+      if (!currentPlaylist) return;
+
+      try {
+        const res = await fetch(`${API_BASE}/playlist_api.php?action=delete&login=${LOGIN}&key=${encodeURIComponent(adminKey)}&id=${currentPlaylist.id}`);
+        const data = await res.json();
+
+        if (data.success) {
+          closeModal();
+          currentPlaylist = null;
+          document.getElementById('currentPlaylist').style.display = 'none';
+          await loadPlaylists();
+        } else if (data.error) {
+          alert(data.error);
+        }
+      } catch (err) {
+        console.error('Error deleting playlist:', err);
       }
     }
 

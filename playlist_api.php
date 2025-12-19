@@ -291,6 +291,29 @@ switch ($action) {
     }
     break;
 
+  case 'rename':
+    // Rename a playlist
+    $id = (int)($_GET["id"] ?? 0);
+    $name = trim((string)($_GET["name"] ?? ""));
+    if ($id <= 0) json_error("Missing playlist id");
+    if (strlen($name) < 1) json_error("Playlist name required");
+    if (strlen($name) > 100) json_error("Playlist name too long");
+
+    try {
+      $stmt = $pdo->prepare("UPDATE playlists SET name = ? WHERE id = ? AND login = ?");
+      $stmt->execute([$name, $id, $login]);
+      if ($stmt->rowCount() === 0) {
+        json_error("Playlist not found", 404);
+      }
+      json_response(["success" => true, "name" => $name]);
+    } catch (PDOException $e) {
+      if (strpos($e->getMessage(), 'duplicate') !== false || strpos($e->getMessage(), 'unique') !== false) {
+        json_error("Playlist with that name already exists");
+      }
+      json_error("Database error: " . $e->getMessage(), 500);
+    }
+    break;
+
   case 'get_by_name':
     // Get playlist by name (for bot command)
     $name = trim((string)($_GET["name"] ?? ""));
