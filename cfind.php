@@ -34,31 +34,41 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
 if ($key !== $ADMIN_KEY) { http_response_code(403); echo "forbidden"; exit; }
 if (strlen($query) < 2) { echo "Usage: !cfind <search term>"; exit; }
 
+// Split query into words for multi-word search
+$queryWords = preg_split('/\s+/', trim($query));
+$queryWords = array_filter($queryWords, function($w) { return strlen($w) >= 2; });
+
 // Search in PostgreSQL
 $pdo = get_db_connection();
 $matches = [];
 
 $totalCount = 0;
 
-if ($pdo) {
+if ($pdo && !empty($queryWords)) {
   try {
+    // Build WHERE clause for each word (all must match)
+    $whereClauses = ["login = ?", "blocked = FALSE"];
+    $params = [$login];
+    foreach ($queryWords as $word) {
+      $whereClauses[] = "title ILIKE ?";
+      $params[] = '%' . $word . '%';
+    }
+    $whereSQL = implode(' AND ', $whereClauses);
+
     // Get total count first
-    $stmt = $pdo->prepare("
-      SELECT COUNT(*) FROM clips
-      WHERE login = ? AND blocked = FALSE AND title ILIKE ?
-    ");
-    $stmt->execute([$login, '%' . $query . '%']);
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM clips WHERE {$whereSQL}");
+    $stmt->execute($params);
     $totalCount = (int)$stmt->fetchColumn();
 
-    // Case-insensitive search using ILIKE
+    // Case-insensitive search using ILIKE for each word
     $stmt = $pdo->prepare("
       SELECT seq, clip_id, title, view_count
       FROM clips
-      WHERE login = ? AND blocked = FALSE AND title ILIKE ?
+      WHERE {$whereSQL}
       ORDER BY view_count DESC
       LIMIT 20
     ");
-    $stmt->execute([$login, '%' . $query . '%']);
+    $stmt->execute($params);
     $matches = $stmt->fetchAll(PDO::FETCH_ASSOC);
   } catch (PDOException $e) {
     error_log("cfind db error: " . $e->getMessage());
@@ -66,16 +76,24 @@ if ($pdo) {
 }
 
 // Fallback to JSON if database empty
-if (empty($matches)) {
+if (empty($matches) && !empty($queryWords)) {
   $indexFile = __DIR__ . "/cache/clips_index_{$login}.json";
   if (file_exists($indexFile)) {
     $raw = @file_get_contents($indexFile);
     $data = $raw ? json_decode($raw, true) : null;
     if (is_array($data) && isset($data['clips'])) {
-      $queryLower = strtolower($query);
       foreach ($data['clips'] as $c) {
         $title = $c['title'] ?? '';
-        if (stripos($title, $query) !== false) {
+        $titleLower = strtolower($title);
+        // Check if ALL words are in the title
+        $allMatch = true;
+        foreach ($queryWords as $word) {
+          if (stripos($titleLower, strtolower($word)) === false) {
+            $allMatch = false;
+            break;
+          }
+        }
+        if ($allMatch) {
           $matches[] = [
             'seq' => $c['seq'] ?? 0,
             'clip_id' => $c['id'] ?? '',

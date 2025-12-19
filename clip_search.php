@@ -28,35 +28,46 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
 
 $isAuthorized = ($key === $ADMIN_KEY && $ADMIN_KEY !== '');
 
+// Split query into words for multi-word search
+$queryWords = preg_split('/\s+/', trim($query));
+$queryWords = array_filter($queryWords, function($w) { return strlen($w) >= 2; });
+
 // Search for clips
 $matches = [];
 $totalCount = 0;
 $totalPages = 0;
 
-if (strlen($query) >= 2) {
+if (!empty($queryWords)) {
   $pdo = get_db_connection();
 
   if ($pdo) {
     try {
+      // Build WHERE clause for each word (all must match)
+      $whereClauses = ["login = ?", "blocked = FALSE"];
+      $params = [$login];
+      foreach ($queryWords as $word) {
+        $whereClauses[] = "title ILIKE ?";
+        $params[] = '%' . $word . '%';
+      }
+      $whereSQL = implode(' AND ', $whereClauses);
+
       // Get total count first
-      $stmt = $pdo->prepare("
-        SELECT COUNT(*) FROM clips
-        WHERE login = ? AND blocked = FALSE AND title ILIKE ?
-      ");
-      $stmt->execute([$login, '%' . $query . '%']);
+      $stmt = $pdo->prepare("SELECT COUNT(*) FROM clips WHERE {$whereSQL}");
+      $stmt->execute($params);
       $totalCount = (int)$stmt->fetchColumn();
       $totalPages = ceil($totalCount / $perPage);
 
       // Get paginated results
       $offset = ($page - 1) * $perPage;
+      $paginatedParams = array_merge($params, [$perPage, $offset]);
       $stmt = $pdo->prepare("
         SELECT seq, clip_id, title, view_count, created_at, duration, game_id
         FROM clips
-        WHERE login = ? AND blocked = FALSE AND title ILIKE ?
+        WHERE {$whereSQL}
         ORDER BY view_count DESC
         LIMIT ? OFFSET ?
       ");
-      $stmt->execute([$login, '%' . $query . '%', $perPage, $offset]);
+      $stmt->execute($paginatedParams);
       $matches = $stmt->fetchAll(PDO::FETCH_ASSOC);
     } catch (PDOException $e) {
       error_log("clip_search db error: " . $e->getMessage());
