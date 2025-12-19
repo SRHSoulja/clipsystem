@@ -40,6 +40,7 @@ if (strlen($query) < 2) { echo "Usage: !cfind <search term>"; exit; }
 // Split query into words for multi-word search
 $queryWords = preg_split('/\s+/', trim($query));
 $queryWords = array_filter($queryWords, function($w) { return strlen($w) >= 2; });
+$queryWords = array_values($queryWords); // Re-index to ensure sequential keys
 
 // Search in PostgreSQL
 $pdo = get_db_connection();
@@ -47,9 +48,13 @@ $matches = [];
 
 $totalCount = 0;
 
-// Log for debugging alternating issue
-$debugInfo = "login=$login, query=$query, words=" . count($queryWords);
-error_log("cfind request: $debugInfo");
+// Log request details for debugging
+$serverInfo = gethostname() . ':' . getmypid();
+error_log("cfind [$serverInfo] request: login=$login, query='$query', words=" . json_encode($queryWords));
+
+if (!$pdo) {
+  error_log("cfind [$serverInfo] ERROR: No database connection");
+}
 
 if ($pdo && !empty($queryWords)) {
   try {
@@ -62,12 +67,15 @@ if ($pdo && !empty($queryWords)) {
     }
     $whereSQL = implode(' AND ', $whereClauses);
 
+    error_log("cfind [$serverInfo] SQL: SELECT COUNT(*) FROM clips WHERE $whereSQL");
+    error_log("cfind [$serverInfo] params: " . json_encode($params));
+
     // Get total count first
     $countStmt = $pdo->prepare("SELECT COUNT(*) FROM clips WHERE {$whereSQL}");
     $countStmt->execute($params);
     $totalCount = (int)$countStmt->fetchColumn();
 
-    error_log("cfind count result: $totalCount for query '$query'");
+    error_log("cfind [$serverInfo] count result: $totalCount");
 
     // Case-insensitive search using ILIKE for each word
     $searchStmt = $pdo->prepare("
@@ -80,12 +88,12 @@ if ($pdo && !empty($queryWords)) {
     $searchStmt->execute($params);
     $matches = $searchStmt->fetchAll(PDO::FETCH_ASSOC);
 
-    error_log("cfind matches found: " . count($matches));
+    error_log("cfind [$serverInfo] matches found: " . count($matches));
   } catch (PDOException $e) {
-    error_log("cfind db error: " . $e->getMessage());
+    error_log("cfind [$serverInfo] DB ERROR: " . $e->getMessage());
   }
 } else {
-  error_log("cfind skip: pdo=" . ($pdo ? "yes" : "no") . ", queryWords=" . count($queryWords));
+  error_log("cfind [$serverInfo] skip: pdo=" . ($pdo ? "yes" : "no") . ", words=" . count($queryWords));
 }
 
 // Fallback to JSON if database empty
