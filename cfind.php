@@ -48,11 +48,10 @@ $queryWords = preg_split('/\s+/', trim($query));
 $queryWords = array_filter($queryWords, function($w) { return strlen($w) >= 2; });
 $queryWords = array_values($queryWords); // Re-index to ensure sequential keys
 
-// Search in PostgreSQL
+// Search in PostgreSQL - separate counts for title vs clipper
 $pdo = get_db_connection();
-$matches = [];
-
-$totalCount = 0;
+$titleCount = 0;
+$clipperCount = 0;
 
 // Log request details for debugging
 $serverInfo = gethostname() . ':' . getmypid();
@@ -64,38 +63,31 @@ if (!$pdo) {
 
 if ($pdo && !empty($queryWords)) {
   try {
-    // Build WHERE clause for each word (all must match in title OR creator_name)
-    $whereClauses = ["login = ?", "blocked = FALSE"];
-    $params = [$login];
+    // Count clips matching in TITLE
+    $titleWhere = ["login = ?", "blocked = FALSE"];
+    $titleParams = [$login];
     foreach ($queryWords as $word) {
-      $whereClauses[] = "(title ILIKE ? OR creator_name ILIKE ?)";
-      $params[] = '%' . $word . '%';
-      $params[] = '%' . $word . '%';
+      $titleWhere[] = "title ILIKE ?";
+      $titleParams[] = '%' . $word . '%';
     }
-    $whereSQL = implode(' AND ', $whereClauses);
+    $titleSQL = implode(' AND ', $titleWhere);
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM clips WHERE {$titleSQL}");
+    $stmt->execute($titleParams);
+    $titleCount = (int)$stmt->fetchColumn();
 
-    error_log("cfind [$serverInfo] SQL: SELECT COUNT(*) FROM clips WHERE $whereSQL");
-    error_log("cfind [$serverInfo] params: " . json_encode($params));
+    // Count clips matching in CREATOR_NAME (clipper)
+    $clipperWhere = ["login = ?", "blocked = FALSE"];
+    $clipperParams = [$login];
+    foreach ($queryWords as $word) {
+      $clipperWhere[] = "creator_name ILIKE ?";
+      $clipperParams[] = '%' . $word . '%';
+    }
+    $clipperSQL = implode(' AND ', $clipperWhere);
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM clips WHERE {$clipperSQL}");
+    $stmt->execute($clipperParams);
+    $clipperCount = (int)$stmt->fetchColumn();
 
-    // Get total count first
-    $countStmt = $pdo->prepare("SELECT COUNT(*) FROM clips WHERE {$whereSQL}");
-    $countStmt->execute($params);
-    $totalCount = (int)$countStmt->fetchColumn();
-
-    error_log("cfind [$serverInfo] count result: $totalCount");
-
-    // Case-insensitive search using ILIKE for each word
-    $searchStmt = $pdo->prepare("
-      SELECT seq, clip_id, title, view_count
-      FROM clips
-      WHERE {$whereSQL}
-      ORDER BY view_count DESC
-      LIMIT 20
-    ");
-    $searchStmt->execute($params);
-    $matches = $searchStmt->fetchAll(PDO::FETCH_ASSOC);
-
-    error_log("cfind [$serverInfo] matches found: " . count($matches));
+    error_log("cfind [$serverInfo] title=$titleCount, clipper=$clipperCount");
   } catch (PDOException $e) {
     error_log("cfind [$serverInfo] DB ERROR: " . $e->getMessage());
   }
@@ -103,104 +95,26 @@ if ($pdo && !empty($queryWords)) {
   error_log("cfind [$serverInfo] skip: pdo=" . ($pdo ? "yes" : "no") . ", words=" . count($queryWords));
 }
 
-// Fallback to JSON if database empty
-if (empty($matches) && !empty($queryWords)) {
-  $indexFile = __DIR__ . "/cache/clips_index_{$login}.json";
-  if (file_exists($indexFile)) {
-    $raw = @file_get_contents($indexFile);
-    $data = $raw ? json_decode($raw, true) : null;
-    if (is_array($data) && isset($data['clips'])) {
-      foreach ($data['clips'] as $c) {
-        $title = $c['title'] ?? '';
-        $titleLower = strtolower($title);
-        // Check if ALL words are in the title
-        $allMatch = true;
-        foreach ($queryWords as $word) {
-          if (stripos($titleLower, strtolower($word)) === false) {
-            $allMatch = false;
-            break;
-          }
-        }
-        if ($allMatch) {
-          $matches[] = [
-            'seq' => $c['seq'] ?? 0,
-            'clip_id' => $c['id'] ?? '',
-            'title' => $title,
-            'view_count' => $c['view_count'] ?? 0
-          ];
-        }
-      }
-      // Sort by view count desc
-      usort($matches, function($a, $b) {
-        return ($b['view_count'] ?? 0) - ($a['view_count'] ?? 0);
-      });
-      $matches = array_slice($matches, 0, 20);
-    }
-  }
-}
-
-if (empty($matches)) {
+// If no results at all
+if ($titleCount === 0 && $clipperCount === 0) {
   echo "No clips found matching \"{$query}\"";
   exit;
 }
 
-// Score matches - prefer exact word matches and title start matches
-$queryLower = strtolower($query);
-$queryWords = preg_split('/\s+/', $queryLower);
-
-foreach ($matches as &$m) {
-  $titleLower = strtolower($m['title'] ?? '');
-  $score = 0;
-
-  // Exact match bonus
-  if ($titleLower === $queryLower) {
-    $score += 1000;
-  }
-
-  // Starts with query bonus
-  if (strpos($titleLower, $queryLower) === 0) {
-    $score += 500;
-  }
-
-  // Word boundary match bonus (query appears as whole word)
-  if (preg_match('/\b' . preg_quote($queryLower, '/') . '\b/i', $titleLower)) {
-    $score += 200;
-  }
-
-  // Multiple query words matching
-  foreach ($queryWords as $word) {
-    if (strlen($word) >= 2 && stripos($titleLower, $word) !== false) {
-      $score += 50;
-    }
-  }
-
-  // View count tiebreaker
-  $score += min(100, ($m['view_count'] ?? 0) / 1000);
-
-  $m['score'] = $score;
-}
-unset($m);
-
-// Sort by score descending
-usort($matches, function($a, $b) {
-  return $b['score'] - $a['score'];
-});
-
-$count = count($matches);
-// Use totalCount if we have it, otherwise use matched count
-$displayCount = $totalCount > 0 ? $totalCount : $count;
-
-// Build search URL for multiple results (no key needed - public browse page)
+// Build search URLs
 $baseUrl = getenv('API_BASE_URL') ?: 'https://clipsystem-production.up.railway.app';
-$searchUrl = $baseUrl . '/clip_search.php?login=' . urlencode($login) . '&q=' . urlencode($query);
+$titleUrl = $baseUrl . '/clip_search.php?login=' . urlencode($login) . '&q=' . urlencode($query);
+$clipperUrl = $baseUrl . '/clip_search.php?login=' . urlencode($login) . '&clipper=' . urlencode($query);
 
-// Show results with link - always include search URL so users can preview
-if ($displayCount === 1) {
-  $m = $matches[0];
-  echo "Found #{$m['seq']}: " . ($m['title'] ?? '(no title)') . " | {$searchUrl}";
-} else {
-  echo "Found {$displayCount} clips | {$searchUrl}";
+// Build response - show both title and clipper results if applicable
+$parts = [];
+
+if ($titleCount > 0) {
+  $parts[] = "{$titleCount} in titles: {$titleUrl}";
 }
 
-// Debug: append server info to help diagnose alternating issue
-// echo " [" . gethostname() . ":" . getmypid() . "]";
+if ($clipperCount > 0) {
+  $parts[] = "{$clipperCount} by clipper: {$clipperUrl}";
+}
+
+echo implode(' | ', $parts);
