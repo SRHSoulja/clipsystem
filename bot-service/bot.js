@@ -80,7 +80,7 @@ function isMod(tags) {
   return tags.mod || tags.badges?.broadcaster === '1';
 }
 
-// Fetch helper with timeout and no caching
+// Fetch helper with timeout, no caching, and no keep-alive
 async function fetchWithTimeout(url, timeoutMs = 5000) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -89,9 +89,11 @@ async function fetchWithTimeout(url, timeoutMs = 5000) {
     const response = await fetch(url, {
       signal: controller.signal,
       cache: 'no-store',
+      keepalive: false,
       headers: {
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache'
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Connection': 'close'
       }
     });
     clearTimeout(timeout);
@@ -258,11 +260,14 @@ const commands = {
     }
 
     try {
-      // Add cache buster to prevent stale cached responses
-      const cacheBuster = Date.now();
-      const url = `${config.apiBaseUrl}/cfind.php?login=${clipChannel}&key=${config.adminKey}&q=${encodeURIComponent(query)}&_=${cacheBuster}`;
+      // Add cache buster and random param to ensure unique request
+      const cacheBuster = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+      const url = `${config.apiBaseUrl}/cfind.php?login=${clipChannel}&key=${config.adminKey}&q=${encodeURIComponent(query)}&_cb=${cacheBuster}`;
+      console.log(`!cfind request: ${query} -> ${url}`);
       const res = await fetchWithTimeout(url);
-      return await res.text();
+      const text = await res.text();
+      console.log(`!cfind response: ${text.substring(0, 100)}`);
+      return text;
     } catch (err) {
       console.error('!cfind error:', err.message);
       return 'Could not search clips.';

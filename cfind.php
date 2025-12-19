@@ -194,3 +194,6 @@ if ($displayCount === 1) {
 } else {
   echo "Found {$displayCount} clips | {$searchUrl}";
 }
+
+// Debug: append server info to help diagnose alternating issue
+// echo " [" . gethostname() . ":" . getmypid() . "]";
