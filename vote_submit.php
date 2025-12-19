@@ -62,35 +62,66 @@ if ($dir !== "up" && $dir !== "down") {
   exit;
 }
 
-// Look up clip by seq from the full index (not just recent)
-$indexFile = $staticDir . "/clips_index_" . $login . ".json";
-if (!file_exists($indexFile)) { echo "Clip index not found."; exit; }
-
-$indexRaw = @file_get_contents($indexFile);
-$indexData = $indexRaw ? json_decode($indexRaw, true) : null;
-if (!is_array($indexData) || !isset($indexData["clips"]) || !is_array($indexData["clips"])) {
-  echo "Invalid clip index.";
-  exit;
-}
-
+// Look up clip by seq - try database first, fall back to JSON
 $clipId = null;
 $clipTitle = "";
-foreach ($indexData["clips"] as $c) {
-  if (isset($c["seq"]) && (int)$c["seq"] === $seq) {
-    $clipId = isset($c["id"]) ? (string)$c["id"] : null;
-    $clipTitle = isset($c["title"]) ? $c["title"] : "";
-    break;
+$maxSeq = 0;
+$pdo = get_db_connection();
+
+if ($pdo) {
+  try {
+    $stmt = $pdo->prepare("SELECT clip_id, title, blocked FROM clips WHERE login = ? AND seq = ?");
+    $stmt->execute([$login, $seq]);
+    $row = $stmt->fetch();
+
+    if ($row) {
+      if ($row['blocked']) {
+        echo "Clip #{$seq} has been removed.";
+        exit;
+      }
+      $clipId = $row['clip_id'];
+      $clipTitle = $row['title'] ?? "";
+    } else {
+      $stmt = $pdo->prepare("SELECT MAX(seq) FROM clips WHERE login = ?");
+      $stmt->execute([$login]);
+      $maxSeq = (int)$stmt->fetchColumn();
+    }
+  } catch (PDOException $e) {
+    error_log("vote_submit db lookup error: " . $e->getMessage());
+    // Fall through to JSON
   }
 }
 
-if (!$clipId) {
+// Fallback to JSON if database didn't find it
+if (!$clipId && !$maxSeq) {
+  $indexFile = $staticDir . "/clips_index_" . $login . ".json";
+  if (!file_exists($indexFile)) { echo "Clip index not found."; exit; }
+
+  $indexRaw = @file_get_contents($indexFile);
+  $indexData = $indexRaw ? json_decode($indexRaw, true) : null;
+  if (!is_array($indexData) || !isset($indexData["clips"]) || !is_array($indexData["clips"])) {
+    echo "Invalid clip index.";
+    exit;
+  }
+
+  foreach ($indexData["clips"] as $c) {
+    if (isset($c["seq"]) && (int)$c["seq"] === $seq) {
+      $clipId = isset($c["id"]) ? (string)$c["id"] : null;
+      $clipTitle = isset($c["title"]) ? $c["title"] : "";
+      break;
+    }
+  }
+
   $maxSeq = isset($indexData["max_seq"]) ? (int)$indexData["max_seq"] : count($indexData["clips"]);
+}
+
+if (!$clipId) {
   echo "Clip #{$seq} not found. Valid range: 1-{$maxSeq}";
   exit;
 }
 
 // Try database first, fall back to file storage
-$pdo = get_db_connection();
+// $pdo already set above from clip lookup
 
 if ($pdo) {
   // Use PostgreSQL for persistent storage
@@ -98,16 +129,54 @@ if ($pdo) {
 
   try {
     // Check if user already voted
-    $stmt = $pdo->prepare("SELECT id FROM vote_ledger WHERE login = ? AND clip_id = ? AND username = ?");
+    $stmt = $pdo->prepare("SELECT id, vote_dir FROM vote_ledger WHERE login = ? AND clip_id = ? AND username = ?");
     $stmt->execute([$login, $clipId, strtolower($user)]);
-    if ($stmt->fetch()) {
-      // Already voted - get current counts
+    $existing = $stmt->fetch();
+
+    if ($existing) {
+      $oldDir = $existing['vote_dir'];
+
+      // Same vote direction - already voted
+      if ($oldDir === $dir) {
+        $stmt = $pdo->prepare("SELECT up_votes, down_votes FROM votes WHERE login = ? AND clip_id = ?");
+        $stmt->execute([$login, $clipId]);
+        $row = $stmt->fetch();
+        $up = $row ? (int)$row['up_votes'] : 0;
+        $down = $row ? (int)$row['down_votes'] : 0;
+        echo "Already voted {$dir} for Clip #{$seq}. 👍{$up} 👎{$down}";
+        exit;
+      }
+
+      // Different direction - change the vote
+      $pdo->beginTransaction();
+
+      // Decrement old vote, increment new vote
+      $oldColumn = ($oldDir === "up") ? "up_votes" : "down_votes";
+      $newColumn = ($dir === "up") ? "up_votes" : "down_votes";
+
+      $stmt = $pdo->prepare("
+        UPDATE votes SET
+          {$oldColumn} = GREATEST(0, {$oldColumn} - 1),
+          {$newColumn} = {$newColumn} + 1,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE login = ? AND clip_id = ?
+      ");
+      $stmt->execute([$login, $clipId]);
+
+      // Update ledger with new vote direction
+      $stmt = $pdo->prepare("UPDATE vote_ledger SET vote_dir = ?, voted_at = CURRENT_TIMESTAMP WHERE id = ?");
+      $stmt->execute([$dir, $existing['id']]);
+
+      $pdo->commit();
+
+      // Get final counts
       $stmt = $pdo->prepare("SELECT up_votes, down_votes FROM votes WHERE login = ? AND clip_id = ?");
       $stmt->execute([$login, $clipId]);
       $row = $stmt->fetch();
       $up = $row ? (int)$row['up_votes'] : 0;
       $down = $row ? (int)$row['down_votes'] : 0;
-      echo "Already voted for Clip #{$seq}. 👍{$up} 👎{$down}";
+
+      echo "Changed vote to {$dir} for Clip #{$seq}. 👍{$up} 👎{$down}";
       exit;
     }
 

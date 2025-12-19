@@ -19,7 +19,7 @@ const config = {
   oauthToken: process.env.TWITCH_OAUTH_TOKEN || '',
   channel: process.env.TWITCH_CHANNEL || 'floppyjimmie',
   apiBaseUrl: process.env.API_BASE_URL || 'https://clipsystem-production.up.railway.app',
-  adminKey: process.env.ADMIN_KEY || 'flopjim2024'
+  adminKey: process.env.ADMIN_KEY || ''
 };
 
 // Validate required config
@@ -187,6 +187,27 @@ const commands = {
     }
   },
 
+  // !cadd <seq> - Restore a removed clip (mod only)
+  async cadd(channel, tags, args) {
+    if (!isMod(tags)) {
+      return null; // Silently ignore non-mods
+    }
+
+    const seq = parseInt(args[0]);
+    if (!seq || seq <= 0) {
+      return 'Usage: !cadd <clip#>';
+    }
+
+    try {
+      const url = `${config.apiBaseUrl}/cadd.php?login=${config.channel}&key=${config.adminKey}&seq=${seq}`;
+      const res = await fetchWithTimeout(url);
+      return await res.text();
+    } catch (err) {
+      console.error('!cadd error:', err.message);
+      return 'Could not restore clip.';
+    }
+  },
+
   // !clip or !clips - Show info about the clip system
   async clip(channel, tags, args) {
     return `Use !pb to see the current clip. Mods can use !pclip <#> to play a specific clip. Vote with !like <#> or !dislike <#>`;
@@ -235,7 +256,7 @@ client.on('connected', (addr, port) => {
   console.log(`Connected to Twitch IRC at ${addr}:${port}`);
   console.log(`Joined channel: ${config.channel}`);
   console.log(`Bot username: ${config.botUsername}`);
-  console.log('Commands active: !pb, !pclip, !like, !dislike, !cremove, !clip');
+  console.log('Commands active: !pb, !pclip, !like, !dislike, !cremove, !cadd, !clip');
 });
 
 client.on('disconnected', (reason) => {

@@ -27,7 +27,7 @@ if (file_exists($envPath)) {
 require_once __DIR__ . '/db_config.php';
 
 // Auth check for web access
-$ADMIN_KEY = getenv('ADMIN_KEY') ?: 'flopjim2024';
+$ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
 if (php_sapi_name() !== 'cli') {
     $key = $_GET['key'] ?? '';
     if ($key !== $ADMIN_KEY) {

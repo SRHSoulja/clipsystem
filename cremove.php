@@ -31,8 +31,8 @@ $login = clean_login($_GET["login"] ?? "");
 $seq   = (int)($_GET["seq"] ?? 0);
 $key   = (string)($_GET["key"] ?? "");
 
-// Same admin key as pclip
-$ADMIN_KEY = "flopjim2024";
+// Load from environment (set ADMIN_KEY in Railway)
+$ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
 
 if ($key !== $ADMIN_KEY) { http_response_code(403); echo "forbidden"; exit; }
 if ($seq <= 0) { echo "Usage: !cremove <clip#>"; exit; }

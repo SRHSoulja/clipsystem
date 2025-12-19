@@ -476,6 +476,7 @@
   let backFrame = frameB;
 
   let clips = [];
+  let voteScores = {}; // clip_id -> net score (likes - dislikes)
   let advanceTimer = null;
   let transitionTimer = null;
   let prepareTimer = null;
@@ -940,6 +941,8 @@
 
   const POP_WEIGHT = 0.55;
   const POP_CAP = 1.8;
+  const VOTE_WEIGHT = 0.5;  // Weight per net vote (likes - dislikes)
+  const VOTE_CAP = 5;       // Max vote bonus/penalty
   function log10Safe(x){ return Math.log10 ? Math.log10(x) : (Math.log(x) / Math.LN10); }
 
   function pickNextClip() {
@@ -968,6 +971,10 @@
       const views = Number(c.view_count || 0);
       const pop = log10Safe(views + 1);
       score += Math.min(POP_CAP, pop * POP_WEIGHT);
+
+      // Vote weighting: likes boost, dislikes penalize
+      const netVotes = voteScores[c.id] || 0;
+      score += Math.max(-VOTE_CAP, Math.min(VOTE_CAP, netVotes * VOTE_WEIGHT));
 
       return { c, score };
     }).filter(x => x.score > 0.1);
@@ -1321,6 +1328,21 @@
       return;
     }
 
+    // Fetch vote data for weighting
+    try {
+      const voteRes = await fetch(`${API_BASE}/votes_export.php?login=${encodeURIComponent(login)}`, { cache: "no-store" });
+      const voteData = await voteRes.json();
+      if (Array.isArray(voteData.votes)) {
+        voteScores = {};
+        voteData.votes.forEach(v => {
+          voteScores[v.clip_id] = v.net_score || 0;
+        });
+        console.log("[INIT] Loaded vote data for", Object.keys(voteScores).length, "clips");
+      }
+    } catch (e) {
+      console.log("[INIT] Could not load vote data (ok if no votes yet):", e.message);
+    }
+
     const first = pickNextClip();
     if (!first) {
       console.error("[INIT] pickNextClip returned null, aborting");
@@ -1370,6 +1392,15 @@
         const r = await fetch(apiUrl, { cache: "no-store" });
         const d = await r.json();
         if (Array.isArray(d.clips) && d.clips.length) clips = d.clips;
+      } catch {}
+      // Also refresh vote data
+      try {
+        const vr = await fetch(`${API_BASE}/votes_export.php?login=${encodeURIComponent(login)}`, { cache: "no-store" });
+        const vd = await vr.json();
+        if (Array.isArray(vd.votes)) {
+          voteScores = {};
+          vd.votes.forEach(v => { voteScores[v.clip_id] = v.net_score || 0; });
+        }
       } catch {}
     }, 10 * 60 * 1000);
   }
