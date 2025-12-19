@@ -755,6 +755,7 @@
     if (advanceTimer) { clearTimeout(advanceTimer); advanceTimer = null; }
     if (transitionTimer) { clearTimeout(transitionTimer); transitionTimer = null; }
     if (prepareTimer) { clearTimeout(prepareTimer); prepareTimer = null; }
+    // Note: playlistAdvanceTimer is managed separately in pollPclipOnce to avoid premature cancellation
   }
 
   function clipSrc(id, autoplay) {
@@ -1067,13 +1068,13 @@
 
   let switchCount = 0;  // Debug counter
 
-  function switchToClip(c) {
+  function switchToClip(c, playlistData = null) {
     const switchNum = ++switchCount;
     if (!c) {
       debugLog("SW#" + switchNum + " null clip!", "err");
       return;
     }
-    debugLog("SW#" + switchNum + " -> " + (c.id || "?").substring(0, 15) + " dur=" + c.duration);
+    debugLog("SW#" + switchNum + " -> " + (c.id || "?").substring(0, 15) + " dur=" + c.duration + (playlistData ? " [PLAYLIST]" : ""));
 
     // Clear any pending timers when starting a new switch
     clearTimers();
@@ -1127,10 +1128,15 @@
       debugLog("SW#" + switchNum + " calling setNowPlaying");
       setNowPlayingWithRetry(clipToPlay);
 
-      // Ensure we have a valid duration
-      const dur = (clipToPlay.duration && clipToPlay.duration > 0) ? clipToPlay.duration : 30;
-      scheduleNext(dur);
-      debugLog("SW#" + switchNum + " next in " + dur + "s");
+      // For playlist clips, DON'T schedule next - the playlist advancement timer handles it
+      if (playlistData) {
+        debugLog("SW#" + switchNum + " playlist mode - skipping scheduleNext");
+      } else {
+        // Ensure we have a valid duration
+        const dur = (clipToPlay.duration && clipToPlay.duration > 0) ? clipToPlay.duration : 30;
+        scheduleNext(dur);
+        debugLog("SW#" + switchNum + " next in " + dur + "s");
+      }
 
       isSwitching = false;
       hasStartedPlayback = true;
@@ -1292,32 +1298,21 @@
         console.log("[PCLIP] Cancelled previous playlist advance timer");
       }
 
+      // For playlist clips, we need to set a flag so switchToClip's callback knows not to schedule normal advancement
+      const playlistData = isPlaylistClip ? {
+        index: data.playlist_index,
+        total: data.playlist_total,
+        duration: (c.duration && c.duration > 0) ? c.duration : 30
+      } : null;
+
       // Force the switch immediately
       console.log("[PCLIP] Switching to forced clip:", c.id, "duration:", c.duration, "playlist:", isPlaylistClip);
-      switchToClip(c);
+      switchToClip(c, playlistData);
 
       // For playlist clips, set up advancement after clip finishes
       if (isPlaylistClip) {
-        const clipDuration = (c.duration && c.duration > 0) ? c.duration : 30;
-        console.log("[PCLIP] Playlist mode: clip", (data.playlist_index + 1), "of", data.playlist_total, "- will advance after", clipDuration, "seconds");
-
-        // Wait a bit for switchToClip's callback to fire and set up timers, then cancel them
-        setTimeout(() => {
-          // Cancel ALL scheduled timers - we're in playlist mode
-          if (advanceTimer) {
-            clearTimeout(advanceTimer);
-            advanceTimer = null;
-          }
-          if (transitionTimer) {
-            clearTimeout(transitionTimer);
-            transitionTimer = null;
-          }
-          if (prepareTimer) {
-            clearTimeout(prepareTimer);
-            prepareTimer = null;
-          }
-          console.log("[PCLIP] Cancelled normal timers for playlist mode");
-        }, 500); // Wait 500ms for iframe load callback
+        const clipDuration = playlistData.duration;
+        console.log("[PCLIP] Playlist mode: clip", (playlistData.index + 1), "of", playlistData.total, "- will advance after", clipDuration, "seconds");
 
         // Clear force_play AFTER the clip finishes (for playlist advancement)
         // Store the timer so we can cancel it if a new clip arrives
