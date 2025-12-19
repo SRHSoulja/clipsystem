@@ -1268,10 +1268,15 @@
       console.log("[PCLIP] Switching to forced clip:", c.id, "duration:", c.duration, "isSwitching:", isSwitching);
       switchToClip(c);
 
-      // Clear the force_play file so it doesn't replay on refresh
-      try {
-        fetch(`${API_BASE}/force_play_clear.php?login=${encodeURIComponent(login)}`, { cache: "no-store" });
-      } catch {}
+      // Clear force_play AFTER the clip finishes (for playlist advancement)
+      // Use clip duration + small buffer to ensure clip has ended
+      const clipDuration = (c.duration && c.duration > 0) ? c.duration : 30;
+      setTimeout(() => {
+        console.log("[PCLIP] Clip ended, calling force_play_clear for playlist advancement");
+        try {
+          fetch(`${API_BASE}/force_play_clear.php?login=${encodeURIComponent(login)}`, { cache: "no-store" });
+        } catch {}
+      }, (clipDuration + 1) * 1000);
     } catch (err) {
       console.error("[PCLIP] Poll error:", err);
     }
