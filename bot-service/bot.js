@@ -107,7 +107,7 @@ function isOnCooldown(user, command) {
 function isMod(tags) {
   const username = (tags.username || '').toLowerCase();
   // Special exception: TheArsonDragon gets mod privileges
-  if (username === 'thearsonddragon') return true;
+  if (username === 'thearsondragon') return true;
   return tags.mod || tags.badges?.broadcaster === '1';
 }
 
