@@ -83,11 +83,13 @@ if ($pdo) {
         $stmt->execute([$currentIndex, $login]);
       }
 
-      // Get playlist clips in order
+      // Get playlist clips in order with game names
       $stmt = $pdo->prepare("
-        SELECT c.clip_id as id, c.seq, c.title, c.duration, c.created_at, c.view_count, c.game_id
+        SELECT c.clip_id as id, c.seq, c.title, c.duration, c.created_at, c.view_count, c.game_id,
+               g.name as game_name
         FROM playlist_clips pc
         JOIN clips c ON c.login = ? AND c.seq = pc.clip_seq
+        LEFT JOIN games_cache g ON c.game_id = g.game_id
         WHERE pc.playlist_id = ?
         ORDER BY pc.position
       ");
@@ -169,12 +171,14 @@ if ($pdo) {
     $blockedCount = (int)$stmt->fetchColumn();
 
     if ($totalAll > 0) {
-      // Fetch all non-blocked clips from database
+      // Fetch all non-blocked clips from database with game names
       $stmt = $pdo->prepare("
-        SELECT clip_id as id, seq, title, duration, created_at, view_count, game_id, video_id, vod_offset
-        FROM clips
-        WHERE login = ? AND blocked = FALSE
-        ORDER BY created_at DESC
+        SELECT c.clip_id as id, c.seq, c.title, c.duration, c.created_at, c.view_count, c.game_id, c.video_id, c.vod_offset,
+               g.name as game_name
+        FROM clips c
+        LEFT JOIN games_cache g ON c.game_id = g.game_id
+        WHERE c.login = ? AND c.blocked = FALSE
+        ORDER BY c.created_at DESC
       ");
       $stmt->execute([$login]);
       $all = $stmt->fetchAll(PDO::FETCH_ASSOC);

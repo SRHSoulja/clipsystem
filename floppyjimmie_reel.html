@@ -142,14 +142,15 @@
       top:24px;
       z-index:11000;
       display:flex;
-      gap:14px;
+      flex-direction:column;
+      gap:10px;
       align-items:center;
-      padding:14px 18px;
+      padding:14px 20px;
       border-radius:14px;
-      background: rgba(0,0,0,0.75);
+      background: rgba(0,0,0,0.8);
       border: 2px solid rgba(255,255,255,0.25);
       color:#fff;
-      font: 18px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      font: 16px/1.3 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
       user-select:none;
       pointer-events:none;
       backdrop-filter: blur(8px);
@@ -157,26 +158,65 @@
       transform: translateX(-50%) translateY(-6px);
       transition: opacity 180ms linear, transform 180ms linear;
       box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+      max-width:500px;
+      text-align:center;
     }
     #voteHud.show{
       opacity:1;
       transform: translateX(-50%) translateY(0);
     }
+    #voteHud .clip-info{
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+      width:100%;
+    }
     #voteHud .seq{
       font-weight:800;
-      font-size:20px;
+      font-size:18px;
       letter-spacing:.3px;
       color:#fff;
       text-shadow: 0 1px 3px rgba(0,0,0,0.5);
     }
+    #voteHud .clip-title{
+      font-weight:600;
+      font-size:15px;
+      color:#e0e0e0;
+      max-width:100%;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    #voteHud .clip-meta{
+      font-size:13px;
+      color:#a0a0a0;
+      display:flex;
+      gap:10px;
+      justify-content:center;
+      flex-wrap:wrap;
+    }
+    #voteHud .clip-meta span{
+      display:inline-flex;
+      align-items:center;
+      gap:4px;
+    }
+    #voteHud .vote-section{
+      display:flex;
+      gap:12px;
+      align-items:center;
+      padding-top:6px;
+      border-top: 1px solid rgba(255,255,255,0.15);
+      width:100%;
+      justify-content:center;
+    }
     #voteHud .pill{
       display:inline-flex;
       align-items:center;
-      gap:8px;
-      padding:8px 14px;
+      gap:6px;
+      padding:6px 12px;
       border-radius:999px;
       font-weight:700;
-      font-size:18px;
+      font-size:16px;
     }
     #voteHud .pill.up{
       background: rgba(34,197,94,0.2);
@@ -191,8 +231,8 @@
     #voteHud .hints{
       display:flex;
       flex-direction:column;
-      gap:4px;
-      font-size:14px;
+      gap:3px;
+      font-size:13px;
       font-weight:700;
     }
     #voteHud .hint-like{
@@ -250,12 +290,18 @@
     <div id="ui-mask"></div>
 
     <div id="voteHud" aria-hidden="true">
-      <span class="seq" id="voteSeq">Clip</span>
-      <span class="pill up" id="voteUp">👍 0</span>
-      <span class="pill down" id="voteDown">👎 0</span>
-      <div class="hints">
-        <span class="hint-like" id="hintLike">!like #</span>
-        <span class="hint-dislike" id="hintDislike">!dislike #</span>
+      <div class="clip-info">
+        <span class="seq" id="voteSeq">Clip</span>
+        <span class="clip-title" id="clipTitle"></span>
+        <span class="clip-meta" id="clipMeta"></span>
+      </div>
+      <div class="vote-section">
+        <span class="pill up" id="voteUp">👍 0</span>
+        <span class="pill down" id="voteDown">👎 0</span>
+        <div class="hints">
+          <span class="hint-like" id="hintLike">!like #</span>
+          <span class="hint-dislike" id="hintDislike">!dislike #</span>
+        </div>
       </div>
     </div>
 
@@ -355,6 +401,8 @@
   // ===== Vote HUD polling =====
   const voteHud  = document.getElementById("voteHud");
   const voteSeq  = document.getElementById("voteSeq");
+  const clipTitle = document.getElementById("clipTitle");
+  const clipMeta = document.getElementById("clipMeta");
   const voteUp   = document.getElementById("voteUp");
   const voteDown = document.getElementById("voteDown");
   const hintLike = document.getElementById("hintLike");
@@ -366,6 +414,16 @@
   // Client-side seq tracking - updates HUD immediately without waiting for server
   let currentHudSeq = 0;
   let currentHudClipId = null;
+
+  // Format duration in seconds to mm:ss or just ss for short clips
+  function formatDuration(seconds) {
+    if (!seconds || seconds <= 0) return "";
+    const s = Math.round(seconds);
+    if (s < 60) return `${s}s`;
+    const m = Math.floor(s / 60);
+    const rem = s % 60;
+    return `${m}:${rem.toString().padStart(2, '0')}`;
+  }
 
   // Update HUD seq immediately from local clip data (no server needed)
   function updateHudSeqLocal(clip) {
@@ -385,6 +443,31 @@
       voteSeq.textContent = `Clip #${seq}`;
       hintLike.textContent = `!like ${seq}`;
       hintDislike.textContent = `!dislike ${seq}`;
+
+      // Update title
+      if (clipTitle) {
+        clipTitle.textContent = clip.title || "";
+      }
+
+      // Build meta info (duration, category/game)
+      if (clipMeta) {
+        const metaParts = [];
+
+        // Duration
+        const dur = formatDuration(clip.duration);
+        if (dur) {
+          metaParts.push(`<span>${dur}</span>`);
+        }
+
+        // Game/Category
+        const game = clip.game_name || "";
+        if (game) {
+          metaParts.push(`<span>${game}</span>`);
+        }
+
+        clipMeta.innerHTML = metaParts.join("");
+      }
+
       voteHud.classList.add("show");
       debugLog("HUD seq=" + seq + " (local)", "ok");
     }
