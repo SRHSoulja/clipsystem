@@ -449,7 +449,7 @@
         clipTitle.textContent = clip.title || "";
       }
 
-      // Build meta info (duration, category/game)
+      // Build meta info (duration, category/game, clipper)
       if (clipMeta) {
         const metaParts = [];
 
@@ -463,6 +463,12 @@
         const game = clip.game_name || "";
         if (game) {
           metaParts.push(`<span>${game}</span>`);
+        }
+
+        // Clipper name
+        const clipper = clip.creator_name || "";
+        if (clipper) {
+          metaParts.push(`<span>Clipped by ${clipper}</span>`);
         }
 
         clipMeta.innerHTML = metaParts.join("");

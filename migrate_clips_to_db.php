@@ -74,12 +74,20 @@ try {
             video_id VARCHAR(64),
             vod_offset INTEGER,
             thumbnail_url TEXT,
+            creator_name VARCHAR(64),
             blocked BOOLEAN DEFAULT FALSE,
             imported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(login, clip_id),
             UNIQUE(login, seq)
         )
     ");
+
+    // Add creator_name column if it doesn't exist (for existing databases)
+    try {
+        $pdo->exec("ALTER TABLE clips ADD COLUMN IF NOT EXISTS creator_name VARCHAR(64)");
+    } catch (PDOException $e) {
+        // Column might already exist, ignore error
+    }
 
     // Indexes for fast lookups
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_clips_login ON clips(login)");
@@ -125,8 +133,8 @@ if ($existingCount > 0) {
 
 // Prepare insert statement (upsert - skip if exists)
 $insertSql = "
-    INSERT INTO clips (login, clip_id, seq, title, duration, created_at, view_count, game_id, video_id, vod_offset, thumbnail_url, blocked)
-    VALUES (:login, :clip_id, :seq, :title, :duration, :created_at, :view_count, :game_id, :video_id, :vod_offset, :thumbnail_url, :blocked)
+    INSERT INTO clips (login, clip_id, seq, title, duration, created_at, view_count, game_id, video_id, vod_offset, thumbnail_url, creator_name, blocked)
+    VALUES (:login, :clip_id, :seq, :title, :duration, :created_at, :view_count, :game_id, :video_id, :vod_offset, :thumbnail_url, :creator_name, :blocked)
     ON CONFLICT (login, clip_id) DO NOTHING
 ";
 $stmt = $pdo->prepare($insertSql);
@@ -190,6 +198,7 @@ foreach ($clips as $i => $clip) {
             ':video_id' => !empty($clip['video_id']) ? $clip['video_id'] : null,
             ':vod_offset' => isset($clip['vod_offset']) && $clip['vod_offset'] !== null ? (int)$clip['vod_offset'] : null,
             ':thumbnail_url' => !empty($clip['thumbnail_url']) ? $clip['thumbnail_url'] : null,
+            ':creator_name' => !empty($clip['creator_name']) ? $clip['creator_name'] : null,
             ':blocked' => $isBlocked ? 't' : 'f',
         ]);
 

@@ -86,7 +86,7 @@ if ($pdo) {
       // Get playlist clips in order with game names
       $stmt = $pdo->prepare("
         SELECT c.clip_id as id, c.seq, c.title, c.duration, c.created_at, c.view_count, c.game_id,
-               g.name as game_name
+               c.creator_name, g.name as game_name
         FROM playlist_clips pc
         JOIN clips c ON c.login = ? AND c.seq = pc.clip_seq
         LEFT JOIN games_cache g ON c.game_id = g.game_id
@@ -174,7 +174,7 @@ if ($pdo) {
       // Fetch all non-blocked clips from database with game names
       $stmt = $pdo->prepare("
         SELECT c.clip_id as id, c.seq, c.title, c.duration, c.created_at, c.view_count, c.game_id, c.video_id, c.vod_offset,
-               g.name as game_name
+               c.creator_name, g.name as game_name
         FROM clips c
         LEFT JOIN games_cache g ON c.game_id = g.game_id
         WHERE c.login = ? AND c.blocked = FALSE

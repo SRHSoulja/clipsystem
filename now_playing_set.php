@@ -49,6 +49,8 @@ if ($url === "" && $clipId !== "") {
   $url = "https://clips.twitch.tv/" . $clipId;
 }
 
+require_once __DIR__ . '/db_config.php';
+
 // Static data (clips_index) is in ./cache (read-only on Railway)
 $staticDir = __DIR__ . "/cache";
 // Runtime data goes to /tmp on Railway
@@ -59,19 +61,39 @@ $jsonPath   = $runtimeDir . "/now_playing_{$login}.json";
 $txtPath    = $runtimeDir . "/now_playing_{$login}.txt";
 $recentPath = $runtimeDir . "/recent_played_{$login}.json";
 
-// Look up the clip's permanent seq from the index
+// Look up the clip's permanent seq and title
 $seq = 0;
 $title = "";
-$indexFile = $staticDir . "/clips_index_{$login}.json";
-if (file_exists($indexFile)) {
-  $indexRaw = @file_get_contents($indexFile);
-  $indexData = $indexRaw ? json_decode($indexRaw, true) : null;
-  if (is_array($indexData) && isset($indexData["clips"]) && is_array($indexData["clips"])) {
-    foreach ($indexData["clips"] as $c) {
-      if (isset($c["id"]) && $c["id"] === $clipId) {
-        $seq = isset($c["seq"]) ? (int)$c["seq"] : 0;
-        $title = isset($c["title"]) ? $c["title"] : "";
-        break;
+
+// Try database first (preferred source)
+$pdo = get_db_connection();
+if ($pdo) {
+  try {
+    $stmt = $pdo->prepare("SELECT seq, title FROM clips WHERE login = ? AND clip_id = ?");
+    $stmt->execute([$login, $clipId]);
+    $row = $stmt->fetch();
+    if ($row) {
+      $seq = (int)$row['seq'];
+      $title = $row['title'] ?: '';
+    }
+  } catch (PDOException $e) {
+    error_log("now_playing_set db lookup error: " . $e->getMessage());
+  }
+}
+
+// Fallback to JSON index if not in database
+if ($seq === 0) {
+  $indexFile = $staticDir . "/clips_index_{$login}.json";
+  if (file_exists($indexFile)) {
+    $indexRaw = @file_get_contents($indexFile);
+    $indexData = $indexRaw ? json_decode($indexRaw, true) : null;
+    if (is_array($indexData) && isset($indexData["clips"]) && is_array($indexData["clips"])) {
+      foreach ($indexData["clips"] as $c) {
+        if (isset($c["id"]) && $c["id"] === $clipId) {
+          $seq = isset($c["seq"]) ? (int)$c["seq"] : 0;
+          $title = isset($c["title"]) ? $c["title"] : "";
+          break;
+        }
       }
     }
   }
@@ -105,6 +127,7 @@ $entry = [
   "clip_id"    => $clipId,
   "url"        => $url,
   "slug"       => $slug,
+  "title"      => $title,
   "updated_at" => gmdate("c"),
   "started_at" => $now
 ];
