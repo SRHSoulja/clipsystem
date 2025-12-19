@@ -480,6 +480,7 @@
   let advanceTimer = null;
   let transitionTimer = null;
   let prepareTimer = null;
+  let playlistAdvanceTimer = null; // Timer for playlist auto-advance
 
   let nextClip = null;
   let nextToken = 0;
@@ -1267,27 +1268,53 @@
       // Check if this is a playlist clip
       const isPlaylistClip = !!(data.playlist_id);
 
+      // ALWAYS cancel any pending playlist advance timer when a new clip arrives
+      if (playlistAdvanceTimer) {
+        clearTimeout(playlistAdvanceTimer);
+        playlistAdvanceTimer = null;
+        console.log("[PCLIP] Cancelled previous playlist advance timer");
+      }
+
       // Force the switch immediately
       console.log("[PCLIP] Switching to forced clip:", c.id, "duration:", c.duration, "playlist:", isPlaylistClip);
       switchToClip(c);
 
-      // For playlist clips, cancel the normal advance timer and use playlist advancement instead
+      // For playlist clips, set up advancement after clip finishes
       if (isPlaylistClip) {
-        // Cancel the advanceTimer that switchToClip set up - we'll use force_play_clear instead
-        if (advanceTimer) {
-          clearTimeout(advanceTimer);
-          advanceTimer = null;
-          console.log("[PCLIP] Cancelled normal advance timer for playlist mode");
-        }
+        const clipDuration = (c.duration && c.duration > 0) ? c.duration : 30;
+        console.log("[PCLIP] Playlist mode: clip", (data.playlist_index + 1), "of", data.playlist_total, "- will advance after", clipDuration, "seconds");
+
+        // Wait a bit for switchToClip's callback to fire and set up timers, then cancel them
+        setTimeout(() => {
+          // Cancel ALL scheduled timers - we're in playlist mode
+          if (advanceTimer) {
+            clearTimeout(advanceTimer);
+            advanceTimer = null;
+          }
+          if (transitionTimer) {
+            clearTimeout(transitionTimer);
+            transitionTimer = null;
+          }
+          if (prepareTimer) {
+            clearTimeout(prepareTimer);
+            prepareTimer = null;
+          }
+          console.log("[PCLIP] Cancelled normal timers for playlist mode");
+        }, 500); // Wait 500ms for iframe load callback
 
         // Clear force_play AFTER the clip finishes (for playlist advancement)
-        // Use clip duration + small buffer to ensure clip has ended
-        const clipDuration = (c.duration && c.duration > 0) ? c.duration : 30;
-        setTimeout(() => {
-          console.log("[PCLIP] Playlist clip ended, calling force_play_clear for next clip");
+        // Store the timer so we can cancel it if a new clip arrives
+        playlistAdvanceTimer = setTimeout(() => {
+          playlistAdvanceTimer = null; // Clear the reference
+          console.log("[PCLIP] Playlist clip ended, showing transition and calling force_play_clear");
+          showTransition();
           fetch(`${API_BASE}/force_play_clear.php?login=${encodeURIComponent(login)}`, { cache: "no-store" })
+            .then(res => res.json())
+            .then(data => {
+              console.log("[PCLIP] force_play_clear response:", data);
+            })
             .catch(err => console.error("[PCLIP] force_play_clear error:", err));
-        }, (clipDuration + 2) * 1000); // +2 seconds buffer to ensure clip finished
+        }, (clipDuration + 1) * 1000);
       }
     } catch (err) {
       console.error("[PCLIP] Poll error:", err);
