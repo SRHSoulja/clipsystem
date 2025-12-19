@@ -97,8 +97,8 @@ async function fetchWithTimeout(url, timeoutMs = 5000) {
 
 // Command handlers
 const commands = {
-  // !pb - Show currently playing clip
-  async pb(channel, tags, args) {
+  // !clip - Show currently playing clip
+  async clip(channel, tags, args) {
     try {
       const url = `${config.apiBaseUrl}/now_playing_get.php?login=${clipChannel}`;
       const res = await fetchWithTimeout(url);
@@ -111,7 +111,7 @@ const commands = {
       const title = data.title || 'Unknown';
       return `Now playing Clip #${data.seq}: ${title}`;
     } catch (err) {
-      console.error('!pb error:', err.message);
+      console.error('!clip error:', err.message);
       return 'Could not fetch current clip.';
     }
   },
@@ -137,11 +137,23 @@ const commands = {
     }
   },
 
-  // !like <seq> - Upvote a clip
+  // !like [seq] - Upvote a clip (current clip if no seq provided)
   async like(channel, tags, args) {
-    const seq = parseInt(args[0]);
+    let seq = parseInt(args[0]);
+
+    // If no seq provided, get current playing clip
     if (!seq || seq <= 0) {
-      return 'Usage: !like <clip#>';
+      try {
+        const npRes = await fetchWithTimeout(`${config.apiBaseUrl}/now_playing_get.php?login=${clipChannel}`);
+        const npData = await npRes.json();
+        if (npData && npData.seq) {
+          seq = npData.seq;
+        } else {
+          return 'No clip currently playing. Use !like <clip#>';
+        }
+      } catch (err) {
+        return 'Could not get current clip.';
+      }
     }
 
     try {
@@ -155,11 +167,23 @@ const commands = {
     }
   },
 
-  // !dislike <seq> - Downvote a clip
+  // !dislike [seq] - Downvote a clip (current clip if no seq provided)
   async dislike(channel, tags, args) {
-    const seq = parseInt(args[0]);
+    let seq = parseInt(args[0]);
+
+    // If no seq provided, get current playing clip
     if (!seq || seq <= 0) {
-      return 'Usage: !dislike <clip#>';
+      try {
+        const npRes = await fetchWithTimeout(`${config.apiBaseUrl}/now_playing_get.php?login=${clipChannel}`);
+        const npData = await npRes.json();
+        if (npData && npData.seq) {
+          seq = npData.seq;
+        } else {
+          return 'No clip currently playing. Use !dislike <clip#>';
+        }
+      } catch (err) {
+        return 'Could not get current clip.';
+      }
     }
 
     try {
@@ -269,14 +293,17 @@ const commands = {
     }
   },
 
-  // !clip or !clips - Show info about the clip system
-  async clip(channel, tags, args) {
-    return `Use !pb to see the current clip. Mods can use !pclip <#> to play a specific clip. Vote with !like <#> or !dislike <#>`;
-  },
-
-  // Alias
+  // !clips - Alias for !clip
   async clips(channel, tags, args) {
     return commands.clip(channel, tags, args);
+  },
+
+  // !chelp - Show available clip commands
+  async chelp(channel, tags, args) {
+    if (isMod(tags)) {
+      return 'Clip commands: !clip (current), !like/!dislike [#], !pclip <#>, !cremove <#>, !cadd <#>, !cfind <query>, !playlist <name>';
+    }
+    return 'Clip commands: !clip (see current), !like [#] (upvote), !dislike [#] (downvote)';
   }
 };
 
@@ -318,7 +345,7 @@ client.on('connected', (addr, port) => {
   console.log(`Joined channels: ${channels.join(', ')}`);
   console.log(`Clip channel: ${clipChannel}`);
   console.log(`Bot username: ${config.botUsername}`);
-  console.log('Commands active: !pb, !pclip, !cfind, !playlist, !like, !dislike, !cremove, !cadd, !clip');
+  console.log('Commands active: !clip, !pclip, !cfind, !playlist, !like, !dislike, !cremove, !cadd, !chelp');
 });
 
 client.on('disconnected', (reason) => {

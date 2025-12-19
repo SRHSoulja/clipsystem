@@ -383,6 +383,7 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
     let currentPlaylist = null;
     let selectedClips = new Set();
     let games = {};
+    let gameNames = {};
 
     // Login
     document.getElementById('keyInput').addEventListener('keypress', (e) => {
@@ -431,6 +432,23 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
           }
         });
 
+        // Fetch game names from API
+        const gameIds = Object.keys(games).slice(0, 100).join(',');
+        if (gameIds) {
+          try {
+            const gamesRes = await fetch(`${API_BASE}/games_api.php?action=get&ids=${gameIds}`);
+            const gamesData = await gamesRes.json();
+            if (gamesData.games) {
+              gameNames = {};
+              Object.values(gamesData.games).forEach(g => {
+                gameNames[g.game_id || g.id] = g.name;
+              });
+            }
+          } catch (e) {
+            console.log('Could not fetch game names:', e);
+          }
+        }
+
         // Populate game filter
         const gameFilter = document.getElementById('gameFilter');
         gameFilter.innerHTML = '<option value="">All Games</option>';
@@ -440,7 +458,8 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
           .forEach(([id, count]) => {
             const opt = document.createElement('option');
             opt.value = id;
-            opt.textContent = `Game ${id} (${count})`;
+            const name = gameNames[id] || `Game ${id}`;
+            opt.textContent = `${name} (${count})`;
             gameFilter.appendChild(opt);
           });
 
@@ -480,7 +499,7 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
           <div class="title">${escapeHtml(c.title || '(no title)')}</div>
           <div class="meta">
             <span>${c.view_count ? c.view_count.toLocaleString() + ' views' : ''}</span>
-            <span>${c.game_id || ''}</span>
+            <span>${c.game_id ? (gameNames[c.game_id] || c.game_id) : ''}</span>
           </div>
         </div>
       `).join('');

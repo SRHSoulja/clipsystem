@@ -149,6 +149,10 @@ $payload = [
 $title = $best['title'] ?? "(no title)";
 $seq = (int)$best['seq'];
 
+// Build search URL for multiple results
+$baseUrl = getenv('API_BASE_URL') ?: 'https://clipsystem-production.up.railway.app';
+$searchUrl = $baseUrl . '/clip_search.php?login=' . urlencode($login) . '&q=' . urlencode($query) . '&key=' . urlencode($ADMIN_KEY);
+
 if ($count === 1) {
   echo "Playing #{$seq}: {$title}";
 } elseif ($count <= 3) {
@@ -156,5 +160,5 @@ if ($count === 1) {
   $seqs = array_map(function($m) { return '#' . $m['seq']; }, $matches);
   echo "Found " . implode(', ', $seqs) . " - Playing #{$seq}: {$title}";
 } else {
-  echo "Found {$count} clips - Playing #{$seq}: {$title}";
+  echo "Found {$count} clips - Playing #{$seq}: {$title} | See all: {$searchUrl}";
 }
