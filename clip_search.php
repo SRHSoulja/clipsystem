@@ -29,7 +29,7 @@ $page   = max(1, (int)($_GET["page"] ?? 1));
 $perPage = 100;
 
 // Validate sort option
-$validSorts = ['views', 'date', 'title'];
+$validSorts = ['views', 'date', 'oldest', 'title', 'titlez'];
 if (!in_array($sort, $validSorts)) {
   $sort = 'views';
 }
@@ -196,7 +196,9 @@ if ($pdo) {
     // Determine sort order
     $orderBy = match($sort) {
       'date' => 'created_at DESC',
+      'oldest' => 'created_at ASC',
       'title' => 'title ASC',
+      'titlez' => 'title DESC',
       default => 'view_count DESC',
     };
 
@@ -656,7 +658,9 @@ if ($pdo) {
         <select name="sort">
           <option value="views" <?= $sort === 'views' ? 'selected' : '' ?>>Most Viewed</option>
           <option value="date" <?= $sort === 'date' ? 'selected' : '' ?>>Newest First</option>
+          <option value="oldest" <?= $sort === 'oldest' ? 'selected' : '' ?>>Oldest First</option>
           <option value="title" <?= $sort === 'title' ? 'selected' : '' ?>>Title (A-Z)</option>
+          <option value="titlez" <?= $sort === 'titlez' ? 'selected' : '' ?>>Title (Z-A)</option>
         </select>
       </div>
 
