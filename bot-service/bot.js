@@ -306,52 +306,12 @@ const commands = {
     // Let the API handle empty queries - it returns the search page link
 
     try {
-      // Use fresh https request to avoid any connection reuse issues
-      const https = require('https');
-      const cacheBuster = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-
-      // Build URL parts separately to avoid encoding issues
-      const encodedQuery = encodeURIComponent(query);
-      const encodedLogin = encodeURIComponent(clipChannel);
-      const encodedKey = encodeURIComponent(config.adminKey);
-      const path = `/cfind.php?login=${encodedLogin}&key=${encodedKey}&q=${encodedQuery}&_cb=${cacheBuster}`;
-
-      console.log(`!cfind request: ${query} -> path: ${path.substring(0, 80)}...`);
-
-      return new Promise((resolve, reject) => {
-        const options = {
-          hostname: 'clipsystem-production.up.railway.app',
-          port: 443,
-          path: path,
-          method: 'GET',
-          headers: {
-            'Cache-Control': 'no-cache',
-            'Connection': 'close'
-          },
-          agent: false // Disable connection pooling
-        };
-
-        const req = https.request(options, (res) => {
-          let data = '';
-          res.on('data', chunk => data += chunk);
-          res.on('end', () => {
-            console.log(`!cfind response: ${data.substring(0, 100)}`);
-            resolve(data);
-          });
-        });
-
-        req.on('error', (err) => {
-          console.error('!cfind error:', err.message);
-          resolve('Could not search clips.');
-        });
-
-        req.setTimeout(5000, () => {
-          req.destroy();
-          resolve('Search timed out.');
-        });
-
-        req.end();
-      });
+      const url = `${config.apiBaseUrl}/cfind.php?login=${encodeURIComponent(clipChannel)}&key=${encodeURIComponent(config.adminKey)}&q=${encodeURIComponent(query)}`;
+      console.log(`!cfind request: "${query}"`);
+      const res = await fetchWithTimeout(url);
+      const data = await res.text();
+      console.log(`!cfind response: ${data.substring(0, 100)}`);
+      return data;
     } catch (err) {
       console.error('!cfind error:', err.message);
       return 'Could not search clips.';
