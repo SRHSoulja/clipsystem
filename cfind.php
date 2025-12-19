@@ -38,7 +38,7 @@ if ($key !== $ADMIN_KEY) { http_response_code(403); echo "forbidden"; exit; }
 
 // If no query provided, just return the search page link
 $baseUrl = getenv('API_BASE_URL') ?: 'https://clipsystem-production.up.railway.app';
-if (strlen($query) < 2) {
+if ($query === '' || strlen($query) < 2) {
   echo "Search clips: {$baseUrl}/clip_search.php?login=" . urlencode($login);
   exit;
 }
@@ -47,6 +47,12 @@ if (strlen($query) < 2) {
 $queryWords = preg_split('/\s+/', trim($query));
 $queryWords = array_filter($queryWords, function($w) { return strlen($w) >= 2; });
 $queryWords = array_values($queryWords); // Re-index to ensure sequential keys
+
+// If all words were filtered out (too short), return search page link
+if (empty($queryWords)) {
+  echo "Search clips: {$baseUrl}/clip_search.php?login=" . urlencode($login);
+  exit;
+}
 
 // Search in PostgreSQL - separate counts for title vs clipper
 $pdo = get_db_connection();
