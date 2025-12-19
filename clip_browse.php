@@ -79,8 +79,15 @@ if ($pdo) {
       $params[] = $gameId;
     }
 
-    // Search filter (multi-word AND logic)
-    if ($query) {
+    // Check if query is a clip number (all digits)
+    $isClipNumber = $query && preg_match('/^\d+$/', $query);
+
+    if ($isClipNumber) {
+      // Search by clip seq number
+      $whereClauses[] = "seq = ?";
+      $params[] = (int)$query;
+    } elseif ($query) {
+      // Search filter (multi-word AND logic)
       $queryWords = preg_split('/\s+/', trim($query));
       $queryWords = array_filter($queryWords, function($w) { return strlen($w) >= 2; });
       foreach ($queryWords as $word) {

@@ -74,10 +74,19 @@ if ($pdo) {
       $params[] = $gameId;
     }
 
-    // Search filter
-    foreach ($queryWords as $word) {
-      $whereClauses[] = "title ILIKE ?";
-      $params[] = '%' . $word . '%';
+    // Check if query is a clip number (all digits)
+    $isClipNumber = $query && preg_match('/^\d+$/', $query);
+
+    if ($isClipNumber) {
+      // Search by clip seq number
+      $whereClauses[] = "seq = ?";
+      $params[] = (int)$query;
+    } else {
+      // Search filter by title words
+      foreach ($queryWords as $word) {
+        $whereClauses[] = "title ILIKE ?";
+        $params[] = '%' . $word . '%';
+      }
     }
 
     $whereSQL = implode(' AND ', $whereClauses);
@@ -530,7 +539,7 @@ if ($pdo) {
     <?php endif; ?>
 
     <div class="info-msg">
-      Click any clip to watch on Twitch. Use <strong>!pclip #</strong> in chat to queue clips to the stream.
+      Click any clip to watch on Twitch. Search by title or clip number (e.g. "1234").
     </div>
 
     <?php if (empty($matches) && ($query || $gameId)): ?>
