@@ -34,6 +34,14 @@ migrate_clips_to_db.php?login=floppyjimmie&key=YOUR_ADMIN_KEY&fresh=1
 - Auto-continues through all clips
 - Takes ~10-15 minutes for 14k clips
 
+### Step 3: Export Seq Mapping (IMPORTANT!)
+```
+seq_export.php?login=floppyjimmie&key=YOUR_ADMIN_KEY
+```
+- Downloads `seq_map_floppyjimmie_YYYYMMDD.json`
+- **Save this file!** It's your backup of clip_id → seq mappings
+- If you ever need to rebuild, this ensures seq numbers stay the same
+
 ---
 
 ## Adding New Clips (After Launch)
@@ -72,13 +80,39 @@ migrate_clips_to_db.php?login=floppyjimmie&key=YOUR_ADMIN_KEY&update=1
 
 ---
 
+## Rebuilding with Preserved Seq Numbers
+
+If you ever need to do a fresh rebuild but want to keep the same seq numbers:
+
+### Step 1: Fresh Backfill
+```
+clips_backfill.php?login=floppyjimmie&years=5&fresh=1
+```
+
+### Step 2: Fresh Migration
+```
+migrate_clips_to_db.php?login=floppyjimmie&key=YOUR_ADMIN_KEY&fresh=1
+```
+
+### Step 3: Restore Seq Numbers
+1. Upload your saved `seq_map_*.json` to Railway at `/tmp/clipsystem_cache/seq_map.json`
+2. Run:
+```
+seq_import.php?login=floppyjimmie&key=YOUR_ADMIN_KEY
+```
+- Restores original seq numbers from your backup
+- New clips (not in backup) keep their new seq numbers
+
+---
+
 ## Key Concepts
 
 ### Seq Numbers
 - Each clip has a unique `seq` number within a login
 - `seq=1` is the oldest clip, `seq=N` is the newest
-- Votes reference clips by seq number
-- **NEVER change seq numbers for voted clips** - this breaks vote references
+- Votes are stored by `clip_id` (permanent), NOT seq number
+- Seq is just a human-friendly lookup key
+- **Even if seq changes, votes stay attached to the correct clip**
 
 ### Fresh Mode
 - `fresh=1` on backfill: Ignores cache, re-fetches everything from Twitch
@@ -122,6 +156,8 @@ migrate_clips_to_db.php?login=floppyjimmie&key=YOUR_ADMIN_KEY&update=1
 |------|---------|
 | `clips_backfill.php` | Fetch clips from Twitch API |
 | `migrate_clips_to_db.php` | Import clips from JSON to PostgreSQL |
+| `seq_export.php` | Export clip_id → seq mapping (backup) |
+| `seq_import.php` | Restore seq numbers from backup |
 | `twitch_reel_api.php` | API for player to get clip list |
 | `now_playing_set.php` | Update currently playing clip |
 | `now_playing_get.php` | Get current clip (for !pb command) |
