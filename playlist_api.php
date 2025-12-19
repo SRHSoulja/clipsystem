@@ -116,7 +116,7 @@ switch ($action) {
 
       // Get clips
       $stmt = $pdo->prepare("
-        SELECT pc.clip_seq as seq, pc.position, c.title, c.clip_id
+        SELECT pc.clip_seq as seq, pc.position, c.title, c.clip_id, c.duration
         FROM playlist_clips pc
         LEFT JOIN clips c ON c.login = ? AND c.seq = pc.clip_seq
         WHERE pc.playlist_id = ?
@@ -125,7 +125,13 @@ switch ($action) {
       $stmt->execute([$login, $id]);
       $clips = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+      // Calculate total duration
+      $totalDuration = 0;
+      foreach ($clips as $c) {
+        $totalDuration += (float)($c['duration'] ?? 0);
+      }
       $playlist['clips'] = $clips;
+      $playlist['total_duration'] = $totalDuration;
       json_response(["playlist" => $playlist]);
     } catch (PDOException $e) {
       json_error("Database error: " . $e->getMessage(), 500);

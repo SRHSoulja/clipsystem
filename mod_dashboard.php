@@ -700,19 +700,40 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
       }
     }
 
+    function formatDuration(seconds) {
+      if (!seconds || seconds <= 0) return '0:00';
+      const mins = Math.floor(seconds / 60);
+      const secs = Math.round(seconds % 60);
+      return mins > 0 ? `${mins}:${secs.toString().padStart(2, '0')}` : `0:${secs.toString().padStart(2, '0')}`;
+    }
+
     function renderPlaylistClips() {
       const container = document.getElementById('playlistClips');
       const clips = currentPlaylist?.clips || [];
+      const totalDuration = currentPlaylist?.total_duration || 0;
 
-      container.innerHTML = clips.map((c, i) => `
-        <div class="playlist-clip">
-          <div>
-            <span class="seq">#${c.seq}</span>
-            ${escapeHtml((c.title || '').substring(0, 40))}
+      let html = '';
+      if (clips.length > 0) {
+        // Show total duration header
+        html += `<div style="margin-bottom:8px;padding:6px;background:#1a1a1d;border-radius:4px;font-size:12px;color:#adadb8;">
+          Total: ${formatDuration(totalDuration)} (${clips.length} clips)
+        </div>`;
+
+        html += clips.map((c, i) => `
+          <div class="playlist-clip">
+            <div style="flex:1;min-width:0;">
+              <span class="seq">#${c.seq}</span>
+              <span style="color:#adadb8;font-size:11px;margin-left:4px;">${c.duration ? formatDuration(c.duration) : ''}</span>
+              <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml((c.title || '').substring(0, 40))}</div>
+            </div>
+            <button class="remove-btn" onclick="removeFromPlaylist(${c.seq})">×</button>
           </div>
-          <button class="remove-btn" onclick="removeFromPlaylist(${c.seq})">×</button>
-        </div>
-      `).join('') || '<div class="loading">Empty playlist</div>';
+        `).join('');
+      } else {
+        html = '<div class="loading">Empty playlist</div>';
+      }
+
+      container.innerHTML = html;
     }
 
     async function addSelectedToPlaylist() {

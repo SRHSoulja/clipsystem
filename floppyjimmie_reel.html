@@ -1264,19 +1264,31 @@
         return;
       }
 
+      // Check if this is a playlist clip
+      const isPlaylistClip = !!(data.playlist_id);
+
       // Force the switch immediately
-      console.log("[PCLIP] Switching to forced clip:", c.id, "duration:", c.duration, "isSwitching:", isSwitching);
+      console.log("[PCLIP] Switching to forced clip:", c.id, "duration:", c.duration, "playlist:", isPlaylistClip);
       switchToClip(c);
 
-      // Clear force_play AFTER the clip finishes (for playlist advancement)
-      // Use clip duration + small buffer to ensure clip has ended
-      const clipDuration = (c.duration && c.duration > 0) ? c.duration : 30;
-      setTimeout(() => {
-        console.log("[PCLIP] Clip ended, calling force_play_clear for playlist advancement");
-        try {
-          fetch(`${API_BASE}/force_play_clear.php?login=${encodeURIComponent(login)}`, { cache: "no-store" });
-        } catch {}
-      }, (clipDuration + 1) * 1000);
+      // For playlist clips, cancel the normal advance timer and use playlist advancement instead
+      if (isPlaylistClip) {
+        // Cancel the advanceTimer that switchToClip set up - we'll use force_play_clear instead
+        if (advanceTimer) {
+          clearTimeout(advanceTimer);
+          advanceTimer = null;
+          console.log("[PCLIP] Cancelled normal advance timer for playlist mode");
+        }
+
+        // Clear force_play AFTER the clip finishes (for playlist advancement)
+        // Use clip duration + small buffer to ensure clip has ended
+        const clipDuration = (c.duration && c.duration > 0) ? c.duration : 30;
+        setTimeout(() => {
+          console.log("[PCLIP] Playlist clip ended, calling force_play_clear for next clip");
+          fetch(`${API_BASE}/force_play_clear.php?login=${encodeURIComponent(login)}`, { cache: "no-store" })
+            .catch(err => console.error("[PCLIP] force_play_clear error:", err));
+        }, (clipDuration + 2) * 1000); // +2 seconds buffer to ensure clip finished
+      }
     } catch (err) {
       console.error("[PCLIP] Poll error:", err);
     }
