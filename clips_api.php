@@ -31,6 +31,94 @@ function clean_login($s){
   return $s ?: "default";
 }
 
+// Get Twitch access token
+function getTwitchToken() {
+  $clientId = getenv('TWITCH_CLIENT_ID');
+  $clientSecret = getenv('TWITCH_CLIENT_SECRET');
+
+  if (!$clientId || !$clientSecret) {
+    return null;
+  }
+
+  $ch = curl_init('https://id.twitch.tv/oauth2/token');
+  curl_setopt_array($ch, [
+    CURLOPT_POST => true,
+    CURLOPT_POSTFIELDS => http_build_query([
+      'client_id' => $clientId,
+      'client_secret' => $clientSecret,
+      'grant_type' => 'client_credentials'
+    ]),
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_TIMEOUT => 10,
+  ]);
+
+  $response = curl_exec($ch);
+  $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+  curl_close($ch);
+
+  if ($httpCode !== 200) {
+    return null;
+  }
+
+  $data = json_decode($response, true);
+  return $data['access_token'] ?? null;
+}
+
+// Fetch game names from Twitch API and cache them
+function fetchGamesFromTwitch($gameIds, $pdo) {
+  $clientId = getenv('TWITCH_CLIENT_ID');
+  $token = getTwitchToken();
+
+  if (!$clientId || !$token || empty($gameIds)) {
+    return [];
+  }
+
+  $gameNames = [];
+
+  // Twitch allows up to 100 IDs per request
+  foreach (array_chunk($gameIds, 100) as $chunk) {
+    $query = implode('&', array_map(fn($id) => "id=" . urlencode($id), $chunk));
+    $url = "https://api.twitch.tv/helix/games?" . $query;
+
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+      CURLOPT_HTTPHEADER => [
+        "Client-ID: $clientId",
+        "Authorization: Bearer $token"
+      ],
+      CURLOPT_RETURNTRANSFER => true,
+      CURLOPT_TIMEOUT => 10,
+    ]);
+
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($httpCode === 200) {
+      $data = json_decode($response, true);
+      if (isset($data['data'])) {
+        foreach ($data['data'] as $game) {
+          $gameNames[$game['id']] = $game['name'];
+
+          // Cache in database
+          try {
+            $stmt = $pdo->prepare("
+              INSERT INTO games_cache (game_id, name, box_art_url)
+              VALUES (?, ?, ?)
+              ON CONFLICT (game_id) DO UPDATE SET name = EXCLUDED.name, fetched_at = CURRENT_TIMESTAMP
+            ");
+            $stmt->execute([$game['id'], $game['name'], $game['box_art_url'] ?? '']);
+          } catch (PDOException $e) {
+            // Ignore cache errors
+          }
+        }
+      }
+    }
+  }
+
+  return $gameNames;
+}
+
 $login   = clean_login($_GET["login"] ?? "");
 $key     = (string)($_GET["key"] ?? "");
 $page    = max(1, (int)($_GET["page"] ?? 1));
@@ -116,7 +204,7 @@ switch ($action) {
     $stmt->execute([$login]);
     $games = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Fetch game names
+    // Fetch game names from cache
     $gameIds = array_column($games, 'game_id');
     $gameNames = [];
 
@@ -126,6 +214,13 @@ switch ($action) {
       $stmt->execute($gameIds);
       while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
         $gameNames[$row['game_id']] = $row['name'];
+      }
+
+      // Find missing game IDs and fetch from Twitch API
+      $missingIds = array_diff($gameIds, array_keys($gameNames));
+      if (!empty($missingIds)) {
+        $fetched = fetchGamesFromTwitch(array_values($missingIds), $pdo);
+        $gameNames = array_merge($gameNames, $fetched);
       }
     }
 
