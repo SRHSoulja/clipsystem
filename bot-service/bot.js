@@ -62,6 +62,31 @@ const client = new tmi.Client({
 const cooldowns = new Map();
 const COOLDOWN_MS = 3000; // 3 second cooldown per user per command
 
+// Message deduplication - prevent processing duplicate Twitch messages
+const recentMessages = new Map();
+const DEDUP_WINDOW_MS = 5000; // 5 second window for deduplication
+
+function isDuplicateMessage(messageId) {
+  if (!messageId) return false;
+
+  const now = Date.now();
+
+  // Clean old entries
+  for (const [id, time] of recentMessages) {
+    if (now - time > DEDUP_WINDOW_MS) {
+      recentMessages.delete(id);
+    }
+  }
+
+  if (recentMessages.has(messageId)) {
+    console.log(`Duplicate message detected: ${messageId}`);
+    return true;
+  }
+
+  recentMessages.set(messageId, now);
+  return false;
+}
+
 function isOnCooldown(user, command) {
   const key = `${user}:${command}`;
   const lastUsed = cooldowns.get(key) || 0;
@@ -360,6 +385,12 @@ client.on('message', async (channel, tags, message, self) => {
   // Ignore own messages
   if (self) return;
 
+  // Check for duplicate messages from Twitch
+  const messageId = tags['id'] || tags['message-id'];
+  if (isDuplicateMessage(messageId)) {
+    return;
+  }
+
   // Parse message
   const trimmed = message.trim();
   if (!trimmed.startsWith('!')) return;
@@ -375,6 +406,11 @@ client.on('message', async (channel, tags, message, self) => {
   // Check cooldown (except for mods)
   if (!isMod(tags) && isOnCooldown(tags.username, cmdName)) {
     return;
+  }
+
+  // Log command execution for debugging
+  if (cmdName === 'cfind') {
+    console.log(`Processing !cfind from ${tags.username}: "${args.join(' ')}" (msg-id: ${messageId})`);
   }
 
   try {
