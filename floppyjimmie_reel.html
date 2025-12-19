@@ -1398,6 +1398,20 @@
       const nonce = (data.nonce != null) ? String(data.nonce) : null;
       console.log("[PCLIP] Nonce check - received:", nonce, "last:", lastPclipNonce);
       if (!nonce || nonce === lastPclipNonce) return;
+
+      // On fresh page load (lastPclipNonce is null), ignore stale force_play requests
+      // This prevents replaying old clips when switching scenes
+      if (lastPclipNonce === null && data.set_at) {
+        const setAtTime = new Date(data.set_at).getTime();
+        const ageMs = Date.now() - setAtTime;
+        const MAX_AGE_MS = 60000; // 60 seconds
+        if (ageMs > MAX_AGE_MS) {
+          console.log("[PCLIP] Ignoring stale force_play request, age:", Math.round(ageMs / 1000), "seconds");
+          lastPclipNonce = nonce; // Mark as seen so we don't check age again
+          return;
+        }
+      }
+
       lastPclipNonce = nonce;
       console.log("[PCLIP] Force play command received:", JSON.stringify(data));
 
