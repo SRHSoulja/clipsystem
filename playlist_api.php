@@ -275,10 +275,13 @@ switch ($action) {
         "seq" => (int)$first['seq'],
         "clip_id" => $first['clip_id'],
         "title" => $first['title'] ?? "",
+        "duration" => (float)($first['duration'] ?? 30),
         "nonce" => (string)(time() . "_" . bin2hex(random_bytes(4))),
         "set_at" => gmdate("c"),
         "playlist_id" => $id,
         "playlist_index" => 0,
+        "playlist_name" => $playlist['name'],
+        "playlist_total" => count($clips),
       ];
       @file_put_contents($forcePath, json_encode($forcePayload, JSON_UNESCAPED_SLASHES), LOCK_EX);
 

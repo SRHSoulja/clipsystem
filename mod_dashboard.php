@@ -591,6 +591,7 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
             </div>
           </div>
           <div class="meta">
+            <span>${c.duration ? Math.round(c.duration) + 's' : ''}</span>
             <span>${c.view_count ? Number(c.view_count).toLocaleString() + ' views' : ''}</span>
             <span>${c.game_id ? (gameNames[c.game_id] || c.game_id) : ''}</span>
           </div>
