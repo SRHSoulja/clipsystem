@@ -374,6 +374,131 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
       padding-left: 16px;
       border-left: 1px solid #3a3a3d;
     }
+
+    /* Mobile toggle button for sidebar */
+    .mobile-toggle {
+      display: none;
+      background: #9147ff;
+      border: none;
+      color: white;
+      padding: 8px 16px;
+      border-radius: 4px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    /* Mobile responsive styles */
+    @media (max-width: 768px) {
+      .mobile-toggle { display: block; }
+
+      .header {
+        flex-wrap: wrap;
+        gap: 12px;
+        padding: 12px 16px;
+      }
+      .header h1 { font-size: 18px; }
+
+      .main {
+        flex-direction: column;
+        position: relative;
+      }
+
+      .sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: 100%;
+        z-index: 100;
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+      }
+      .sidebar.open {
+        transform: translateX(0);
+      }
+      .sidebar-close {
+        display: block;
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        background: #eb0400;
+        border: none;
+        color: white;
+        padding: 8px 16px;
+        border-radius: 4px;
+        font-size: 14px;
+        cursor: pointer;
+        z-index: 101;
+      }
+
+      .search-bar {
+        flex-wrap: wrap;
+        padding: 12px;
+        gap: 8px;
+      }
+      .search-bar input {
+        width: 100%;
+        flex: unset;
+      }
+      .search-bar select {
+        flex: 1;
+        min-width: unset;
+      }
+
+      .clips-grid {
+        padding: 12px;
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+
+      .clip-card {
+        padding: 10px;
+      }
+      .clip-card .thumbnail {
+        width: 70px;
+        height: 40px;
+      }
+      .clip-card .title { font-size: 13px; }
+
+      .actions-bar {
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 12px;
+      }
+      .actions-bar button {
+        padding: 10px 14px;
+        font-size: 13px;
+      }
+      .selected-count {
+        width: 100%;
+        text-align: center;
+        order: -1;
+        margin-left: 0;
+      }
+
+      .clips-pagination {
+        padding: 12px;
+      }
+      .pagination-controls {
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+      .pagination-controls .page-goto {
+        width: 100%;
+        justify-content: center;
+        margin-left: 0;
+        margin-top: 8px;
+        padding-left: 0;
+        border-left: none;
+        padding-top: 8px;
+        border-top: 1px solid #3a3a3d;
+      }
+
+      .current-playlist {
+        max-height: 35vh;
+      }
+    }
   </style>
 </head>
 <body>
@@ -389,11 +514,13 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
   <div class="dashboard" id="dashboard">
     <div class="header">
       <h1>Mod Dashboard</h1>
+      <button class="mobile-toggle" onclick="toggleSidebar()">Playlists</button>
       <div class="user"><?php echo htmlspecialchars($login); ?></div>
     </div>
 
     <div class="main">
-      <div class="sidebar">
+      <div class="sidebar" id="sidebar">
+        <button class="sidebar-close" onclick="toggleSidebar()" style="display:none;">Close</button>
         <h2>Playlists</h2>
         <div class="playlist-list" id="playlistList">
           <div class="loading">Loading...</div>
@@ -484,6 +611,14 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
     let totalClips = 0;
     let perPage = 200;
     let isLoading = false;
+
+    // Mobile sidebar toggle
+    function toggleSidebar() {
+      const sidebar = document.getElementById('sidebar');
+      const closeBtn = sidebar.querySelector('.sidebar-close');
+      sidebar.classList.toggle('open');
+      closeBtn.style.display = sidebar.classList.contains('open') ? 'block' : 'none';
+    }
 
     // Login
     document.getElementById('keyInput').addEventListener('keypress', (e) => {
