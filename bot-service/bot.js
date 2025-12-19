@@ -18,8 +18,7 @@ const config = {
   botUsername: process.env.TWITCH_BOT_USERNAME || '',
   oauthToken: process.env.TWITCH_OAUTH_TOKEN || '',
   channel: process.env.TWITCH_CHANNEL || 'floppyjimmie',
-  // CLIP_LOGIN is the channel whose clips we're playing (defaults to first channel)
-  clipLogin: process.env.CLIP_LOGIN || '',
+  clipChannel: process.env.CLIP_CHANNEL || '',
   apiBaseUrl: process.env.API_BASE_URL || 'https://clipsystem-production.up.railway.app',
   adminKey: process.env.ADMIN_KEY || ''
 };
@@ -39,11 +38,11 @@ const oauthToken = config.oauthToken.startsWith('oauth:')
   ? config.oauthToken
   : `oauth:${config.oauthToken}`;
 
-// Parse channels (supports comma-separated list)
+// Parse channels (supports comma-separated list for joining multiple chats)
 const channels = config.channel.split(',').map(c => c.trim().toLowerCase()).filter(Boolean);
 
-// The login to use for clip API calls (defaults to first channel in list)
-const clipLogin = config.clipLogin || channels[0] || 'floppyjimmie';
+// The channel whose clips we're playing (CLIP_CHANNEL env var, or first channel)
+const clipChannel = config.clipChannel || channels[0] || 'floppyjimmie';
 
 // Create TMI client
 const client = new tmi.Client({
@@ -101,7 +100,7 @@ const commands = {
   // !pb - Show currently playing clip
   async pb(channel, tags, args) {
     try {
-      const url = `${config.apiBaseUrl}/now_playing_get.php?login=${clipLogin}`;
+      const url = `${config.apiBaseUrl}/now_playing_get.php?login=${clipChannel}`;
       const res = await fetchWithTimeout(url);
       const data = await res.json();
 
@@ -129,7 +128,7 @@ const commands = {
     }
 
     try {
-      const url = `${config.apiBaseUrl}/pclip.php?login=${clipLogin}&key=${config.adminKey}&seq=${seq}`;
+      const url = `${config.apiBaseUrl}/pclip.php?login=${clipChannel}&key=${config.adminKey}&seq=${seq}`;
       const res = await fetchWithTimeout(url);
       return await res.text();
     } catch (err) {
@@ -147,7 +146,7 @@ const commands = {
 
     try {
       const user = tags.username || 'anonymous';
-      const url = `${config.apiBaseUrl}/vote_submit.php?login=${clipLogin}&user=${user}&seq=${seq}&vote=like`;
+      const url = `${config.apiBaseUrl}/vote_submit.php?login=${clipChannel}&user=${user}&seq=${seq}&vote=like`;
       const res = await fetchWithTimeout(url);
       return await res.text();
     } catch (err) {
@@ -165,7 +164,7 @@ const commands = {
 
     try {
       const user = tags.username || 'anonymous';
-      const url = `${config.apiBaseUrl}/vote_submit.php?login=${clipLogin}&user=${user}&seq=${seq}&vote=dislike`;
+      const url = `${config.apiBaseUrl}/vote_submit.php?login=${clipChannel}&user=${user}&seq=${seq}&vote=dislike`;
       const res = await fetchWithTimeout(url);
       return await res.text();
     } catch (err) {
@@ -186,7 +185,7 @@ const commands = {
     }
 
     try {
-      const url = `${config.apiBaseUrl}/cremove.php?login=${clipLogin}&key=${config.adminKey}&seq=${seq}`;
+      const url = `${config.apiBaseUrl}/cremove.php?login=${clipChannel}&key=${config.adminKey}&seq=${seq}`;
       const res = await fetchWithTimeout(url);
       return await res.text();
     } catch (err) {
@@ -207,7 +206,7 @@ const commands = {
     }
 
     try {
-      const url = `${config.apiBaseUrl}/cadd.php?login=${clipLogin}&key=${config.adminKey}&seq=${seq}`;
+      const url = `${config.apiBaseUrl}/cadd.php?login=${clipChannel}&key=${config.adminKey}&seq=${seq}`;
       const res = await fetchWithTimeout(url);
       return await res.text();
     } catch (err) {
@@ -228,7 +227,7 @@ const commands = {
     }
 
     try {
-      const url = `${config.apiBaseUrl}/cfind.php?login=${clipLogin}&key=${config.adminKey}&q=${encodeURIComponent(query)}`;
+      const url = `${config.apiBaseUrl}/cfind.php?login=${clipChannel}&key=${config.adminKey}&q=${encodeURIComponent(query)}`;
       const res = await fetchWithTimeout(url);
       return await res.text();
     } catch (err) {
@@ -250,7 +249,7 @@ const commands = {
 
     try {
       // First find playlist by name
-      const findUrl = `${config.apiBaseUrl}/playlist_api.php?action=get_by_name&login=${clipLogin}&key=${config.adminKey}&name=${encodeURIComponent(name)}`;
+      const findUrl = `${config.apiBaseUrl}/playlist_api.php?action=get_by_name&login=${clipChannel}&key=${config.adminKey}&name=${encodeURIComponent(name)}`;
       const findRes = await fetchWithTimeout(findUrl);
       const findData = await findRes.json();
 
@@ -259,7 +258,7 @@ const commands = {
       }
 
       // Now play it
-      const playUrl = `${config.apiBaseUrl}/playlist_api.php?action=play&login=${clipLogin}&key=${config.adminKey}&id=${findData.playlist.id}`;
+      const playUrl = `${config.apiBaseUrl}/playlist_api.php?action=play&login=${clipChannel}&key=${config.adminKey}&id=${findData.playlist.id}`;
       const playRes = await fetchWithTimeout(playUrl);
       const playData = await playRes.json();
 
@@ -317,7 +316,7 @@ client.on('message', async (channel, tags, message, self) => {
 client.on('connected', (addr, port) => {
   console.log(`Connected to Twitch IRC at ${addr}:${port}`);
   console.log(`Joined channels: ${channels.join(', ')}`);
-  console.log(`Clip data from: ${clipLogin}`);
+  console.log(`Clip channel: ${clipChannel}`);
   console.log(`Bot username: ${config.botUsername}`);
   console.log('Commands active: !pb, !pclip, !cfind, !playlist, !like, !dislike, !cremove, !cadd, !clip');
 });
