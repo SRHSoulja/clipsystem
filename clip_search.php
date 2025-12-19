@@ -69,6 +69,40 @@ if ($pdo) {
       return strcasecmp($nameA, $nameB);
     });
 
+    // Add virtual combined categories (search multiple games at once)
+    // These use special "combo:" prefix for game_id
+    $comboCats = [
+      ['pattern' => 'Super Mario', 'label' => 'Super Mario (All)'],
+      ['pattern' => 'Mario', 'label' => 'Mario (All)'],
+    ];
+    foreach ($comboCats as $combo) {
+      $comboCount = 0;
+      foreach ($games as $g) {
+        if (stripos($g['name'] ?? '', $combo['pattern']) !== false) {
+          $comboCount += (int)$g['count'];
+        }
+      }
+      if ($comboCount > 0) {
+        $games[] = [
+          'game_id' => 'combo:' . $combo['pattern'],
+          'name' => $combo['label'],
+          'count' => $comboCount,
+          'is_combo' => true
+        ];
+      }
+    }
+
+    // Re-sort to put combo categories in alphabetical position
+    usort($games, function($a, $b) {
+      $priority = ['Just Chatting' => 0, 'IRL' => 1, "I'm Only Sleeping" => 2];
+      $nameA = $a['name'] ?: '';
+      $nameB = $b['name'] ?: '';
+      $prioA = $priority[$nameA] ?? 999;
+      $prioB = $priority[$nameB] ?? 999;
+      if ($prioA !== $prioB) return $prioA - $prioB;
+      return strcasecmp($nameA, $nameB);
+    });
+
     // If a game is selected, get its name
     if ($gameId) {
       foreach ($games as $g) {
@@ -83,10 +117,25 @@ if ($pdo) {
     $whereClauses = ["login = ?", "blocked = FALSE"];
     $params = [$login];
 
-    // Game filter by ID
+    // Game filter by ID (or combo pattern)
     if ($gameId) {
-      $whereClauses[] = "game_id = ?";
-      $params[] = $gameId;
+      if (strpos($gameId, 'combo:') === 0) {
+        // Combo category - search for games matching the pattern
+        $comboPattern = substr($gameId, 6); // Remove "combo:" prefix
+        $comboStmt = $pdo->prepare("SELECT game_id FROM games_cache WHERE name ILIKE ?");
+        $comboStmt->execute(['%' . $comboPattern . '%']);
+        $comboGameIds = $comboStmt->fetchAll(PDO::FETCH_COLUMN);
+        if (!empty($comboGameIds)) {
+          $placeholders = implode(',', array_fill(0, count($comboGameIds), '?'));
+          $whereClauses[] = "game_id IN ($placeholders)";
+          $params = array_merge($params, $comboGameIds);
+        } else {
+          $whereClauses[] = "1 = 0"; // No matches
+        }
+      } else {
+        $whereClauses[] = "game_id = ?";
+        $params[] = $gameId;
+      }
     }
 
     // Game filter by name (search games_cache for matching game_ids)
