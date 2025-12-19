@@ -76,65 +76,108 @@ if (file_exists($cacheFile) && (time() - filemtime($cacheFile) < $cacheTtlSecond
   exit;
 }
 
-// ---- read catalog index ----
-$indexFile = $cacheDir . "/clips_index_{$safe}.json";
-$index = read_json_file($indexFile);
-
-if (!$index || !isset($index['clips']) || !is_array($index['clips']) || !count($index['clips'])) {
-  http_response_code(500);
-  $out = [
-    "error" => "Missing or empty catalog index. Expected: {$indexFile}",
-    "login" => $login,
-  ];
-  echo json_encode($out, JSON_UNESCAPED_SLASHES);
-  exit;
-}
-
-$all = $index['clips'];
-$totalAll = count($all);
-
-// ---- filter out blocked clips ----
-// Try PostgreSQL first for permanent blocklist, fall back to file
-$blockedIds = [];
+// ---- Try PostgreSQL first for clips ----
+$all = [];
+$totalAll = 0;
+$blockedCount = 0;
+$source = "database";
 $pdo = get_db_connection();
 
 if ($pdo) {
   try {
-    $stmt = $pdo->prepare("SELECT clip_id FROM blocklist WHERE login = ?");
+    // Get total count and blocked count
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM clips WHERE login = ?");
     $stmt->execute([$login]);
-    while ($row = $stmt->fetch()) {
-      $blockedIds[$row['clip_id']] = true;
+    $totalAll = (int)$stmt->fetchColumn();
+
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM clips WHERE login = ? AND blocked = TRUE");
+    $stmt->execute([$login]);
+    $blockedCount = (int)$stmt->fetchColumn();
+
+    if ($totalAll > 0) {
+      // Fetch all non-blocked clips from database
+      $stmt = $pdo->prepare("
+        SELECT clip_id as id, seq, title, duration, created_at, view_count, game_id, video_id, vod_offset
+        FROM clips
+        WHERE login = ? AND blocked = FALSE
+        ORDER BY created_at DESC
+      ");
+      $stmt->execute([$login]);
+      $all = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+      // Convert created_at to ISO format string if needed
+      foreach ($all as &$c) {
+        if ($c['created_at'] instanceof DateTime) {
+          $c['created_at'] = $c['created_at']->format('c');
+        }
+      }
+      unset($c);
     }
   } catch (PDOException $e) {
-    error_log("blocklist db error: " . $e->getMessage());
-    // Fall through to file storage
+    error_log("reel_api db error: " . $e->getMessage());
+    $all = []; // Fall through to JSON
   }
 }
 
-// Fallback: Also check file-based blocklist (for backwards compatibility)
-$runtimeDir = is_writable("/tmp") ? "/tmp/clipsystem_cache" : $cacheDir;
-$blocklistFile = $runtimeDir . "/blocklist_{$safe}.json";
-if (file_exists($blocklistFile)) {
-  $blockRaw = @file_get_contents($blocklistFile);
-  $blocklist = $blockRaw ? json_decode($blockRaw, true) : [];
-  if (is_array($blocklist)) {
-    foreach ($blocklist as $b) {
-      if (isset($b["clip_id"])) {
-        $blockedIds[$b["clip_id"]] = true;
+// ---- Fallback to JSON if database empty or unavailable ----
+if (empty($all)) {
+  $source = "local_index";
+  $indexFile = $cacheDir . "/clips_index_{$safe}.json";
+  $index = read_json_file($indexFile);
+
+  if (!$index || !isset($index['clips']) || !is_array($index['clips']) || !count($index['clips'])) {
+    http_response_code(500);
+    $out = [
+      "error" => "Missing or empty catalog index. Expected: {$indexFile}",
+      "login" => $login,
+    ];
+    echo json_encode($out, JSON_UNESCAPED_SLASHES);
+    exit;
+  }
+
+  $all = $index['clips'];
+  $totalAll = count($all);
+
+  // Filter out blocked clips from JSON (check database blocklist + file)
+  $blockedIds = [];
+
+  if ($pdo) {
+    try {
+      $stmt = $pdo->prepare("SELECT clip_id FROM blocklist WHERE login = ?");
+      $stmt->execute([$login]);
+      while ($row = $stmt->fetch()) {
+        $blockedIds[$row['clip_id']] = true;
+      }
+    } catch (PDOException $e) {
+      error_log("blocklist db error: " . $e->getMessage());
+    }
+  }
+
+  // Also check file-based blocklist (for backwards compatibility)
+  $runtimeDir = is_writable("/tmp") ? "/tmp/clipsystem_cache" : $cacheDir;
+  $blocklistFile = $runtimeDir . "/blocklist_{$safe}.json";
+  if (file_exists($blocklistFile)) {
+    $blockRaw = @file_get_contents($blocklistFile);
+    $blocklist = $blockRaw ? json_decode($blockRaw, true) : [];
+    if (is_array($blocklist)) {
+      foreach ($blocklist as $b) {
+        if (isset($b["clip_id"])) {
+          $blockedIds[$b["clip_id"]] = true;
+        }
       }
     }
   }
-}
 
-if (count($blockedIds) > 0) {
-  $all = array_filter($all, function($c) use ($blockedIds) {
-    $id = isset($c['id']) ? $c['id'] : '';
-    return !isset($blockedIds[$id]);
-  });
-  $all = array_values($all); // reindex
-}
+  if (count($blockedIds) > 0) {
+    $all = array_filter($all, function($c) use ($blockedIds) {
+      $id = isset($c['id']) ? $c['id'] : '';
+      return !isset($blockedIds[$id]);
+    });
+    $all = array_values($all); // reindex
+  }
 
-$blockedCount = count($blockedIds);
+  $blockedCount = count($blockedIds);
+}
 
 $now = time();
 $recentCut = ($days > 0) ? ($now - ($days * 86400)) : 0;
@@ -232,8 +275,9 @@ foreach ($pick as $c) {
 
 $out = [
   "login" => $login,
-  "source" => "local_index",
+  "source" => $source,
   "index_total" => $totalAll,
+  "blocked_count" => $blockedCount,
   "days_window" => $days,
   "count" => count($clips),
   "clips" => $clips,

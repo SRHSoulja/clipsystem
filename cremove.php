@@ -37,7 +37,59 @@ $ADMIN_KEY = "flopjim2024";
 if ($key !== $ADMIN_KEY) { http_response_code(403); echo "forbidden"; exit; }
 if ($seq <= 0) { echo "Usage: !cremove <clip#>"; exit; }
 
-// Load the clips index to find the clip
+// Try PostgreSQL first (fast indexed lookup + update)
+$pdo = get_db_connection();
+$clip = null;
+$maxSeq = 0;
+
+if ($pdo) {
+  try {
+    // Look up clip by seq
+    $stmt = $pdo->prepare("SELECT clip_id, title, blocked FROM clips WHERE login = ? AND seq = ?");
+    $stmt->execute([$login, $seq]);
+    $row = $stmt->fetch();
+
+    if ($row) {
+      if ($row['blocked']) {
+        echo "Clip #{$seq} already removed: " . ($row['title'] ?? "(no title)");
+        exit;
+      }
+
+      // Mark as blocked in clips table
+      $stmt = $pdo->prepare("UPDATE clips SET blocked = TRUE WHERE login = ? AND seq = ?");
+      $stmt->execute([$login, $seq]);
+
+      // Also add to blocklist table for backwards compatibility
+      init_votes_tables($pdo);
+      $stmt = $pdo->prepare("INSERT INTO blocklist (login, clip_id, seq, title) VALUES (?, ?, ?, ?) ON CONFLICT (login, clip_id) DO NOTHING");
+      $stmt->execute([$login, $row['clip_id'], $seq, $row['title']]);
+
+      // Get total count
+      $stmt = $pdo->prepare("SELECT COUNT(*) FROM clips WHERE login = ? AND blocked = TRUE");
+      $stmt->execute([$login]);
+      $count = (int)$stmt->fetchColumn();
+
+      echo "Removed Clip #{$seq}: " . ($row['title'] ?? "(no title)") . " ({$count} total blocked)";
+      exit;
+
+    } else {
+      // Get max seq for error message
+      $stmt = $pdo->prepare("SELECT MAX(seq) FROM clips WHERE login = ?");
+      $stmt->execute([$login]);
+      $maxSeq = (int)$stmt->fetchColumn();
+      if ($maxSeq > 0) {
+        echo "Clip #{$seq} not found. Valid range: 1-{$maxSeq}";
+        exit;
+      }
+      // Fall through to JSON if no clips in database
+    }
+  } catch (PDOException $e) {
+    error_log("cremove db error: " . $e->getMessage());
+    // Fall through to JSON
+  }
+}
+
+// Fallback: Load from JSON
 $indexFile = $staticDir . "/clips_index_" . $login . ".json";
 if (!file_exists($indexFile)) {
   echo "Clip index not found.";
@@ -73,37 +125,23 @@ if ($clipId === "") { echo "Clip #{$seq} missing id."; exit; }
 
 $title = $clip["title"] ?? "(no title)";
 
-// Try PostgreSQL first for permanent storage
-$pdo = get_db_connection();
-
+// Try PostgreSQL for blocklist storage
 if ($pdo) {
-  init_votes_tables($pdo); // This also creates blocklist table
+  init_votes_tables($pdo);
 
   try {
-    // Check if already blocked
-    $stmt = $pdo->prepare("SELECT id FROM blocklist WHERE login = ? AND clip_id = ?");
-    $stmt->execute([$login, $clipId]);
-    if ($stmt->fetch()) {
-      echo "Clip #{$seq} already removed: {$title}";
-      exit;
-    }
-
-    // Add to blocklist
-    $stmt = $pdo->prepare("INSERT INTO blocklist (login, clip_id, seq, title) VALUES (?, ?, ?, ?)");
+    $stmt = $pdo->prepare("INSERT INTO blocklist (login, clip_id, seq, title) VALUES (?, ?, ?, ?) ON CONFLICT (login, clip_id) DO NOTHING");
     $stmt->execute([$login, $clipId, $seq, $title]);
 
-    // Get total count
-    $stmt = $pdo->prepare("SELECT COUNT(*) as cnt FROM blocklist WHERE login = ?");
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM blocklist WHERE login = ?");
     $stmt->execute([$login]);
-    $row = $stmt->fetch();
-    $count = $row ? (int)$row['cnt'] : 1;
+    $count = (int)$stmt->fetchColumn();
 
     echo "Removed Clip #{$seq}: {$title} ({$count} total blocked)";
     exit;
 
   } catch (PDOException $e) {
     error_log("cremove db error: " . $e->getMessage());
-    // Fall through to file storage
   }
 }
 
