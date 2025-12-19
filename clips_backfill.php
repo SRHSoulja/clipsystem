@@ -88,6 +88,14 @@ $years = (int) arg('years', 5);
 if ($years < 1) $years = 1;
 if ($years > 10) $years = 10;
 
+// Chunking support for web execution (Railway has ~30s timeout)
+$startWindow = (int) arg('window', 1);  // Which window to start from (1-indexed)
+$maxWindows = (int) arg('maxwin', 5);   // Max windows per request
+if ($maxWindows < 1) $maxWindows = 1;
+if ($maxWindows > 20) $maxWindows = 20;
+$isWeb = php_sapi_name() !== 'cli';
+$startTime = time();
+
 // On Railway, /app/cache is read-only, use /tmp for writable storage
 $cacheDir = is_writable('/tmp') ? '/tmp/clipsystem_cache' : __DIR__ . '/cache';
 if (!is_dir($cacheDir)) @mkdir($cacheDir, 0777, true);
@@ -177,9 +185,24 @@ $windowDays = 30; // 30-day chunks
 $windowSec = $windowDays * 24 * 60 * 60;
 
 $totalWindows = (int) ceil(($now - $startAll) / $windowSec);
-$windowStart = $startAll;
 
-for ($w = 1; $w <= $totalWindows; $w++) {
+// Calculate which windows to process this request
+$endWindow = $isWeb ? min($totalWindows, $startWindow + $maxWindows - 1) : $totalWindows;
+echo "Processing windows $startWindow to $endWindow of $totalWindows\n\n";
+
+// Skip to the starting window
+$windowStart = $startAll + (($startWindow - 1) * $windowSec);
+$windowsProcessed = 0;
+$stoppedEarly = false;
+
+for ($w = $startWindow; $w <= $endWindow; $w++) {
+  // Check timeout for web requests (stop after 20 seconds to avoid 504)
+  if ($isWeb && (time() - $startTime) > 20) {
+    echo "\n⚠️  TIMEOUT PREVENTION: Stopping to avoid gateway timeout.\n";
+    $stoppedEarly = true;
+    break;
+  }
+
   $windowEnd = min($now, $windowStart + $windowSec);
   $startedAt = iso_utc($windowStart);
   $endedAt   = iso_utc($windowEnd);
@@ -281,7 +304,31 @@ for ($w = 1; $w <= $totalWindows; $w++) {
   file_put_contents($metaFile, json_encode($meta, JSON_UNESCAPED_SLASHES));
 
   $windowStart = $windowEnd;
+  $windowsProcessed++;
   echo "\n";
 }
 
-echo "Done. Total clips indexed: " . count($clips) . "\n";
+// Calculate next window for continuation
+$nextWindow = $stoppedEarly ? $w : ($w > $totalWindows ? 0 : $w);
+
+echo "=== Chunk Complete ===\n";
+echo "Windows processed: $windowsProcessed\n";
+echo "Total clips indexed: " . count($clips) . "\n";
+
+// Count clips with creator_name
+$withCreatorName = 0;
+foreach ($clips as $c) {
+  if (!empty($c['creator_name'])) $withCreatorName++;
+}
+echo "Clips with creator_name: $withCreatorName\n";
+
+// Show next URL if more to process
+if ($isWeb && $nextWindow > 0 && $nextWindow <= $totalWindows) {
+  $nextUrl = "clips_backfill.php?login=$login&years=$years&window=$nextWindow&maxwin=$maxWindows";
+  echo "\n📋 MORE WINDOWS TO PROCESS!\n";
+  echo "Next: window $nextWindow to " . min($totalWindows, $nextWindow + $maxWindows - 1) . " of $totalWindows\n";
+  echo "Continue URL: $nextUrl\n";
+} else {
+  echo "\n✅ All windows complete! Ready for migration.\n";
+  echo "Run: migrate_clips_to_db.php?login=$login&key=YOUR_KEY&update=1\n";
+}
