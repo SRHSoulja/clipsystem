@@ -4,7 +4,8 @@
 // Usage (browser):  clips_backfill.php?login=floppyjimmie&years=5
 // Usage (cli):      php clips_backfill.php login=floppyjimmie years=5
 
-header('Content-Type: text/plain; charset=utf-8');
+// Buffer output so we can add auto-redirect header
+ob_start();
 
 function load_env($path) {
   if (!file_exists($path)) return;
@@ -311,24 +312,44 @@ for ($w = $startWindow; $w <= $endWindow; $w++) {
 // Calculate next window for continuation
 $nextWindow = $stoppedEarly ? $w : ($w > $totalWindows ? 0 : $w);
 
-echo "=== Chunk Complete ===\n";
-echo "Windows processed: $windowsProcessed\n";
-echo "Total clips indexed: " . count($clips) . "\n";
-
 // Count clips with creator_name
 $withCreatorName = 0;
 foreach ($clips as $c) {
   if (!empty($c['creator_name'])) $withCreatorName++;
 }
+
+// Determine if we need to continue and build next URL
+$needsContinue = $isWeb && $nextWindow > 0 && $nextWindow <= $totalWindows;
+$nextUrl = $needsContinue ? "clips_backfill.php?login=$login&years=$years&window=$nextWindow&maxwin=$maxWindows" : null;
+
+echo "=== Chunk Complete ===\n";
+echo "Windows processed: $windowsProcessed\n";
+echo "Total clips indexed: " . count($clips) . "\n";
 echo "Clips with creator_name: $withCreatorName\n";
 
-// Show next URL if more to process
-if ($isWeb && $nextWindow > 0 && $nextWindow <= $totalWindows) {
-  $nextUrl = "clips_backfill.php?login=$login&years=$years&window=$nextWindow&maxwin=$maxWindows";
-  echo "\n📋 MORE WINDOWS TO PROCESS!\n";
+if ($needsContinue) {
+  echo "\n🔄 AUTO-CONTINUING in 2 seconds...\n";
   echo "Next: window $nextWindow to " . min($totalWindows, $nextWindow + $maxWindows - 1) . " of $totalWindows\n";
-  echo "Continue URL: $nextUrl\n";
 } else {
   echo "\n✅ All windows complete! Ready for migration.\n";
   echo "Run: migrate_clips_to_db.php?login=$login&key=YOUR_KEY&update=1\n";
+}
+
+// Get buffered output and send with proper headers
+$output = ob_get_clean();
+
+if ($isWeb && $needsContinue) {
+  // HTML output with auto-refresh
+  header('Content-Type: text/html; charset=utf-8');
+  echo "<!DOCTYPE html><html><head><meta charset='utf-8'>";
+  echo "<meta http-equiv='refresh' content='2;url=" . htmlspecialchars($nextUrl) . "'>";
+  echo "<title>Clips Backfill - Window $startWindow</title>";
+  echo "<style>body{background:#1a1a2e;color:#0f0;font-family:monospace;padding:20px;font-size:14px;line-height:1.4;} a{color:#0ff;}</style>";
+  echo "</head><body><pre>" . htmlspecialchars($output) . "</pre>";
+  echo "<p><a href='" . htmlspecialchars($nextUrl) . "'>Click here if not redirected...</a></p>";
+  echo "</body></html>";
+} else {
+  // Plain text output
+  header('Content-Type: text/plain; charset=utf-8');
+  echo $output;
 }

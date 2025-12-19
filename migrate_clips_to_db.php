@@ -11,7 +11,8 @@
  * Can be run via browser: migrate_clips_to_db.php?login=floppyjimmie&key=flopjim2024
  */
 
-header("Content-Type: text/plain; charset=utf-8");
+// Buffer output so we can add auto-redirect header
+ob_start();
 
 // Load env
 $envPath = __DIR__ . '/.env';
@@ -298,12 +299,34 @@ echo "\nTotal clips in database for $login: $finalCount\n";
 $maxSeq = $pdo->query("SELECT MAX(seq) FROM clips WHERE login = " . $pdo->quote($login))->fetchColumn();
 echo "Max seq number: $maxSeq\n";
 
-// Show next URL if more to process
-if ($isWeb && $nextOffset < $totalClips) {
-    $nextUrl = "migrate_clips_to_db.php?login=$login&key=" . ($_GET['key'] ?? '') . "&offset=$nextOffset&chunk=$chunkSize";
-    echo "\n📋 MORE CLIPS TO PROCESS!\n";
+// Determine if we need to continue
+$needsContinue = $isWeb && $nextOffset < $totalClips;
+$nextUrl = $needsContinue
+    ? "migrate_clips_to_db.php?login=$login&key=" . urlencode($_GET['key'] ?? '') . "&offset=$nextOffset&chunk=$chunkSize" . ($updateMode ? "&update=1" : "")
+    : null;
+
+if ($needsContinue) {
+    echo "\n🔄 AUTO-CONTINUING in 2 seconds...\n";
     echo "Next chunk: $nextOffset to " . min($totalClips, $nextOffset + $chunkSize) . " of $totalClips\n";
-    echo "Continue URL: $nextUrl\n";
 } else {
     echo "\n✅ All clips migrated!\n";
+}
+
+// Get buffered output and send with proper headers
+$output = ob_get_clean();
+
+if ($needsContinue) {
+    // HTML output with auto-refresh
+    header('Content-Type: text/html; charset=utf-8');
+    echo "<!DOCTYPE html><html><head><meta charset='utf-8'>";
+    echo "<meta http-equiv='refresh' content='2;url=" . htmlspecialchars($nextUrl) . "'>";
+    echo "<title>Migration - Offset $startOffset</title>";
+    echo "<style>body{background:#1a1a2e;color:#0f0;font-family:monospace;padding:20px;font-size:14px;line-height:1.4;} a{color:#0ff;}</style>";
+    echo "</head><body><pre>" . htmlspecialchars($output) . "</pre>";
+    echo "<p><a href='" . htmlspecialchars($nextUrl) . "'>Click here if not redirected...</a></p>";
+    echo "</body></html>";
+} else {
+    // Plain text output
+    header('Content-Type: text/plain; charset=utf-8');
+    echo $output;
 }
