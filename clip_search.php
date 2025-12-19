@@ -418,10 +418,12 @@ $baseUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : '
     <?php else: ?>
     <div class="results-grid">
       <?php foreach ($matches as $clip):
-        $thumbUrl = "https://clips-media-assets2.twitch.tv/" . htmlspecialchars($clip['clip_id']) . "-preview-480x272.jpg";
-        $twitchUrl = "https://clips.twitch.tv/" . htmlspecialchars($clip['clip_id']);
+        $rawClipId = $clip['clip_id'];
+        // Try multiple thumbnail URL formats
+        $thumbUrl = "https://clips-media-assets2.twitch.tv/{$rawClipId}-preview-480x272.jpg";
+        $twitchUrl = "https://clips.twitch.tv/" . htmlspecialchars($rawClipId);
         $duration = isset($clip['duration']) ? gmdate("i:s", (int)$clip['duration']) : '';
-        $clipId = htmlspecialchars($clip['clip_id']);
+        $clipId = htmlspecialchars($rawClipId);
         $clipTitle = htmlspecialchars($clip['title'] ?? '(no title)');
         $clipSeq = (int)$clip['seq'];
       ?>
@@ -497,7 +499,14 @@ $baseUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : '
   </div>
 
   <script>
-    const parentDomain = window.location.hostname;
+    // Build parent parameter - need both the current hostname and railway domain
+    const hostname = window.location.hostname;
+    const parents = [hostname];
+    // Add railway production domain if not already included
+    if (!hostname.includes('railway.app')) {
+      parents.push('clipsystem-production.up.railway.app');
+    }
+    const parentParam = parents.map(p => `parent=${p}`).join('&');
 
     function playClip(clipId, title, seq) {
       const modal = document.getElementById('videoModal');
@@ -506,7 +515,7 @@ $baseUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : '
       const seqEl = document.getElementById('videoSeq');
 
       // Twitch embed URL for clips
-      player.src = `https://clips.twitch.tv/embed?clip=${clipId}&parent=${parentDomain}&autoplay=true`;
+      player.src = `https://clips.twitch.tv/embed?clip=${clipId}&${parentParam}&autoplay=true`;
       titleEl.textContent = title;
       seqEl.textContent = `Clip #${seq}`;
       modal.classList.add('active');
