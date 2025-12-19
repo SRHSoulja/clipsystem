@@ -39,30 +39,31 @@ if (!is_array($data) || !isset($data["clip_id"])) { echo "{}"; exit; }
 $clipId = $data["clip_id"];
 $indexFile = $staticDir . "/clips_index_" . $login . ".json";
 
-$foundInIndex = false;
+// Build clip object from force_play data (from database, always authoritative)
+// This ensures duration is always correct
+$data["clip"] = [
+  "id" => $data["clip_id"],
+  "title" => $data["title"] ?? "",
+  "duration" => $data["duration"] ?? 30,
+  "seq" => $data["seq"] ?? 0,
+  "creator_name" => $data["creator_name"] ?? "",
+];
+
+// Optionally enrich with additional data from JSON index (if available)
 if (file_exists($indexFile)) {
   $indexRaw = @file_get_contents($indexFile);
   $indexData = $indexRaw ? json_decode($indexRaw, true) : null;
   if (is_array($indexData) && isset($indexData["clips"]) && is_array($indexData["clips"])) {
     foreach ($indexData["clips"] as $c) {
       if (isset($c["id"]) && $c["id"] === $clipId) {
-        // Merge full clip data into response so player can use it directly
-        $data["clip"] = $c;
-        $foundInIndex = true;
+        // Merge extra fields from index, but keep duration/title from force_play (database)
+        if (isset($c["view_count"])) $data["clip"]["view_count"] = $c["view_count"];
+        if (isset($c["game_id"])) $data["clip"]["game_id"] = $c["game_id"];
+        if (isset($c["thumbnail_url"])) $data["clip"]["thumbnail_url"] = $c["thumbnail_url"];
         break;
       }
     }
   }
-}
-
-// If clip not found in index (e.g., playlist clip), create clip data from force_play data
-if (!$foundInIndex && isset($data["clip_id"])) {
-  $data["clip"] = [
-    "id" => $data["clip_id"],
-    "title" => $data["title"] ?? "",
-    "duration" => $data["duration"] ?? 30,
-    "seq" => $data["seq"] ?? 0,
-  ];
 }
 
 echo json_encode($data, JSON_UNESCAPED_SLASHES);

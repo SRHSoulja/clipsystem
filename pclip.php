@@ -44,7 +44,7 @@ $pdo = get_db_connection();
 
 if ($pdo) {
   try {
-    $stmt = $pdo->prepare("SELECT clip_id, title, blocked FROM clips WHERE login = ? AND seq = ?");
+    $stmt = $pdo->prepare("SELECT clip_id, title, duration, blocked, creator_name FROM clips WHERE login = ? AND seq = ?");
     $stmt->execute([$login, $seq]);
     $row = $stmt->fetch();
 
@@ -55,7 +55,9 @@ if ($pdo) {
       }
       $clip = [
         'id' => $row['clip_id'],
-        'title' => $row['title']
+        'title' => $row['title'],
+        'duration' => $row['duration'] ? (float)$row['duration'] : 30,
+        'creator_name' => $row['creator_name'] ?? ''
       ];
     } else {
       // Get max seq for error message
@@ -111,6 +113,8 @@ $payload = [
   "seq"      => $seq,
   "clip_id"  => $clipId,
   "title"    => $clip["title"] ?? "",
+  "duration" => $clip["duration"] ?? 30,
+  "creator_name" => $clip["creator_name"] ?? "",
   "nonce"    => (string)(time() . "_" . bin2hex(random_bytes(4))),
   "set_at"   => gmdate("c"),
 ];

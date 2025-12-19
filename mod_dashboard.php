@@ -579,7 +579,7 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
 
         <div class="actions-bar">
           <button class="btn-primary" onclick="addSelectedToPlaylist()">Add to Playlist</button>
-          <button class="btn-secondary" onclick="playSelected()" title="Plays the first selected clip">Play One</button>
+          <button class="btn-secondary" onclick="playSelected()" title="Plays the first selected clip (Tip: double-click any clip to play it instantly!)">Play One</button>
           <span class="selected-count"><span id="selectedCount">0</span> selected</span>
         </div>
       </div>
