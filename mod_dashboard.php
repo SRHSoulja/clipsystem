@@ -1021,11 +1021,19 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
     }
 
     async function shufflePlaylist() {
-      if (!currentPlaylist || !currentPlaylist.clips || currentPlaylist.clips.length < 2) return;
+      if (!currentPlaylist) {
+        alert('No playlist selected');
+        return;
+      }
+      if (!currentPlaylist.clips || currentPlaylist.clips.length < 2) {
+        alert('Need at least 2 clips to shuffle');
+        return;
+      }
 
       try {
         const res = await fetch(`${API_BASE}/playlist_api.php?action=shuffle&login=${LOGIN}&key=${encodeURIComponent(adminKey)}&id=${currentPlaylist.id}`);
         const data = await res.json();
+        console.log('Shuffle response:', data);
 
         if (data.success) {
           // Reload playlist to get new order
