@@ -105,6 +105,12 @@ function isMod(tags) {
   return tags.mod || tags.badges?.broadcaster === '1';
 }
 
+// Check if user is subscriber or higher (sub, mod, broadcaster)
+function isSubOrHigher(tags) {
+  return tags.subscriber || tags.badges?.subscriber ||
+         tags.badges?.founder || tags.mod || tags.badges?.broadcaster === '1';
+}
+
 // Fetch helper with timeout, no caching, and no keep-alive
 async function fetchWithTimeout(url, timeoutMs = 5000) {
   const controller = new AbortController();
@@ -289,10 +295,10 @@ const commands = {
     }
   },
 
-  // !cfind <query> - Search clips by title (mod only)
+  // !cfind <query> - Search clips by title (subs and up)
   async cfind(channel, tags, args) {
-    if (!isMod(tags)) {
-      return null; // Silently ignore non-mods
+    if (!isSubOrHigher(tags)) {
+      return null; // Silently ignore non-subs
     }
 
     const query = args.join(' ').trim();
@@ -394,7 +400,10 @@ const commands = {
   // !chelp - Show available clip commands
   async chelp(channel, tags, args) {
     if (isMod(tags)) {
-      return 'Clip commands: !clip, !like/!dislike [#], !cskip, !pclip <#>, !cremove <#>, !cadd <#>, !cfind <query>, !playlist <name>';
+      return 'Clip commands: !clip, !like/!dislike [#], !cfind <query>, !cskip, !pclip <#>, !cremove <#>, !cadd <#>, !playlist <name>';
+    }
+    if (isSubOrHigher(tags)) {
+      return 'Clip commands: !clip (see current), !like/!dislike [#], !cfind <query> (search clips)';
     }
     return 'Clip commands: !clip (see current), !like [#] (upvote), !dislike [#] (downvote)';
   }
