@@ -10,6 +10,17 @@
 header("Content-Type: text/html; charset=utf-8");
 header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
 
+// Load env file if exists
+$envPath = __DIR__ . '/.env';
+if (file_exists($envPath)) {
+  foreach (file($envPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+    if (strpos(trim($line), '#') === 0) continue;
+    if (strpos($line, '=') === false) continue;
+    list($k, $v) = explode('=', $line, 2);
+    putenv(trim($k) . '=' . trim($v));
+  }
+}
+
 require_once __DIR__ . '/db_config.php';
 
 function clean_login($s){
