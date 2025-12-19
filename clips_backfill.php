@@ -280,10 +280,16 @@ for ($w = $startWindow; $w <= $endWindow; $w++) {
   echo "  Added this window: {$addedThisWindow}, total: " . count($clips) . "\n";
 
   // Save progress after each window
-  // Sort newest-first for convenience (optional)
+  // Sort oldest-first so seq=1 is oldest clip
   usort($clips, function($a, $b) {
-    return strcmp($b['created_at'] ?? '', $a['created_at'] ?? '');
+    return strcmp($a['created_at'] ?? '', $b['created_at'] ?? '');
   });
+
+  // Assign seq numbers (1 = oldest, N = newest)
+  foreach ($clips as $i => &$clip) {
+    $clip['seq'] = $i + 1;
+  }
+  unset($clip);
 
   $out = [
     "login" => $login,
@@ -291,6 +297,7 @@ for ($w = $startWindow; $w <= $endWindow; $w++) {
     "years" => $years,
     "built_at" => gmdate('c'),
     "count" => count($clips),
+    "max_seq" => count($clips),
     "clips" => $clips,
   ];
   file_put_contents($indexFile, json_encode($out, JSON_UNESCAPED_SLASHES));
