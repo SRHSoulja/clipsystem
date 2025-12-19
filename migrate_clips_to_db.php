@@ -174,7 +174,7 @@ foreach ($clips as $i => $clip) {
         }
     }
 
-    $isBlocked = isset($blockedIds[$clipId]);
+    $isBlocked = isset($blockedIds[$clipId]) ? true : false;
 
     try {
         $stmt->execute([
@@ -185,10 +185,10 @@ foreach ($clips as $i => $clip) {
             ':duration' => isset($clip['duration']) ? (int)$clip['duration'] : null,
             ':created_at' => $createdAt,
             ':view_count' => isset($clip['view_count']) ? (int)$clip['view_count'] : 0,
-            ':game_id' => $clip['game_id'] ?? null,
-            ':video_id' => $clip['video_id'] ?? null,
-            ':vod_offset' => isset($clip['vod_offset']) ? (int)$clip['vod_offset'] : null,
-            ':blocked' => $isBlocked,
+            ':game_id' => !empty($clip['game_id']) ? $clip['game_id'] : null,
+            ':video_id' => !empty($clip['video_id']) ? $clip['video_id'] : null,
+            ':vod_offset' => isset($clip['vod_offset']) && $clip['vod_offset'] !== null ? (int)$clip['vod_offset'] : null,
+            ':blocked' => $isBlocked ? 't' : 'f',
         ]);
 
         if ($stmt->rowCount() > 0) {
