@@ -166,10 +166,10 @@ $displayCount = $totalCount > 0 ? $totalCount : $count;
 $baseUrl = getenv('API_BASE_URL') ?: 'https://clipsystem-production.up.railway.app';
 $searchUrl = $baseUrl . '/clip_search.php?login=' . urlencode($login) . '&q=' . urlencode($query);
 
-// Just show results - don't auto-play. Mod can use !pclip to play.
+// Show results with link - always include search URL so users can preview
 if ($displayCount === 1) {
   $m = $matches[0];
-  echo "Found #{$m['seq']}: " . ($m['title'] ?? '(no title)') . " - Use !pclip {$m['seq']} to play";
+  echo "Found #{$m['seq']}: " . ($m['title'] ?? '(no title)') . " | {$searchUrl}";
 } else {
-  echo "Found {$displayCount} clips - Use !pclip <#> to play | See all: {$searchUrl}";
+  echo "Found {$displayCount} clips | {$searchUrl}";
 }
