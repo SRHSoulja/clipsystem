@@ -128,6 +128,16 @@ $clips = $data['clips'];
 $totalClips = count($clips);
 echo "Found $totalClips clips in JSON.\n";
 
+// Count how many clips have creator_name data
+$withCreatorName = 0;
+foreach ($clips as $c) {
+    if (!empty($c['creator_name'])) $withCreatorName++;
+}
+echo "Clips with creator_name in JSON: $withCreatorName\n";
+if ($withCreatorName === 0) {
+    echo "WARNING: No creator_name data in JSON! Run clips_backfill.php first to fetch creator names from Twitch.\n";
+}
+
 // Apply chunking for web requests
 $isWeb = php_sapi_name() !== 'cli';
 if ($isWeb && $startOffset > 0) {
@@ -144,12 +154,27 @@ if ($existingCount > 0) {
     echo "\nWARNING: Clips already exist. This will skip existing clips (upsert mode).\n";
 }
 
-// Prepare insert statement (upsert - skip if exists)
-$insertSql = "
-    INSERT INTO clips (login, clip_id, seq, title, duration, created_at, view_count, game_id, video_id, vod_offset, thumbnail_url, creator_name, blocked)
-    VALUES (:login, :clip_id, :seq, :title, :duration, :created_at, :view_count, :game_id, :video_id, :vod_offset, :thumbnail_url, :creator_name, :blocked)
-    ON CONFLICT (login, clip_id) DO NOTHING
-";
+// Check if we should update existing clips (for adding new fields like creator_name)
+$updateMode = isset($_GET['update']) && $_GET['update'] === '1';
+
+// Prepare insert statement
+if ($updateMode) {
+    // Upsert mode - update creator_name if clip exists
+    $insertSql = "
+        INSERT INTO clips (login, clip_id, seq, title, duration, created_at, view_count, game_id, video_id, vod_offset, thumbnail_url, creator_name, blocked)
+        VALUES (:login, :clip_id, :seq, :title, :duration, :created_at, :view_count, :game_id, :video_id, :vod_offset, :thumbnail_url, :creator_name, :blocked)
+        ON CONFLICT (login, clip_id) DO UPDATE SET creator_name = COALESCE(EXCLUDED.creator_name, clips.creator_name)
+    ";
+    echo "MODE: Update existing clips with creator_name from JSON\n";
+} else {
+    // Skip mode - don't touch existing clips
+    $insertSql = "
+        INSERT INTO clips (login, clip_id, seq, title, duration, created_at, view_count, game_id, video_id, vod_offset, thumbnail_url, creator_name, blocked)
+        VALUES (:login, :clip_id, :seq, :title, :duration, :created_at, :view_count, :game_id, :video_id, :vod_offset, :thumbnail_url, :creator_name, :blocked)
+        ON CONFLICT (login, clip_id) DO NOTHING
+    ";
+    echo "MODE: Skip existing clips (add &update=1 to update creator_name)\n";
+}
 $stmt = $pdo->prepare($insertSql);
 
 // Load existing blocklist to mark blocked clips
@@ -216,10 +241,11 @@ for ($i = $startOffset; $i < $endOffset; $i++) {
             ':blocked' => $isBlocked ? 't' : 'f',
         ]);
 
-        if ($stmt->rowCount() > 0) {
+        $rowsAffected = $stmt->rowCount();
+        if ($rowsAffected > 0) {
             $inserted++;
         } else {
-            $skipped++; // Already existed
+            $skipped++; // Already existed (no change)
         }
     } catch (PDOException $e) {
         $errors++;
