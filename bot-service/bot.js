@@ -142,9 +142,8 @@ const commands = {
         return 'No clip currently playing.';
       }
 
-      const title = data.title || 'Unknown';
       const clipUrl = data.url || `https://clips.twitch.tv/${data.clip_id}`;
-      return `Clip #${data.seq}: ${title} ${clipUrl}`;
+      return `Clip #${data.seq}: ${clipUrl}`;
     } catch (err) {
       console.error('!clip error:', err.message);
       return 'Could not fetch current clip.';
