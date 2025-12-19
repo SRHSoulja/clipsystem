@@ -162,9 +162,9 @@ $count = count($matches);
 // Use totalCount if we have it, otherwise use matched count
 $displayCount = $totalCount > 0 ? $totalCount : $count;
 
-// Build search URL for multiple results
+// Build search URL for multiple results (no key needed - public browse page)
 $baseUrl = getenv('API_BASE_URL') ?: 'https://clipsystem-production.up.railway.app';
-$searchUrl = $baseUrl . '/clip_search.php?login=' . urlencode($login) . '&q=' . urlencode($query) . '&key=' . urlencode($ADMIN_KEY);
+$searchUrl = $baseUrl . '/clip_search.php?login=' . urlencode($login) . '&q=' . urlencode($query);
 
 // Just show results - don't auto-play. Mod can use !pclip to play.
 if ($displayCount === 1) {

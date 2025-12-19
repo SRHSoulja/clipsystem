@@ -19,14 +19,8 @@ function clean_login($s){
 
 $login = clean_login($_GET["login"] ?? "");
 $query = trim((string)($_GET["q"] ?? ""));
-$key   = (string)($_GET["key"] ?? "");
 $page  = max(1, (int)($_GET["page"] ?? 1));
 $perPage = 100;
-
-// Load from environment
-$ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
-
-$isAuthorized = ($key === $ADMIN_KEY && $ADMIN_KEY !== '');
 
 // Split query into words for multi-word search
 $queryWords = preg_split('/\s+/', trim($query));
@@ -245,7 +239,7 @@ $baseUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : '
     .watch-btn:hover {
       background: rgba(145, 71, 255, 0.1);
     }
-    .queue-btn {
+    .play-btn {
       padding: 6px 12px;
       border: none;
       border-radius: 4px;
@@ -256,12 +250,66 @@ $baseUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : '
       cursor: pointer;
       transition: background 0.2s;
     }
-    .queue-btn:hover {
+    .play-btn:hover {
       background: #772ce8;
     }
-    .queue-btn:disabled {
-      background: #3d3d42;
-      cursor: not-allowed;
+    /* Video modal */
+    .video-modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.9);
+      z-index: 2000;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+    }
+    .video-modal.active {
+      display: flex;
+    }
+    .video-container {
+      width: 90%;
+      max-width: 1280px;
+      aspect-ratio: 16/9;
+      background: #000;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .video-container iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+    .video-info {
+      color: #efeff1;
+      margin-top: 15px;
+      text-align: center;
+      max-width: 1280px;
+      width: 90%;
+    }
+    .video-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 5px;
+    }
+    .video-seq {
+      color: #9147ff;
+      font-weight: bold;
+    }
+    .close-modal {
+      position: absolute;
+      top: 20px;
+      right: 30px;
+      font-size: 40px;
+      color: #efeff1;
+      cursor: pointer;
+      z-index: 2001;
+    }
+    .close-modal:hover {
+      color: #9147ff;
     }
     .no-results {
       text-align: center;
@@ -349,18 +397,13 @@ $baseUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : '
 
     <form class="search-form" method="get">
       <input type="hidden" name="login" value="<?= htmlspecialchars($login) ?>">
-      <?php if ($isAuthorized): ?>
-      <input type="hidden" name="key" value="<?= htmlspecialchars($key) ?>">
-      <?php endif; ?>
       <input type="text" name="q" value="<?= htmlspecialchars($query) ?>" placeholder="Search clips..." autofocus>
       <button type="submit">Search</button>
     </form>
 
-    <?php if (!$isAuthorized): ?>
     <div class="info-msg">
-      Click any clip to watch on Twitch. Mods can queue clips to the stream player.
+      Click any clip to watch it here. Use !pclip in chat to queue clips to the stream.
     </div>
-    <?php endif; ?>
 
     <?php if (empty($matches) && strlen($query) >= 2): ?>
     <div class="no-results">
@@ -378,28 +421,29 @@ $baseUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : '
         $thumbUrl = "https://clips-media-assets2.twitch.tv/" . htmlspecialchars($clip['clip_id']) . "-preview-480x272.jpg";
         $twitchUrl = "https://clips.twitch.tv/" . htmlspecialchars($clip['clip_id']);
         $duration = isset($clip['duration']) ? gmdate("i:s", (int)$clip['duration']) : '';
+        $clipId = htmlspecialchars($clip['clip_id']);
+        $clipTitle = htmlspecialchars($clip['title'] ?? '(no title)');
+        $clipSeq = (int)$clip['seq'];
       ?>
       <div class="clip-card">
-        <a href="<?= $twitchUrl ?>" target="_blank" class="clip-thumb">
+        <div class="clip-thumb" onclick="playClip('<?= $clipId ?>', '<?= addslashes($clipTitle) ?>', <?= $clipSeq ?>)" style="cursor:pointer;">
           <img src="<?= $thumbUrl ?>" alt="" loading="lazy" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 480 272%22><rect fill=%22%2326262c%22 width=%22480%22 height=%22272%22/><text x=%22240%22 y=%22140%22 fill=%22%23666%22 text-anchor=%22middle%22>No Preview</text></svg>'">
-          <span class="clip-seq">#<?= (int)$clip['seq'] ?></span>
+          <span class="clip-seq">#<?= $clipSeq ?></span>
           <?php if ($duration): ?>
           <span class="clip-duration"><?= $duration ?></span>
           <?php endif; ?>
           <span class="play-overlay">&#9658;</span>
-        </a>
+        </div>
         <div class="clip-info">
-          <div class="clip-title"><?= htmlspecialchars($clip['title'] ?? '(no title)') ?></div>
+          <div class="clip-title"><?= $clipTitle ?></div>
           <div class="clip-meta">
             <span class="clip-views">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
               <?= number_format((int)($clip['view_count'] ?? 0)) ?>
             </span>
             <div class="clip-actions">
-              <a href="<?= $twitchUrl ?>" target="_blank" class="watch-btn">Watch</a>
-              <?php if ($isAuthorized): ?>
-              <button class="queue-btn" onclick="queueClip(<?= (int)$clip['seq'] ?>, this)">Queue</button>
-              <?php endif; ?>
+              <button class="play-btn" onclick="playClip('<?= $clipId ?>', '<?= addslashes($clipTitle) ?>', <?= $clipSeq ?>)">Play</button>
+              <a href="<?= $twitchUrl ?>" target="_blank" class="watch-btn">Twitch</a>
             </div>
           </div>
         </div>
@@ -411,7 +455,6 @@ $baseUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : '
     <div class="pagination">
       <?php
         $baseParams = ['login' => $login, 'q' => $query];
-        if ($isAuthorized) $baseParams['key'] = $key;
 
         function pageUrl($params, $pageNum) {
           $params['page'] = $pageNum;
@@ -441,39 +484,48 @@ $baseUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : '
     <?php endif; ?>
   </div>
 
-  <div id="toast" class="success-msg" style="display: none;"></div>
+  <!-- Video Modal -->
+  <div id="videoModal" class="video-modal" onclick="closeModal(event)">
+    <span class="close-modal" onclick="closeModal()">&times;</span>
+    <div class="video-container" onclick="event.stopPropagation()">
+      <iframe id="clipPlayer" src="" allowfullscreen></iframe>
+    </div>
+    <div class="video-info" onclick="event.stopPropagation()">
+      <div class="video-title" id="videoTitle"></div>
+      <div class="video-seq" id="videoSeq"></div>
+    </div>
+  </div>
 
-  <?php if ($isAuthorized): ?>
   <script>
-    const login = <?= json_encode($login) ?>;
-    const key = <?= json_encode($key) ?>;
-    const baseUrl = <?= json_encode($baseUrl) ?>;
+    const parentDomain = window.location.hostname;
 
-    async function queueClip(seq, btn) {
-      btn.disabled = true;
-      btn.textContent = '...';
+    function playClip(clipId, title, seq) {
+      const modal = document.getElementById('videoModal');
+      const player = document.getElementById('clipPlayer');
+      const titleEl = document.getElementById('videoTitle');
+      const seqEl = document.getElementById('videoSeq');
 
-      try {
-        const url = `${baseUrl}/pclip.php?login=${login}&key=${key}&seq=${seq}`;
-        const res = await fetch(url);
-        const text = await res.text();
-
-        showToast(text);
-      } catch (err) {
-        showToast('Error: ' + err.message);
-      } finally {
-        btn.disabled = false;
-        btn.textContent = 'Queue';
-      }
+      // Twitch embed URL for clips
+      player.src = `https://clips.twitch.tv/embed?clip=${clipId}&parent=${parentDomain}&autoplay=true`;
+      titleEl.textContent = title;
+      seqEl.textContent = `Clip #${seq}`;
+      modal.classList.add('active');
+      document.body.style.overflow = 'hidden';
     }
 
-    function showToast(msg) {
-      const toast = document.getElementById('toast');
-      toast.textContent = msg;
-      toast.style.display = 'block';
-      setTimeout(() => { toast.style.display = 'none'; }, 3000);
+    function closeModal(event) {
+      if (event && event.target !== event.currentTarget) return;
+      const modal = document.getElementById('videoModal');
+      const player = document.getElementById('clipPlayer');
+      modal.classList.remove('active');
+      player.src = '';
+      document.body.style.overflow = '';
     }
+
+    // Close on Escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeModal();
+    });
   </script>
-  <?php endif; ?>
 </body>
 </html>
