@@ -28,7 +28,8 @@ function clean_login($s){
 }
 
 $login = clean_login($_GET["login"] ?? "");
-$query = trim((string)($_GET["q"] ?? ""));
+// Aggressive trim - handle potential Unicode spaces and other whitespace
+$query = preg_replace('/^\s+|\s+$/u', '', (string)($_GET["q"] ?? ""));
 $key   = (string)($_GET["key"] ?? "");
 
 // Load from environment

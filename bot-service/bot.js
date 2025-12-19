@@ -301,7 +301,8 @@ const commands = {
       return null; // Silently ignore non-subs
     }
 
-    const query = args.join(' ').trim();
+    // Aggressive trim - remove all leading/trailing whitespace including Unicode
+    const query = args.join(' ').trim().replace(/^\s+|\s+$/g, '');
     // Let the API handle empty queries - it returns the search page link
 
     try {
