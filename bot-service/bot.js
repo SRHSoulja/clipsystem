@@ -140,22 +140,40 @@ async function fetchWithTimeout(url, timeoutMs = 5000) {
 
 // Command handlers
 const commands = {
-  // !clip - Show currently playing clip with link
+  // !clip [seq] - Show clip info (current if no seq provided)
   async clip(channel, tags, args) {
     try {
-      const apiUrl = `${config.apiBaseUrl}/now_playing_get.php?login=${clipChannel}`;
-      const res = await fetchWithTimeout(apiUrl);
-      const data = await res.json();
+      // Check if a seq number was provided
+      const seq = parseInt(args[0]);
 
-      if (!data || !data.seq) {
-        return 'No clip currently playing.';
+      if (seq && seq > 0) {
+        // Fetch specific clip by seq
+        const apiUrl = `${config.apiBaseUrl}/clip_info.php?login=${clipChannel}&seq=${seq}`;
+        const res = await fetchWithTimeout(apiUrl);
+        const data = await res.json();
+
+        if (data.error) {
+          return `Clip #${seq} not found.`;
+        }
+
+        const title = data.title ? ` - ${data.title}` : '';
+        return `Clip #${data.seq}${title}: ${data.url}`;
+      } else {
+        // No seq - show currently playing clip
+        const apiUrl = `${config.apiBaseUrl}/now_playing_get.php?login=${clipChannel}`;
+        const res = await fetchWithTimeout(apiUrl);
+        const data = await res.json();
+
+        if (!data || !data.seq) {
+          return 'No clip currently playing.';
+        }
+
+        const clipUrl = data.url || `https://clips.twitch.tv/${data.clip_id}`;
+        return `Clip #${data.seq}: ${clipUrl}`;
       }
-
-      const clipUrl = data.url || `https://clips.twitch.tv/${data.clip_id}`;
-      return `Clip #${data.seq}: ${clipUrl}`;
     } catch (err) {
       console.error('!clip error:', err.message);
-      return 'Could not fetch current clip.';
+      return 'Could not fetch clip info.';
     }
   },
 
