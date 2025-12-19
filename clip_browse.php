@@ -554,7 +554,7 @@ if ($pdo) {
         $thumbUrl = !empty($clip['thumbnail_url']) && $clip['thumbnail_url'] !== 'NOT_FOUND'
           ? $clip['thumbnail_url']
           : "https://clips-media-assets2.twitch.tv/{$clipId}-preview-480x272.jpg";
-        $twitchUrl = "https://clips.twitch.tv/" . rawurlencode($clipId) . "?dark=true";
+        $twitchUrl = "https://clips.twitch.tv/" . rawurlencode($clipId);
         $duration = isset($clip['duration']) ? gmdate("i:s", (int)$clip['duration']) : '';
         $title = $clip['title'] ?? '(no title)';
         $seq = (int)$clip['seq'];
