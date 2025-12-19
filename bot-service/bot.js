@@ -301,9 +301,18 @@ const commands = {
       return null; // Silently ignore non-subs
     }
 
-    // Aggressive trim - remove all leading/trailing whitespace including Unicode
-    const query = args.join(' ').trim().replace(/^\s+|\s+$/g, '');
-    // Let the API handle empty queries - it returns the search page link
+    // Debug: log raw args to see what Twitch is sending
+    console.log(`!cfind raw args: ${JSON.stringify(args)} (${args.length} items)`);
+    if (args.length > 0) {
+      console.log(`!cfind first arg bytes: ${Buffer.from(args[0]).toString('hex')}`);
+    }
+
+    // Aggressive cleanup - remove all whitespace and control characters
+    const rawQuery = args.join(' ');
+    // Remove: leading/trailing whitespace, zero-width chars, control chars
+    const query = rawQuery.replace(/^[\s\u200B-\u200D\uFEFF]+|[\s\u200B-\u200D\uFEFF]+$/g, '');
+
+    console.log(`!cfind raw: "${rawQuery}" -> cleaned: "${query}"`);
 
     try {
       const url = `${config.apiBaseUrl}/cfind.php?login=${encodeURIComponent(clipChannel)}&key=${encodeURIComponent(config.adminKey)}&q=${encodeURIComponent(query)}`;
