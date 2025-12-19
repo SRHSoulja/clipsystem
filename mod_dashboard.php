@@ -307,6 +307,28 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
       padding: 40px;
       color: #adadb8;
     }
+    .clips-pagination {
+      padding: 16px;
+      background: #18181b;
+      border-top: 1px solid #3a3a3d;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      align-items: center;
+    }
+    .pagination-info {
+      color: #adadb8;
+      font-size: 14px;
+    }
+    .pagination-controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .pagination-controls .page-num {
+      padding: 0 12px;
+      color: #efeff1;
+    }
   </style>
 </head>
 <body>
@@ -384,6 +406,11 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
     let selectedClips = new Set();
     let games = {};
     let gameNames = {};
+    let currentPage = 1;
+    let totalPages = 1;
+    let totalClips = 0;
+    let perPage = 200;
+    let isLoading = false;
 
     // Login
     document.getElementById('keyInput').addEventListener('keypress', (e) => {
@@ -415,57 +442,63 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
     }
 
     async function loadDashboard() {
-      await Promise.all([loadClips(), loadPlaylists()]);
+      await Promise.all([loadClips(), loadPlaylists(), loadGames()]);
     }
 
-    async function loadClips() {
+    async function loadClips(page = 1) {
+      if (isLoading) return;
+      isLoading = true;
+
+      const search = document.getElementById('searchInput').value.trim();
+      const gameId = document.getElementById('gameFilter').value;
+
       try {
-        const res = await fetch(`${API_BASE}/twitch_reel_api.php?login=${LOGIN}&pool=5000&days=0`);
+        // Build query params
+        let url = `${API_BASE}/clips_api.php?action=list&login=${LOGIN}&key=${encodeURIComponent(adminKey)}&page=${page}&per_page=${perPage}`;
+        if (search) url += `&q=${encodeURIComponent(search)}`;
+        if (gameId) url += `&game_id=${encodeURIComponent(gameId)}`;
+
+        const res = await fetch(url);
         const data = await res.json();
-        allClips = data.clips || [];
 
-        // Build game list
-        games = {};
-        allClips.forEach(c => {
-          if (c.game_id) {
-            games[c.game_id] = (games[c.game_id] || 0) + 1;
-          }
-        });
-
-        // Fetch game names from API
-        const gameIds = Object.keys(games).slice(0, 100).join(',');
-        if (gameIds) {
-          try {
-            const gamesRes = await fetch(`${API_BASE}/games_api.php?action=get&ids=${gameIds}`);
-            const gamesData = await gamesRes.json();
-            if (gamesData.games) {
-              gameNames = {};
-              Object.values(gamesData.games).forEach(g => {
-                gameNames[g.game_id || g.id] = g.name;
-              });
-            }
-          } catch (e) {
-            console.log('Could not fetch game names:', e);
-          }
+        if (data.error) {
+          document.getElementById('clipsGrid').innerHTML = `<div class="loading">Error: ${data.error}</div>`;
+          return;
         }
 
-        // Populate game filter
-        const gameFilter = document.getElementById('gameFilter');
-        gameFilter.innerHTML = '<option value="">All Games</option>';
-        Object.entries(games)
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 50)
-          .forEach(([id, count]) => {
-            const opt = document.createElement('option');
-            opt.value = id;
-            const name = gameNames[id] || `Game ${id}`;
-            opt.textContent = `${name} (${count})`;
-            gameFilter.appendChild(opt);
-          });
+        allClips = data.clips || [];
+        currentPage = data.page || 1;
+        totalPages = data.total_pages || 1;
+        totalClips = data.total || 0;
 
         renderClips();
+        renderPagination();
       } catch (err) {
         document.getElementById('clipsGrid').innerHTML = '<div class="loading">Error loading clips</div>';
+      } finally {
+        isLoading = false;
+      }
+    }
+
+    async function loadGames() {
+      try {
+        const res = await fetch(`${API_BASE}/clips_api.php?action=games&login=${LOGIN}&key=${encodeURIComponent(adminKey)}`);
+        const data = await res.json();
+
+        const gameFilter = document.getElementById('gameFilter');
+        gameFilter.innerHTML = '<option value="">All Games</option>';
+
+        if (data.games) {
+          data.games.forEach(g => {
+            const opt = document.createElement('option');
+            opt.value = g.game_id;
+            opt.textContent = `${g.name} (${g.count})`;
+            gameNames[g.game_id] = g.name;
+            gameFilter.appendChild(opt);
+          });
+        }
+      } catch (e) {
+        console.log('Could not fetch games:', e);
       }
     }
 
@@ -481,32 +514,58 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
     }
 
     function renderClips() {
-      const search = document.getElementById('searchInput').value.toLowerCase();
-      const gameId = document.getElementById('gameFilter').value;
-
-      const filtered = allClips.filter(c => {
-        if (search && !(c.title || '').toLowerCase().includes(search)) return false;
-        if (gameId && c.game_id !== gameId) return false;
-        return true;
-      });
-
       const grid = document.getElementById('clipsGrid');
-      grid.innerHTML = filtered.slice(0, 200).map(c => `
+
+      if (allClips.length === 0) {
+        grid.innerHTML = '<div class="loading">No clips found</div>';
+        return;
+      }
+
+      grid.innerHTML = allClips.map(c => `
         <div class="clip-card ${selectedClips.has(c.seq) ? 'selected' : ''}"
              onclick="toggleClip(${c.seq})"
              ondblclick="playClip(${c.seq})">
           <div class="seq">#${c.seq}</div>
           <div class="title">${escapeHtml(c.title || '(no title)')}</div>
           <div class="meta">
-            <span>${c.view_count ? c.view_count.toLocaleString() + ' views' : ''}</span>
+            <span>${c.view_count ? Number(c.view_count).toLocaleString() + ' views' : ''}</span>
             <span>${c.game_id ? (gameNames[c.game_id] || c.game_id) : ''}</span>
           </div>
         </div>
       `).join('');
+    }
 
-      if (filtered.length > 200) {
-        grid.innerHTML += `<div class="loading">Showing 200 of ${filtered.length} clips</div>`;
+    function renderPagination() {
+      let paginationHtml = `<div class="pagination-info">Showing ${allClips.length} of ${totalClips.toLocaleString()} clips (Page ${currentPage} of ${totalPages})</div>`;
+
+      if (totalPages > 1) {
+        paginationHtml += '<div class="pagination-controls">';
+        if (currentPage > 1) {
+          paginationHtml += `<button onclick="goToPage(1)" class="btn-secondary">First</button>`;
+          paginationHtml += `<button onclick="goToPage(${currentPage - 1})" class="btn-secondary">Prev</button>`;
+        }
+        paginationHtml += `<span class="page-num">Page ${currentPage}</span>`;
+        if (currentPage < totalPages) {
+          paginationHtml += `<button onclick="goToPage(${currentPage + 1})" class="btn-secondary">Next</button>`;
+          paginationHtml += `<button onclick="goToPage(${totalPages})" class="btn-secondary">Last</button>`;
+        }
+        paginationHtml += '</div>';
       }
+
+      // Insert pagination after clips grid
+      let paginationEl = document.getElementById('clipsPagination');
+      if (!paginationEl) {
+        paginationEl = document.createElement('div');
+        paginationEl.id = 'clipsPagination';
+        paginationEl.className = 'clips-pagination';
+        document.getElementById('clipsGrid').after(paginationEl);
+      }
+      paginationEl.innerHTML = paginationHtml;
+    }
+
+    function goToPage(page) {
+      if (page < 1 || page > totalPages || page === currentPage) return;
+      loadClips(page);
     }
 
     function renderPlaylists() {
@@ -535,8 +594,14 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
       renderClips();
     }
 
+    let filterTimeout = null;
     function filterClips() {
-      renderClips();
+      // Debounce search to avoid too many API calls
+      clearTimeout(filterTimeout);
+      filterTimeout = setTimeout(() => {
+        currentPage = 1;
+        loadClips(1);
+      }, 300);
     }
 
     async function selectPlaylist(id) {

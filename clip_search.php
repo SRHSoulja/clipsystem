@@ -419,16 +419,19 @@ $baseUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : '
     <div class="results-grid">
       <?php foreach ($matches as $clip):
         $rawClipId = $clip['clip_id'];
-        // Try multiple thumbnail URL formats
+        // Thumbnail URL - Twitch clips use a specific format
         $thumbUrl = "https://clips-media-assets2.twitch.tv/{$rawClipId}-preview-480x272.jpg";
-        $twitchUrl = "https://clips.twitch.tv/" . htmlspecialchars($rawClipId);
+        $twitchUrl = "https://clips.twitch.tv/" . rawurlencode($rawClipId);
         $duration = isset($clip['duration']) ? gmdate("i:s", (int)$clip['duration']) : '';
-        $clipId = htmlspecialchars($rawClipId);
-        $clipTitle = htmlspecialchars($clip['title'] ?? '(no title)');
+        $clipId = htmlspecialchars($rawClipId, ENT_QUOTES);
+        // Escape title for JavaScript - use json_encode to handle all special chars
+        $clipTitleRaw = $clip['title'] ?? '(no title)';
+        $clipTitleHtml = htmlspecialchars($clipTitleRaw);
+        $clipTitleJs = json_encode($clipTitleRaw);
         $clipSeq = (int)$clip['seq'];
       ?>
       <div class="clip-card">
-        <div class="clip-thumb" onclick="playClip('<?= $clipId ?>', '<?= addslashes($clipTitle) ?>', <?= $clipSeq ?>)" style="cursor:pointer;">
+        <div class="clip-thumb" onclick="playClip('<?= $clipId ?>', <?= $clipTitleJs ?>, <?= $clipSeq ?>)" style="cursor:pointer;">
           <img src="<?= $thumbUrl ?>" alt="" loading="lazy" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 480 272%22><rect fill=%22%2326262c%22 width=%22480%22 height=%22272%22/><text x=%22240%22 y=%22140%22 fill=%22%23666%22 text-anchor=%22middle%22>No Preview</text></svg>'">
           <span class="clip-seq">#<?= $clipSeq ?></span>
           <?php if ($duration): ?>
@@ -437,14 +440,14 @@ $baseUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : '
           <span class="play-overlay">&#9658;</span>
         </div>
         <div class="clip-info">
-          <div class="clip-title"><?= $clipTitle ?></div>
+          <div class="clip-title"><?= $clipTitleHtml ?></div>
           <div class="clip-meta">
             <span class="clip-views">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
               <?= number_format((int)($clip['view_count'] ?? 0)) ?>
             </span>
             <div class="clip-actions">
-              <button class="play-btn" onclick="playClip('<?= $clipId ?>', '<?= addslashes($clipTitle) ?>', <?= $clipSeq ?>)">Play</button>
+              <button class="play-btn" onclick="playClip('<?= $clipId ?>', <?= $clipTitleJs ?>, <?= $clipSeq ?>)">Play</button>
               <a href="<?= $twitchUrl ?>" target="_blank" class="watch-btn">Twitch</a>
             </div>
           </div>
@@ -499,14 +502,8 @@ $baseUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : '
   </div>
 
   <script>
-    // Build parent parameter - need both the current hostname and railway domain
+    // Parent domain for Twitch embed - must match the domain exactly (no encoding)
     const hostname = window.location.hostname;
-    const parents = [hostname];
-    // Add railway production domain if not already included
-    if (!hostname.includes('railway.app')) {
-      parents.push('clipsystem-production.up.railway.app');
-    }
-    const parentParam = parents.map(p => `parent=${p}`).join('&');
 
     function playClip(clipId, title, seq) {
       const modal = document.getElementById('videoModal');
@@ -514,8 +511,8 @@ $baseUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : '
       const titleEl = document.getElementById('videoTitle');
       const seqEl = document.getElementById('videoSeq');
 
-      // Twitch embed URL for clips
-      player.src = `https://clips.twitch.tv/embed?clip=${clipId}&${parentParam}&autoplay=true`;
+      // Twitch embed URL for clips - parent should NOT be URL encoded
+      player.src = `https://clips.twitch.tv/embed?clip=${clipId}&parent=${hostname}&autoplay=true`;
       titleEl.textContent = title;
       seqEl.textContent = `Clip #${seq}`;
       modal.classList.add('active');
