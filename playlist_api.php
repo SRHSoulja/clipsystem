@@ -258,6 +258,19 @@ switch ($action) {
         json_response(["success" => false, "message" => "Playlist is empty"]);
       }
 
+      // Validate first clip has required data
+      $first = $clips[0];
+      if (empty($first['clip_id'])) {
+        // This can happen if the clip was deleted from the database
+        // Try to find any clip with valid data
+        $validClips = array_filter($clips, fn($c) => !empty($c['clip_id']));
+        if (empty($validClips)) {
+          json_response(["success" => false, "message" => "No valid clips in playlist - clips may have been deleted"]);
+        }
+        $clips = array_values($validClips);
+        $first = $clips[0];
+      }
+
       // Write playlist queue file
       $runtimeDir = is_writable("/tmp") ? "/tmp/clipsystem_cache" : __DIR__ . "/cache";
       if (!is_dir($runtimeDir)) @mkdir($runtimeDir, 0777, true);
@@ -273,8 +286,7 @@ switch ($action) {
       ];
       @file_put_contents($queuePath, json_encode($payload, JSON_UNESCAPED_SLASHES), LOCK_EX);
 
-      // Also set first clip as force_play
-      $first = $clips[0];
+      // Also set first clip as force_play (use $first from validation above)
       $forcePath = $runtimeDir . "/force_play_" . $login . ".json";
       $forcePayload = [
         "login" => $login,
@@ -293,7 +305,13 @@ switch ($action) {
 
       json_response([
         "success" => true,
-        "message" => "Playing playlist: " . $playlist['name'] . " (" . count($clips) . " clips)"
+        "message" => "Playing playlist: " . $playlist['name'] . " (" . count($clips) . " clips)",
+        "first_clip" => [
+          "seq" => $first['seq'],
+          "clip_id" => $first['clip_id'],
+          "title" => $first['title'] ?? "",
+          "duration" => $first['duration'] ?? 30
+        ]
       ]);
     } catch (PDOException $e) {
       json_error("Database error: " . $e->getMessage(), 500);

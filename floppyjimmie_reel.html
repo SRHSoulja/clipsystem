@@ -1231,20 +1231,34 @@
     if (!pclipEnabled) return;
     try {
       const res = await fetch(`${API_BASE}/force_play_get.php?login=${encodeURIComponent(login)}`, { cache: "no-store" });
-      const data = await res.json();
+      const text = await res.text();
+      console.log("[PCLIP] Raw response:", text.substring(0, 200));
+
+      if (!text || text === '{}') return;
+
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        console.error("[PCLIP] JSON parse error:", e);
+        return;
+      }
+
       if (!data || Object.keys(data).length === 0) return;
 
       const nonce = (data.nonce != null) ? String(data.nonce) : null;
+      console.log("[PCLIP] Nonce check - received:", nonce, "last:", lastPclipNonce);
       if (!nonce || nonce === lastPclipNonce) return;
       lastPclipNonce = nonce;
-      console.log("[PCLIP] Force play command received:", data);
+      console.log("[PCLIP] Force play command received:", JSON.stringify(data));
 
       // Try to find in current pool first
       let c = clipById(data.clip_id);
+      console.log("[PCLIP] Looking for clip_id:", data.clip_id, "found in pool:", !!c);
 
       // If not in pool, use full clip data from server response
       if (!c && data.clip) {
-        console.log("[PCLIP] Clip not in current pool, using server data");
+        console.log("[PCLIP] Clip not in current pool, using server data:", JSON.stringify(data.clip));
         c = data.clip;
         // Ensure the clip has a duration, default to 30 seconds if missing
         if (!c.duration || c.duration <= 0) {
@@ -1255,8 +1269,11 @@
 
       if (!c) {
         console.warn("[PCLIP] Could not find clip for:", data.clip_id, data.seq);
+        console.warn("[PCLIP] data.clip was:", data.clip);
         return;
       }
+
+      console.log("[PCLIP] Final clip object:", JSON.stringify(c));
 
       // If currently switching, queue this clip for later
       if (isSwitching) {

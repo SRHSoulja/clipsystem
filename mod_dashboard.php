@@ -799,11 +799,18 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
       try {
         const res = await fetch(`${API_BASE}/playlist_api.php?action=play&login=${LOGIN}&key=${encodeURIComponent(adminKey)}&id=${currentPlaylist.id}`);
         const data = await res.json();
-        if (data.message) {
+        console.log('Playlist play response:', data);
+        if (data.error) {
+          alert('Error: ' + data.error);
+        } else if (data.message) {
           alert(data.message);
+          if (data.first_clip) {
+            console.log('First clip to play:', data.first_clip);
+          }
         }
       } catch (err) {
         console.error('Error playing playlist:', err);
+        alert('Error playing playlist: ' + err.message);
       }
     }
 
