@@ -358,14 +358,30 @@ client.on('message', async (channel, tags, message, self) => {
 // Connection events
 client.on('connected', (addr, port) => {
   console.log(`Connected to Twitch IRC at ${addr}:${port}`);
-  console.log(`Joined channels: ${channels.join(', ')}`);
+  console.log(`Attempting to join channels: ${channels.join(', ')}`);
   console.log(`Clip channel: ${clipChannel}`);
   console.log(`Bot username: ${config.botUsername}`);
   console.log('Commands active: !clip, !pclip, !cskip, !cfind, !playlist, !like, !dislike, !cremove, !cadd, !chelp');
 });
 
+client.on('join', (channel, username, self) => {
+  if (self) {
+    console.log(`Successfully joined: ${channel}`);
+  }
+});
+
+client.on('part', (channel, username, self) => {
+  if (self) {
+    console.log(`Left channel: ${channel}`);
+  }
+});
+
 client.on('disconnected', (reason) => {
   console.log('Disconnected:', reason);
+});
+
+client.on('notice', (channel, msgid, message) => {
+  console.log(`Notice from ${channel}: [${msgid}] ${message}`);
 });
 
 // Connect
