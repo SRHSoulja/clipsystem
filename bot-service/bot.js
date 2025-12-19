@@ -301,8 +301,9 @@ const commands = {
       return null; // Silently ignore non-subs
     }
 
-    // Filter out empty args (Twitch adds empty strings to duplicate messages)
-    const cleanArgs = args.filter(a => a && a.trim());
+    // Filter out empty args and invisible Unicode chars (Twitch adds these to duplicate messages)
+    // \u034f = Combining Grapheme Joiner, \u200B-\u200D = zero-width chars, \uFEFF = BOM
+    const cleanArgs = args.filter(a => a && a.replace(/[\u034f\u200B-\u200D\uFEFF\s]/g, ''));
     const query = cleanArgs.join(' ').trim();
 
     console.log(`!cfind args: ${JSON.stringify(args)} -> query: "${query}"`);
