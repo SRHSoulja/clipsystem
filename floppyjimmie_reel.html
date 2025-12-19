@@ -864,10 +864,12 @@
   }
 
   function computeRevealDelayMs(loadMs) {
-    let d = 950;
-    if (loadMs > 900)  d += 300;
-    if (loadMs > 1500) d += 450;
-    return Math.min(1800, Math.max(850, d));
+    // Reduced delays to minimize transition time covering clips
+    // Base delay just enough for iframe to start playing
+    let d = 350;
+    if (loadMs > 900)  d += 150;
+    if (loadMs > 1500) d += 200;
+    return Math.min(700, Math.max(300, d));
   }
 
   // Check if the transition media (video or GIF) is properly loaded
@@ -906,7 +908,7 @@
   }
 
   // Extra time to let clip video buffer after iframe loads (for first clip)
-  const FIRST_CLIP_BUFFER_MS = 1500;  // Give first clip extra time to buffer video
+  const FIRST_CLIP_BUFFER_MS = 500;  // Reduced from 1500ms - just enough for video to start
 
   function revealIframeThenFadeOut(frameToReveal, loadStartedAt) {
     const loadMs = loadStartedAt ? (Date.now() - loadStartedAt) : 0;
@@ -1051,6 +1053,8 @@
       }, preloadAtMs);
     }
 
+    // Advance shortly after transition shows (reduced from +1 second to +200ms)
+    // This minimizes time the transition covers the old clip
     advanceTimer = setTimeout(async () => {
       console.log("[SCHEDULE] Advance timer fired, switching to next clip");
 
@@ -1088,7 +1092,7 @@
       // Normal mode or playlist finished
       if (fastMode) switchFast();
       else switchSmoothBuffered();
-    }, (d + 1) * 1000);
+    }, (d * 1000) + 200);  // 200ms after transition shows (was +1 second)
   }
 
   function bindOnloadWithFailsafe(targetFrame, onReady) {
