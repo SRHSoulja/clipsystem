@@ -260,14 +260,48 @@ const commands = {
     }
 
     try {
-      // Add cache buster and random param to ensure unique request
+      // Use fresh https request to avoid any connection reuse issues
+      const https = require('https');
       const cacheBuster = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
       const url = `${config.apiBaseUrl}/cfind.php?login=${clipChannel}&key=${config.adminKey}&q=${encodeURIComponent(query)}&_cb=${cacheBuster}`;
-      console.log(`!cfind request: ${query} -> ${url}`);
-      const res = await fetchWithTimeout(url);
-      const text = await res.text();
-      console.log(`!cfind response: ${text.substring(0, 100)}`);
-      return text;
+
+      console.log(`!cfind request: ${query}`);
+
+      return new Promise((resolve, reject) => {
+        const urlObj = new URL(url);
+        const options = {
+          hostname: urlObj.hostname,
+          port: 443,
+          path: urlObj.pathname + urlObj.search,
+          method: 'GET',
+          headers: {
+            'Cache-Control': 'no-cache',
+            'Connection': 'close'
+          },
+          agent: false // Disable connection pooling
+        };
+
+        const req = https.request(options, (res) => {
+          let data = '';
+          res.on('data', chunk => data += chunk);
+          res.on('end', () => {
+            console.log(`!cfind response: ${data.substring(0, 100)}`);
+            resolve(data);
+          });
+        });
+
+        req.on('error', (err) => {
+          console.error('!cfind error:', err.message);
+          resolve('Could not search clips.');
+        });
+
+        req.setTimeout(5000, () => {
+          req.destroy();
+          resolve('Search timed out.');
+        });
+
+        req.end();
+      });
     } catch (err) {
       console.error('!cfind error:', err.message);
       return 'Could not search clips.';
