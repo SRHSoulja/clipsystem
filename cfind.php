@@ -38,8 +38,18 @@ if (strlen($query) < 2) { echo "Usage: !cfind <search term>"; exit; }
 $pdo = get_db_connection();
 $matches = [];
 
+$totalCount = 0;
+
 if ($pdo) {
   try {
+    // Get total count first
+    $stmt = $pdo->prepare("
+      SELECT COUNT(*) FROM clips
+      WHERE login = ? AND blocked = FALSE AND title ILIKE ?
+    ");
+    $stmt->execute([$login, '%' . $query . '%']);
+    $totalCount = (int)$stmt->fetchColumn();
+
     // Case-insensitive search using ILIKE
     $stmt = $pdo->prepare("
       SELECT seq, clip_id, title, view_count
@@ -131,21 +141,17 @@ usort($matches, function($a, $b) {
 });
 
 $count = count($matches);
+// Use totalCount if we have it, otherwise use matched count
+$displayCount = $totalCount > 0 ? $totalCount : $count;
 
 // Build search URL for multiple results
 $baseUrl = getenv('API_BASE_URL') ?: 'https://clipsystem-production.up.railway.app';
 $searchUrl = $baseUrl . '/clip_search.php?login=' . urlencode($login) . '&q=' . urlencode($query) . '&key=' . urlencode($ADMIN_KEY);
 
 // Just show results - don't auto-play. Mod can use !pclip to play.
-if ($count === 1) {
+if ($displayCount === 1) {
   $m = $matches[0];
   echo "Found #{$m['seq']}: " . ($m['title'] ?? '(no title)') . " - Use !pclip {$m['seq']} to play";
-} elseif ($count <= 5) {
-  // Show all seq numbers and titles
-  $results = array_map(function($m) {
-    return '#' . $m['seq'];
-  }, $matches);
-  echo "Found " . implode(', ', $results) . " - Use !pclip <#> to play";
 } else {
-  echo "Found {$count} clips - Use !pclip <#> to play | See all: {$searchUrl}";
+  echo "Found {$displayCount} clips - Use !pclip <#> to play | See all: {$searchUrl}";
 }
