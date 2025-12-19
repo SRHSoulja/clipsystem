@@ -397,6 +397,11 @@ if ($pdo) {
       text-overflow: ellipsis;
       white-space: nowrap;
       max-width: 120px;
+      text-decoration: none;
+    }
+    .clip-clipper:hover {
+      color: #d4b8ff;
+      text-decoration: underline;
     }
     .clip-game-row {
       margin-top: 6px;
@@ -634,7 +639,7 @@ if ($pdo) {
               <?= number_format((int)($clip['view_count'] ?? 0)) ?>
             </span>
             <?php if (!empty($clip['creator_name'])): ?>
-            <span class="clip-clipper" title="Clipped by <?= htmlspecialchars($clip['creator_name']) ?>">&#9986; <?= htmlspecialchars($clip['creator_name']) ?></span>
+            <a href="?login=<?= htmlspecialchars($login) ?>&clipper=<?= urlencode($clip['creator_name']) ?>" class="clip-clipper" title="View all clips by <?= htmlspecialchars($clip['creator_name']) ?>">&#9986; <?= htmlspecialchars($clip['creator_name']) ?></a>
             <?php endif; ?>
           </div>
           <?php if ($gameName): ?>
