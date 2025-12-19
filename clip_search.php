@@ -172,9 +172,10 @@ if ($pdo) {
     $isClipNumber = $query && preg_match('/^\d+$/', $query);
 
     if ($isClipNumber) {
-      // Search by clip seq number
-      $whereClauses[] = "seq = ?";
+      // Search by clip seq number OR titles containing the number
+      $whereClauses[] = "(seq = ? OR title ILIKE ?)";
       $params[] = (int)$query;
+      $params[] = '%' . $query . '%';
     } else {
       // Search filter by title only (clipper filter handles creator_name separately)
       foreach ($queryWords as $word) {
