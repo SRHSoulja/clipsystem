@@ -55,7 +55,7 @@ if (!empty($queryWords)) {
       $offset = ($page - 1) * $perPage;
       $paginatedParams = array_merge($params, [$perPage, $offset]);
       $stmt = $pdo->prepare("
-        SELECT seq, clip_id, title, view_count, created_at, duration, game_id
+        SELECT seq, clip_id, title, view_count, created_at, duration, game_id, thumbnail_url
         FROM clips
         WHERE {$whereSQL}
         ORDER BY view_count DESC
@@ -419,8 +419,8 @@ $baseUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : '
     <div class="results-grid">
       <?php foreach ($matches as $clip):
         $rawClipId = $clip['clip_id'];
-        // Thumbnail URL - Twitch clips use a specific format
-        $thumbUrl = "https://clips-media-assets2.twitch.tv/{$rawClipId}-preview-480x272.jpg";
+        // Use stored thumbnail URL if available, otherwise try to construct one
+        $thumbUrl = !empty($clip['thumbnail_url']) ? $clip['thumbnail_url'] : "https://clips-media-assets2.twitch.tv/{$rawClipId}-preview-480x272.jpg";
         $twitchUrl = "https://clips.twitch.tv/" . rawurlencode($rawClipId);
         $duration = isset($clip['duration']) ? gmdate("i:s", (int)$clip['duration']) : '';
         $clipId = htmlspecialchars($rawClipId, ENT_QUOTES);

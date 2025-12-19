@@ -215,6 +215,7 @@ for ($w = 1; $w <= $totalWindows; $w++) {
         "game_id" => $c["game_id"] ?? "",
         "video_id" => $c["video_id"] ?? "",
         "vod_offset" => $c["vod_offset"] ?? null,
+        "thumbnail_url" => $c["thumbnail_url"] ?? "",
       ];
       $addedThisWindow++;
     }

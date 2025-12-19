@@ -85,7 +85,7 @@ switch ($action) {
     $paginatedParams = array_merge($params, [$perPage, $offset]);
 
     $stmt = $pdo->prepare("
-      SELECT seq, clip_id, title, duration, view_count, game_id, created_at
+      SELECT seq, clip_id, title, duration, view_count, game_id, created_at, thumbnail_url
       FROM clips
       WHERE {$whereSQL}
       ORDER BY seq DESC
