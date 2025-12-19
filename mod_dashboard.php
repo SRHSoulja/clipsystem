@@ -167,6 +167,19 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
       display: flex;
       justify-content: space-between;
       align-items: center;
+      cursor: grab;
+      transition: background 0.15s, transform 0.15s, opacity 0.15s;
+    }
+    .playlist-clip:active { cursor: grabbing; }
+    .playlist-clip.dragging { opacity: 0.5; background: #3a3a42; }
+    .playlist-clip.drag-over { background: #9147ff; transform: scale(1.02); }
+    .playlist-clip .drag-handle {
+      color: #666;
+      margin-right: 8px;
+      cursor: grab;
+      user-select: none;
+      font-size: 14px;
+      letter-spacing: -2px;
     }
     .playlist-clip .seq { color: #9147ff; font-weight: bold; margin-right: 8px; }
     .playlist-clip .remove-btn {
@@ -393,6 +406,7 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
             <div style="display:flex;gap:4px;">
               <button class="btn-primary" style="padding:6px 10px;font-size:12px;" onclick="playPlaylist()" title="Play All">▶ Play</button>
               <button class="btn-secondary" style="padding:6px 10px;font-size:12px;background:#c9302c;" onclick="stopPlaylist()" title="Stop Playlist">⏹ Stop</button>
+              <button class="btn-secondary" style="padding:6px 8px;font-size:12px;" onclick="shufflePlaylist()" title="Shuffle">🔀</button>
               <button class="btn-secondary" style="padding:6px 8px;font-size:12px;" onclick="showRenameModal()" title="Rename">✏️</button>
               <button class="btn-danger" style="padding:6px 8px;font-size:12px;" onclick="confirmDeletePlaylist()" title="Delete">🗑️</button>
             </div>
@@ -717,11 +731,12 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
       if (clips.length > 0) {
         // Show total duration header
         html += `<div style="margin-bottom:8px;padding:6px;background:#1a1a1d;border-radius:4px;font-size:12px;color:#adadb8;">
-          Total: ${formatDuration(totalDuration)} (${clips.length} clips)
+          Total: ${formatDuration(totalDuration)} (${clips.length} clips) - drag to reorder
         </div>`;
 
         html += clips.map((c, i) => `
-          <div class="playlist-clip">
+          <div class="playlist-clip" draggable="true" data-index="${i}" data-seq="${c.seq}">
+            <span class="drag-handle" title="Drag to reorder">⋮⋮</span>
             <div style="flex:1;min-width:0;">
               <span class="seq">#${c.seq}</span>
               <span style="color:#adadb8;font-size:11px;margin-left:4px;">${c.duration ? formatDuration(c.duration) : ''}</span>
@@ -735,6 +750,7 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
       }
 
       container.innerHTML = html;
+      initPlaylistDragDrop();
     }
 
     async function addSelectedToPlaylist() {
@@ -911,6 +927,115 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
         }
       } catch (err) {
         console.error('Error deleting playlist:', err);
+      }
+    }
+
+    // Drag and drop reordering
+    let draggedItem = null;
+    let draggedIndex = null;
+
+    function initPlaylistDragDrop() {
+      const container = document.getElementById('playlistClips');
+      const items = container.querySelectorAll('.playlist-clip[draggable="true"]');
+
+      items.forEach(item => {
+        item.addEventListener('dragstart', handleDragStart);
+        item.addEventListener('dragend', handleDragEnd);
+        item.addEventListener('dragover', handleDragOver);
+        item.addEventListener('dragenter', handleDragEnter);
+        item.addEventListener('dragleave', handleDragLeave);
+        item.addEventListener('drop', handleDrop);
+      });
+    }
+
+    function handleDragStart(e) {
+      draggedItem = this;
+      draggedIndex = parseInt(this.dataset.index);
+      this.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', draggedIndex);
+    }
+
+    function handleDragEnd(e) {
+      this.classList.remove('dragging');
+      document.querySelectorAll('.playlist-clip').forEach(item => {
+        item.classList.remove('drag-over');
+      });
+      draggedItem = null;
+      draggedIndex = null;
+    }
+
+    function handleDragOver(e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+    }
+
+    function handleDragEnter(e) {
+      e.preventDefault();
+      if (this !== draggedItem) {
+        this.classList.add('drag-over');
+      }
+    }
+
+    function handleDragLeave(e) {
+      this.classList.remove('drag-over');
+    }
+
+    async function handleDrop(e) {
+      e.preventDefault();
+      this.classList.remove('drag-over');
+
+      if (this === draggedItem) return;
+
+      const fromIndex = draggedIndex;
+      const toIndex = parseInt(this.dataset.index);
+
+      if (fromIndex === toIndex) return;
+
+      // Reorder locally first for instant feedback
+      const clips = currentPlaylist.clips;
+      const [moved] = clips.splice(fromIndex, 1);
+      clips.splice(toIndex, 0, moved);
+      renderPlaylistClips();
+
+      // Then update server
+      await reorderPlaylist(fromIndex, toIndex);
+    }
+
+    async function reorderPlaylist(fromIndex, toIndex) {
+      if (!currentPlaylist) return;
+
+      try {
+        const res = await fetch(`${API_BASE}/playlist_api.php?action=reorder&login=${LOGIN}&key=${encodeURIComponent(adminKey)}&id=${currentPlaylist.id}&from=${fromIndex}&to=${toIndex}`);
+        const data = await res.json();
+
+        if (!data.success) {
+          console.error('Reorder failed:', data.error);
+          // Reload to get correct order from server
+          await selectPlaylist(currentPlaylist.id);
+        }
+      } catch (err) {
+        console.error('Error reordering playlist:', err);
+        await selectPlaylist(currentPlaylist.id);
+      }
+    }
+
+    async function shufflePlaylist() {
+      if (!currentPlaylist || !currentPlaylist.clips || currentPlaylist.clips.length < 2) return;
+
+      try {
+        const res = await fetch(`${API_BASE}/playlist_api.php?action=shuffle&login=${LOGIN}&key=${encodeURIComponent(adminKey)}&id=${currentPlaylist.id}`);
+        const data = await res.json();
+
+        if (data.success) {
+          // Reload playlist to get new order
+          await selectPlaylist(currentPlaylist.id);
+        } else if (data.error) {
+          alert('Error: ' + data.error);
+        }
+      } catch (err) {
+        console.error('Error shuffling playlist:', err);
+        alert('Error shuffling playlist: ' + err.message);
       }
     }
 

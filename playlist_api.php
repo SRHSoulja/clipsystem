@@ -373,6 +373,87 @@ switch ($action) {
     }
     break;
 
+  case 'reorder':
+    // Reorder clips in a playlist (move from one position to another)
+    $id = (int)($_GET["id"] ?? 0);
+    $from = (int)($_GET["from"] ?? -1);
+    $to = (int)($_GET["to"] ?? -1);
+
+    if ($id <= 0) json_error("Missing playlist id");
+    if ($from < 0 || $to < 0) json_error("Missing from/to indices");
+
+    try {
+      // Verify playlist ownership
+      $stmt = $pdo->prepare("SELECT id FROM playlists WHERE id = ? AND login = ?");
+      $stmt->execute([$id, $login]);
+      if (!$stmt->fetch()) json_error("Playlist not found", 404);
+
+      // Get all clips in current order
+      $stmt = $pdo->prepare("SELECT id, clip_seq, position FROM playlist_clips WHERE playlist_id = ? ORDER BY position");
+      $stmt->execute([$id]);
+      $clips = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+      if ($from >= count($clips) || $to >= count($clips)) {
+        json_error("Index out of range");
+      }
+
+      // Reorder the array
+      $moved = array_splice($clips, $from, 1);
+      array_splice($clips, $to, 0, $moved);
+
+      // Update positions in database
+      $pdo->beginTransaction();
+      foreach ($clips as $i => $clip) {
+        $stmt = $pdo->prepare("UPDATE playlist_clips SET position = ? WHERE id = ?");
+        $stmt->execute([$i, $clip['id']]);
+      }
+      $pdo->commit();
+
+      json_response(["success" => true]);
+    } catch (PDOException $e) {
+      if ($pdo->inTransaction()) $pdo->rollBack();
+      json_error("Database error: " . $e->getMessage(), 500);
+    }
+    break;
+
+  case 'shuffle':
+    // Randomly shuffle all clips in a playlist
+    $id = (int)($_GET["id"] ?? 0);
+    if ($id <= 0) json_error("Missing playlist id");
+
+    try {
+      // Verify playlist ownership
+      $stmt = $pdo->prepare("SELECT id FROM playlists WHERE id = ? AND login = ?");
+      $stmt->execute([$id, $login]);
+      if (!$stmt->fetch()) json_error("Playlist not found", 404);
+
+      // Get all clips
+      $stmt = $pdo->prepare("SELECT id FROM playlist_clips WHERE playlist_id = ?");
+      $stmt->execute([$id]);
+      $clips = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+      if (count($clips) < 2) {
+        json_response(["success" => true, "message" => "Nothing to shuffle"]);
+      }
+
+      // Shuffle the array
+      shuffle($clips);
+
+      // Update positions in database
+      $pdo->beginTransaction();
+      foreach ($clips as $i => $clipId) {
+        $stmt = $pdo->prepare("UPDATE playlist_clips SET position = ? WHERE id = ?");
+        $stmt->execute([$i, $clipId]);
+      }
+      $pdo->commit();
+
+      json_response(["success" => true]);
+    } catch (PDOException $e) {
+      if ($pdo->inTransaction()) $pdo->rollBack();
+      json_error("Database error: " . $e->getMessage(), 500);
+    }
+    break;
+
   default:
     json_error("Unknown action: " . $action);
 }
