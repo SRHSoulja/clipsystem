@@ -10,6 +10,9 @@ header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type");
 header("Content-Type: text/plain; charset=utf-8");
 header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+header("Pragma: no-cache");
+header("Expires: 0");
+header("Vary: *");
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { exit(0); }
 
@@ -44,6 +47,10 @@ $matches = [];
 
 $totalCount = 0;
 
+// Log for debugging alternating issue
+$debugInfo = "login=$login, query=$query, words=" . count($queryWords);
+error_log("cfind request: $debugInfo");
+
 if ($pdo && !empty($queryWords)) {
   try {
     // Build WHERE clause for each word (all must match)
@@ -56,23 +63,29 @@ if ($pdo && !empty($queryWords)) {
     $whereSQL = implode(' AND ', $whereClauses);
 
     // Get total count first
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM clips WHERE {$whereSQL}");
-    $stmt->execute($params);
-    $totalCount = (int)$stmt->fetchColumn();
+    $countStmt = $pdo->prepare("SELECT COUNT(*) FROM clips WHERE {$whereSQL}");
+    $countStmt->execute($params);
+    $totalCount = (int)$countStmt->fetchColumn();
+
+    error_log("cfind count result: $totalCount for query '$query'");
 
     // Case-insensitive search using ILIKE for each word
-    $stmt = $pdo->prepare("
+    $searchStmt = $pdo->prepare("
       SELECT seq, clip_id, title, view_count
       FROM clips
       WHERE {$whereSQL}
       ORDER BY view_count DESC
       LIMIT 20
     ");
-    $stmt->execute($params);
-    $matches = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $searchStmt->execute($params);
+    $matches = $searchStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    error_log("cfind matches found: " . count($matches));
   } catch (PDOException $e) {
     error_log("cfind db error: " . $e->getMessage());
   }
+} else {
+  error_log("cfind skip: pdo=" . ($pdo ? "yes" : "no") . ", queryWords=" . count($queryWords));
 }
 
 // Fallback to JSON if database empty

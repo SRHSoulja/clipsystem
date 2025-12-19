@@ -80,13 +80,20 @@ function isMod(tags) {
   return tags.mod || tags.badges?.broadcaster === '1';
 }
 
-// Fetch helper with timeout
+// Fetch helper with timeout and no caching
 async function fetchWithTimeout(url, timeoutMs = 5000) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const response = await fetch(url, { signal: controller.signal });
+    const response = await fetch(url, {
+      signal: controller.signal,
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
+      }
+    });
     clearTimeout(timeout);
     return response;
   } catch (err) {
@@ -251,7 +258,9 @@ const commands = {
     }
 
     try {
-      const url = `${config.apiBaseUrl}/cfind.php?login=${clipChannel}&key=${config.adminKey}&q=${encodeURIComponent(query)}`;
+      // Add cache buster to prevent stale cached responses
+      const cacheBuster = Date.now();
+      const url = `${config.apiBaseUrl}/cfind.php?login=${clipChannel}&key=${config.adminKey}&q=${encodeURIComponent(query)}&_=${cacheBuster}`;
       const res = await fetchWithTimeout(url);
       return await res.text();
     } catch (err) {
