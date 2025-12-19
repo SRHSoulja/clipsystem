@@ -20,6 +20,8 @@ function clean_login($s){
 $login = clean_login($_GET["login"] ?? "");
 $query = trim((string)($_GET["q"] ?? ""));
 $key   = (string)($_GET["key"] ?? "");
+$page  = max(1, (int)($_GET["page"] ?? 1));
+$perPage = 100;
 
 // Load from environment
 $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
@@ -28,20 +30,33 @@ $isAuthorized = ($key === $ADMIN_KEY && $ADMIN_KEY !== '');
 
 // Search for clips
 $matches = [];
+$totalCount = 0;
+$totalPages = 0;
 
 if (strlen($query) >= 2) {
   $pdo = get_db_connection();
 
   if ($pdo) {
     try {
+      // Get total count first
+      $stmt = $pdo->prepare("
+        SELECT COUNT(*) FROM clips
+        WHERE login = ? AND blocked = FALSE AND title ILIKE ?
+      ");
+      $stmt->execute([$login, '%' . $query . '%']);
+      $totalCount = (int)$stmt->fetchColumn();
+      $totalPages = ceil($totalCount / $perPage);
+
+      // Get paginated results
+      $offset = ($page - 1) * $perPage;
       $stmt = $pdo->prepare("
         SELECT seq, clip_id, title, view_count, created_at, duration, game_id
         FROM clips
         WHERE login = ? AND blocked = FALSE AND title ILIKE ?
         ORDER BY view_count DESC
-        LIMIT 100
+        LIMIT ? OFFSET ?
       ");
-      $stmt->execute([$login, '%' . $query . '%']);
+      $stmt->execute([$login, '%' . $query . '%', $perPage, $offset]);
       $matches = $stmt->fetchAll(PDO::FETCH_ASSOC);
     } catch (PDOException $e) {
       error_log("clip_search db error: " . $e->getMessage());
@@ -275,12 +290,51 @@ $baseUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : '
       from { opacity: 0; transform: translateY(10px); }
       to { opacity: 1; transform: translateY(0); }
     }
+    .pagination {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 10px;
+      margin-top: 30px;
+      padding: 20px 0;
+    }
+    .pagination a, .pagination span {
+      padding: 10px 16px;
+      border-radius: 6px;
+      text-decoration: none;
+      font-weight: 600;
+      transition: background 0.2s;
+    }
+    .pagination a {
+      background: #1f1f23;
+      color: #9147ff;
+      border: 1px solid #3d3d42;
+    }
+    .pagination a:hover {
+      background: #26262c;
+      border-color: #9147ff;
+    }
+    .pagination .current {
+      background: #9147ff;
+      color: white;
+    }
+    .pagination .disabled {
+      background: #1f1f23;
+      color: #3d3d42;
+      border: 1px solid #3d3d42;
+      cursor: not-allowed;
+    }
+    .pagination .page-info {
+      color: #adadb8;
+      background: transparent;
+      padding: 10px;
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>Clip Search</h1>
-    <p class="subtitle"><?= htmlspecialchars($login) ?> - <?= count($matches) >= 100 ? '100+' : count($matches) ?> result<?= count($matches) !== 1 ? 's' : '' ?> for "<?= htmlspecialchars($query) ?>"</p>
+    <p class="subtitle"><?= htmlspecialchars($login) ?> - <?= number_format($totalCount) ?> result<?= $totalCount !== 1 ? 's' : '' ?> for "<?= htmlspecialchars($query) ?>"<?php if ($totalPages > 1): ?> (Page <?= $page ?> of <?= $totalPages ?>)<?php endif; ?></p>
 
     <form class="search-form" method="get">
       <input type="hidden" name="login" value="<?= htmlspecialchars($login) ?>">
@@ -341,6 +395,38 @@ $baseUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : '
       </div>
       <?php endforeach; ?>
     </div>
+
+    <?php if ($totalPages > 1): ?>
+    <div class="pagination">
+      <?php
+        $baseParams = ['login' => $login, 'q' => $query];
+        if ($isAuthorized) $baseParams['key'] = $key;
+
+        function pageUrl($params, $pageNum) {
+          $params['page'] = $pageNum;
+          return '?' . http_build_query($params);
+        }
+      ?>
+      <?php if ($page > 1): ?>
+        <a href="<?= pageUrl($baseParams, 1) ?>">&laquo; First</a>
+        <a href="<?= pageUrl($baseParams, $page - 1) ?>">&lsaquo; Prev</a>
+      <?php else: ?>
+        <span class="disabled">&laquo; First</span>
+        <span class="disabled">&lsaquo; Prev</span>
+      <?php endif; ?>
+
+      <span class="page-info">Page <?= $page ?> of <?= $totalPages ?></span>
+
+      <?php if ($page < $totalPages): ?>
+        <a href="<?= pageUrl($baseParams, $page + 1) ?>">Next &rsaquo;</a>
+        <a href="<?= pageUrl($baseParams, $totalPages) ?>">Last &raquo;</a>
+      <?php else: ?>
+        <span class="disabled">Next &rsaquo;</span>
+        <span class="disabled">Last &raquo;</span>
+      <?php endif; ?>
+    </div>
+    <?php endif; ?>
+
     <?php endif; ?>
   </div>
 
