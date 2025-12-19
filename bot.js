@@ -208,6 +208,60 @@ const commands = {
     }
   },
 
+  // !cfind <query> - Search clips by title (mod only)
+  async cfind(channel, tags, args) {
+    if (!isMod(tags)) {
+      return null; // Silently ignore non-mods
+    }
+
+    const query = args.join(' ').trim();
+    if (query.length < 2) {
+      return 'Usage: !cfind <search term>';
+    }
+
+    try {
+      const url = `${config.apiBaseUrl}/cfind.php?login=${config.channel}&key=${config.adminKey}&q=${encodeURIComponent(query)}`;
+      const res = await fetchWithTimeout(url);
+      return await res.text();
+    } catch (err) {
+      console.error('!cfind error:', err.message);
+      return 'Could not search clips.';
+    }
+  },
+
+  // !playlist <name> - Play a saved playlist (mod only)
+  async playlist(channel, tags, args) {
+    if (!isMod(tags)) {
+      return null; // Silently ignore non-mods
+    }
+
+    const name = args.join(' ').trim();
+    if (!name) {
+      return 'Usage: !playlist <name>';
+    }
+
+    try {
+      // First find playlist by name
+      const findUrl = `${config.apiBaseUrl}/playlist_api.php?action=get_by_name&login=${config.channel}&key=${config.adminKey}&name=${encodeURIComponent(name)}`;
+      const findRes = await fetchWithTimeout(findUrl);
+      const findData = await findRes.json();
+
+      if (findData.error) {
+        return `Playlist "${name}" not found`;
+      }
+
+      // Now play it
+      const playUrl = `${config.apiBaseUrl}/playlist_api.php?action=play&login=${config.channel}&key=${config.adminKey}&id=${findData.playlist.id}`;
+      const playRes = await fetchWithTimeout(playUrl);
+      const playData = await playRes.json();
+
+      return playData.message || 'Playing playlist';
+    } catch (err) {
+      console.error('!playlist error:', err.message);
+      return 'Could not play playlist.';
+    }
+  },
+
   // !clip or !clips - Show info about the clip system
   async clip(channel, tags, args) {
     return `Use !pb to see the current clip. Mods can use !pclip <#> to play a specific clip. Vote with !like <#> or !dislike <#>`;
@@ -256,7 +310,7 @@ client.on('connected', (addr, port) => {
   console.log(`Connected to Twitch IRC at ${addr}:${port}`);
   console.log(`Joined channel: ${config.channel}`);
   console.log(`Bot username: ${config.botUsername}`);
-  console.log('Commands active: !pb, !pclip, !like, !dislike, !cremove, !cadd, !clip');
+  console.log('Commands active: !pb, !pclip, !cfind, !playlist, !like, !dislike, !cremove, !cadd, !clip');
 });
 
 client.on('disconnected', (reason) => {
