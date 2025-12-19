@@ -22,6 +22,7 @@ function clean_login($s){
 $login  = clean_login($_GET["login"] ?? "");
 $query  = trim((string)($_GET["q"] ?? ""));
 $gameId = trim((string)($_GET["game_id"] ?? ""));
+$gameName = trim((string)($_GET["game"] ?? "")); // Search by game name
 $clipper = trim((string)($_GET["clipper"] ?? ""));
 $page   = max(1, (int)($_GET["page"] ?? 1));
 $perPage = 100;
@@ -71,10 +72,27 @@ if ($pdo) {
     $whereClauses = ["login = ?", "blocked = FALSE"];
     $params = [$login];
 
-    // Game filter
+    // Game filter by ID
     if ($gameId) {
       $whereClauses[] = "game_id = ?";
       $params[] = $gameId;
+    }
+
+    // Game filter by name (search games_cache for matching game_ids)
+    if ($gameName && !$gameId) {
+      // Find game IDs that match the game name
+      $gameSearchStmt = $pdo->prepare("SELECT game_id FROM games_cache WHERE name ILIKE ?");
+      $gameSearchStmt->execute(['%' . $gameName . '%']);
+      $matchingGameIds = $gameSearchStmt->fetchAll(PDO::FETCH_COLUMN);
+
+      if (!empty($matchingGameIds)) {
+        $placeholders = implode(',', array_fill(0, count($matchingGameIds), '?'));
+        $whereClauses[] = "game_id IN ($placeholders)";
+        $params = array_merge($params, $matchingGameIds);
+      } else {
+        // No games match - force empty results
+        $whereClauses[] = "1 = 0";
+      }
     }
 
     // Clipper filter
@@ -556,28 +574,34 @@ if ($pdo) {
       </div>
 
       <button type="submit" class="filter-btn">Search</button>
-      <?php if ($query || $gameId || $clipper): ?>
+      <?php if ($query || $gameId || $gameName || $clipper): ?>
       <a href="?login=<?= htmlspecialchars($login) ?>" class="clear-btn">Clear All</a>
       <?php endif; ?>
     </form>
 
-    <?php if ($query || $gameId || $clipper): ?>
+    <?php if ($query || $gameId || $gameName || $clipper): ?>
     <div class="active-filters">
       <?php if ($query): ?>
       <span class="filter-tag">
         Search: "<?= htmlspecialchars($query) ?>"
-        <a href="?login=<?= htmlspecialchars($login) ?><?= $gameId ? '&game_id=' . htmlspecialchars($gameId) : '' ?><?= $clipper ? '&clipper=' . htmlspecialchars($clipper) : '' ?>">&times;</a>
+        <a href="?login=<?= htmlspecialchars($login) ?><?= $gameId ? '&game_id=' . htmlspecialchars($gameId) : '' ?><?= $gameName ? '&game=' . htmlspecialchars($gameName) : '' ?><?= $clipper ? '&clipper=' . htmlspecialchars($clipper) : '' ?>">&times;</a>
       </span>
       <?php endif; ?>
       <?php if ($clipper): ?>
       <span class="filter-tag">
         Clipper: <?= htmlspecialchars($clipper) ?>
-        <a href="?login=<?= htmlspecialchars($login) ?><?= $query ? '&q=' . htmlspecialchars($query) : '' ?><?= $gameId ? '&game_id=' . htmlspecialchars($gameId) : '' ?>">&times;</a>
+        <a href="?login=<?= htmlspecialchars($login) ?><?= $query ? '&q=' . htmlspecialchars($query) : '' ?><?= $gameId ? '&game_id=' . htmlspecialchars($gameId) : '' ?><?= $gameName ? '&game=' . htmlspecialchars($gameName) : '' ?>">&times;</a>
       </span>
       <?php endif; ?>
       <?php if ($gameId): ?>
       <span class="filter-tag">
         Category: <?= htmlspecialchars($currentGameName) ?>
+        <a href="?login=<?= htmlspecialchars($login) ?><?= $query ? '&q=' . htmlspecialchars($query) : '' ?><?= $clipper ? '&clipper=' . htmlspecialchars($clipper) : '' ?>">&times;</a>
+      </span>
+      <?php endif; ?>
+      <?php if ($gameName && !$gameId): ?>
+      <span class="filter-tag">
+        Category: "<?= htmlspecialchars($gameName) ?>"
         <a href="?login=<?= htmlspecialchars($login) ?><?= $query ? '&q=' . htmlspecialchars($query) : '' ?><?= $clipper ? '&clipper=' . htmlspecialchars($clipper) : '' ?>">&times;</a>
       </span>
       <?php endif; ?>
@@ -588,7 +612,7 @@ if ($pdo) {
       Click any clip to watch on Twitch. Search by title or clip number (e.g. "1234").
     </div>
 
-    <?php if (empty($matches) && ($query || $gameId)): ?>
+    <?php if (empty($matches) && ($query || $gameId || $gameName || $clipper)): ?>
     <div class="no-results">
       <h2>No clips found</h2>
       <p>Try a different search term or category</p>
@@ -659,6 +683,7 @@ if ($pdo) {
         if ($query) $baseParams['q'] = $query;
         if ($clipper) $baseParams['clipper'] = $clipper;
         if ($gameId) $baseParams['game_id'] = $gameId;
+        if ($gameName) $baseParams['game'] = $gameName;
 
         function pageUrl($params, $pageNum) {
           $params['page'] = $pageNum;

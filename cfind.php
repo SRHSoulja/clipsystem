@@ -55,10 +55,11 @@ if (empty($queryWords)) {
   exit;
 }
 
-// Search in PostgreSQL - separate counts for title vs clipper
+// Search in PostgreSQL - separate counts for title, clipper, and game
 $pdo = get_db_connection();
 $titleCount = 0;
 $clipperCount = 0;
+$gameCount = 0;
 
 // Log request details for debugging
 $serverInfo = gethostname() . ':' . getmypid();
@@ -94,7 +95,23 @@ if ($pdo && !empty($queryWords)) {
     $stmt->execute($clipperParams);
     $clipperCount = (int)$stmt->fetchColumn();
 
-    error_log("cfind [$serverInfo] title=$titleCount, clipper=$clipperCount");
+    // Count clips matching in GAME NAME (category)
+    $gameWhere = ["c.login = ?", "c.blocked = FALSE"];
+    $gameParams = [$login];
+    foreach ($queryWords as $word) {
+      $gameWhere[] = "g.name ILIKE ?";
+      $gameParams[] = '%' . $word . '%';
+    }
+    $gameSQL = implode(' AND ', $gameWhere);
+    $stmt = $pdo->prepare("
+      SELECT COUNT(*) FROM clips c
+      JOIN games_cache g ON c.game_id = g.game_id
+      WHERE {$gameSQL}
+    ");
+    $stmt->execute($gameParams);
+    $gameCount = (int)$stmt->fetchColumn();
+
+    error_log("cfind [$serverInfo] title=$titleCount, clipper=$clipperCount, game=$gameCount");
   } catch (PDOException $e) {
     error_log("cfind [$serverInfo] DB ERROR: " . $e->getMessage());
   }
@@ -103,7 +120,7 @@ if ($pdo && !empty($queryWords)) {
 }
 
 // If no results at all
-if ($titleCount === 0 && $clipperCount === 0) {
+if ($titleCount === 0 && $clipperCount === 0 && $gameCount === 0) {
   echo "No clips found matching \"{$query}\"";
   exit;
 }
@@ -112,8 +129,9 @@ if ($titleCount === 0 && $clipperCount === 0) {
 $baseUrl = getenv('API_BASE_URL') ?: 'https://clipsystem-production.up.railway.app';
 $titleUrl = $baseUrl . '/clip_search.php?login=' . urlencode($login) . '&q=' . urlencode($query);
 $clipperUrl = $baseUrl . '/clip_search.php?login=' . urlencode($login) . '&clipper=' . urlencode($query);
+$gameUrl = $baseUrl . '/clip_search.php?login=' . urlencode($login) . '&game=' . urlencode($query);
 
-// Build response - show both title and clipper results if applicable
+// Build response - show title, clipper, and game results if applicable
 $parts = [];
 
 if ($titleCount > 0) {
@@ -122,6 +140,10 @@ if ($titleCount > 0) {
 
 if ($clipperCount > 0) {
   $parts[] = "{$clipperCount} by clipper: {$clipperUrl}";
+}
+
+if ($gameCount > 0) {
+  $parts[] = "{$gameCount} in category: {$gameUrl}";
 }
 
 echo implode(' | ', $parts);
