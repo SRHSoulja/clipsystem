@@ -804,7 +804,7 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
         if (data.error) {
           alert('Error: ' + data.error);
         } else if (data.message) {
-          alert(data.message + '\n\nNote: Refresh the player page to start the playlist.');
+          alert(data.message + '\n\nPlaylist will start within a few seconds.');
         }
       } catch (err) {
         console.error('Error playing playlist:', err);
