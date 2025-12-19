@@ -566,7 +566,7 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
 
       <div class="content">
         <div class="search-bar">
-          <input type="text" id="searchInput" placeholder="Search by title or clipper..." oninput="filterClips()">
+          <input type="text" id="searchInput" placeholder="Search titles..." oninput="filterClips()">
           <input type="text" id="creatorFilter" placeholder="Filter by clipper..." oninput="filterClips()" style="max-width:180px;">
           <select id="gameFilter" onchange="filterClips()">
             <option value="">All Games</option>

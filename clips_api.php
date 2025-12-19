@@ -144,13 +144,12 @@ switch ($action) {
     $whereClauses = ["login = ?", "blocked = FALSE"];
     $params = [$login];
 
-    // Multi-word search (AND logic) - searches title and creator_name
+    // Multi-word search (AND logic) - searches title only
     if ($search) {
       $searchWords = preg_split('/\s+/', trim($search));
       $searchWords = array_filter($searchWords, function($w) { return strlen($w) >= 2; });
       foreach ($searchWords as $word) {
-        $whereClauses[] = "(title ILIKE ? OR creator_name ILIKE ?)";
-        $params[] = '%' . $word . '%';
+        $whereClauses[] = "title ILIKE ?";
         $params[] = '%' . $word . '%';
       }
     }
