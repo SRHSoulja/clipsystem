@@ -181,7 +181,45 @@ $baseUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : '
       align-items: center;
       gap: 4px;
     }
-    .play-btn {
+    .clip-thumb {
+      display: block;
+      text-decoration: none;
+      color: inherit;
+    }
+    .play-overlay {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 48px;
+      color: white;
+      opacity: 0;
+      transition: opacity 0.2s;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+    }
+    .clip-thumb:hover .play-overlay {
+      opacity: 1;
+    }
+    .clip-actions {
+      display: flex;
+      gap: 8px;
+    }
+    .watch-btn {
+      padding: 6px 12px;
+      border: 1px solid #9147ff;
+      border-radius: 4px;
+      background: transparent;
+      color: #9147ff;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+      text-decoration: none;
+    }
+    .watch-btn:hover {
+      background: rgba(145, 71, 255, 0.1);
+    }
+    .queue-btn {
       padding: 6px 12px;
       border: none;
       border-radius: 4px;
@@ -192,10 +230,10 @@ $baseUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : '
       cursor: pointer;
       transition: background 0.2s;
     }
-    .play-btn:hover {
+    .queue-btn:hover {
       background: #772ce8;
     }
-    .play-btn:disabled {
+    .queue-btn:disabled {
       background: #3d3d42;
       cursor: not-allowed;
     }
@@ -213,6 +251,14 @@ $baseUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : '
       padding: 15px;
       border-radius: 6px;
       margin-bottom: 20px;
+    }
+    .info-msg {
+      background: #1f1f23;
+      border: 1px solid #3d3d42;
+      padding: 15px;
+      border-radius: 6px;
+      margin-bottom: 20px;
+      color: #adadb8;
     }
     .success-msg {
       position: fixed;
@@ -234,7 +280,7 @@ $baseUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : '
 <body>
   <div class="container">
     <h1>Clip Search</h1>
-    <p class="subtitle"><?= htmlspecialchars($login) ?> - <?= count($matches) ?> result<?= count($matches) !== 1 ? 's' : '' ?> for "<?= htmlspecialchars($query) ?>"</p>
+    <p class="subtitle"><?= htmlspecialchars($login) ?> - <?= count($matches) >= 100 ? '100+' : count($matches) ?> result<?= count($matches) !== 1 ? 's' : '' ?> for "<?= htmlspecialchars($query) ?>"</p>
 
     <form class="search-form" method="get">
       <input type="hidden" name="login" value="<?= htmlspecialchars($login) ?>">
@@ -246,8 +292,8 @@ $baseUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : '
     </form>
 
     <?php if (!$isAuthorized): ?>
-    <div class="error-msg">
-      You need mod access to play clips from this page. Viewing only.
+    <div class="info-msg">
+      Click any clip to watch on Twitch. Mods can queue clips to the stream player.
     </div>
     <?php endif; ?>
 
@@ -265,16 +311,18 @@ $baseUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : '
     <div class="results-grid">
       <?php foreach ($matches as $clip):
         $thumbUrl = "https://clips-media-assets2.twitch.tv/" . htmlspecialchars($clip['clip_id']) . "-preview-480x272.jpg";
+        $twitchUrl = "https://clips.twitch.tv/" . htmlspecialchars($clip['clip_id']);
         $duration = isset($clip['duration']) ? gmdate("i:s", (int)$clip['duration']) : '';
       ?>
       <div class="clip-card">
-        <div class="clip-thumb">
+        <a href="<?= $twitchUrl ?>" target="_blank" class="clip-thumb">
           <img src="<?= $thumbUrl ?>" alt="" loading="lazy" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 480 272%22><rect fill=%22%2326262c%22 width=%22480%22 height=%22272%22/><text x=%22240%22 y=%22140%22 fill=%22%23666%22 text-anchor=%22middle%22>No Preview</text></svg>'">
           <span class="clip-seq">#<?= (int)$clip['seq'] ?></span>
           <?php if ($duration): ?>
           <span class="clip-duration"><?= $duration ?></span>
           <?php endif; ?>
-        </div>
+          <span class="play-overlay">&#9658;</span>
+        </a>
         <div class="clip-info">
           <div class="clip-title"><?= htmlspecialchars($clip['title'] ?? '(no title)') ?></div>
           <div class="clip-meta">
@@ -282,9 +330,12 @@ $baseUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : '
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
               <?= number_format((int)($clip['view_count'] ?? 0)) ?>
             </span>
-            <?php if ($isAuthorized): ?>
-            <button class="play-btn" onclick="playClip(<?= (int)$clip['seq'] ?>, this)">Play</button>
-            <?php endif; ?>
+            <div class="clip-actions">
+              <a href="<?= $twitchUrl ?>" target="_blank" class="watch-btn">Watch</a>
+              <?php if ($isAuthorized): ?>
+              <button class="queue-btn" onclick="queueClip(<?= (int)$clip['seq'] ?>, this)">Queue</button>
+              <?php endif; ?>
+            </div>
           </div>
         </div>
       </div>
@@ -301,7 +352,7 @@ $baseUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : '
     const key = <?= json_encode($key) ?>;
     const baseUrl = <?= json_encode($baseUrl) ?>;
 
-    async function playClip(seq, btn) {
+    async function queueClip(seq, btn) {
       btn.disabled = true;
       btn.textContent = '...';
 
@@ -315,7 +366,7 @@ $baseUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : '
         showToast('Error: ' + err.message);
       } finally {
         btn.disabled = false;
-        btn.textContent = 'Play';
+        btn.textContent = 'Queue';
       }
     }
 
