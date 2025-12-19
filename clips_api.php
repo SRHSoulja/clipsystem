@@ -241,6 +241,15 @@ switch ($action) {
       ];
     }
 
+    // Sort: Just Chatting, IRL, I'm Only Sleeping first, then alphabetical
+    usort($result, function($a, $b) {
+      $priority = ['Just Chatting' => 0, 'IRL' => 1, "I'm Only Sleeping" => 2];
+      $prioA = $priority[$a['name']] ?? 999;
+      $prioB = $priority[$b['name']] ?? 999;
+      if ($prioA !== $prioB) return $prioA - $prioB;
+      return strcasecmp($a['name'], $b['name']);
+    });
+
     json_response(["games" => $result]);
     break;
 

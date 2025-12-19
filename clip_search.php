@@ -58,6 +58,17 @@ if ($pdo) {
     $gamesStmt->execute([$login]);
     $games = $gamesStmt->fetchAll(PDO::FETCH_ASSOC);
 
+    // Sort games: Just Chatting, IRL, I'm Only Sleeping first, then alphabetical
+    usort($games, function($a, $b) {
+      $priority = ['Just Chatting' => 0, 'IRL' => 1, "I'm Only Sleeping" => 2];
+      $nameA = $a['name'] ?: '';
+      $nameB = $b['name'] ?: '';
+      $prioA = $priority[$nameA] ?? 999;
+      $prioB = $priority[$nameB] ?? 999;
+      if ($prioA !== $prioB) return $prioA - $prioB;
+      return strcasecmp($nameA, $nameB);
+    });
+
     // If a game is selected, get its name
     if ($gameId) {
       foreach ($games as $g) {
