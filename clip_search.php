@@ -24,8 +24,15 @@ $query  = trim((string)($_GET["q"] ?? ""));
 $gameId = trim((string)($_GET["game_id"] ?? ""));
 $gameName = trim((string)($_GET["game"] ?? "")); // Search by game name
 $clipper = trim((string)($_GET["clipper"] ?? ""));
+$sort   = $_GET["sort"] ?? "views"; // views, date, title
 $page   = max(1, (int)($_GET["page"] ?? 1));
 $perPage = 100;
+
+// Validate sort option
+$validSorts = ['views', 'date', 'title'];
+if (!in_array($sort, $validSorts)) {
+  $sort = 'views';
+}
 
 // Split query into words for multi-word search
 $queryWords = [];
@@ -186,12 +193,19 @@ if ($pdo) {
 
     // Get paginated results
     $offset = ($page - 1) * $perPage;
+    // Determine sort order
+    $orderBy = match($sort) {
+      'date' => 'created_at DESC',
+      'title' => 'title ASC',
+      default => 'view_count DESC',
+    };
+
     $paginatedParams = array_merge($params, [$perPage, $offset]);
     $stmt = $pdo->prepare("
       SELECT seq, clip_id, title, view_count, created_at, duration, game_id, thumbnail_url, creator_name
       FROM clips
       WHERE {$whereSQL}
-      ORDER BY view_count DESC
+      ORDER BY {$orderBy}
       LIMIT ? OFFSET ?
     ");
     $stmt->execute($paginatedParams);
@@ -633,36 +647,48 @@ if ($pdo) {
         </select>
       </div>
 
+      <div class="filter-group">
+        <label>Sort By</label>
+        <select name="sort">
+          <option value="views" <?= $sort === 'views' ? 'selected' : '' ?>>Most Viewed</option>
+          <option value="date" <?= $sort === 'date' ? 'selected' : '' ?>>Newest First</option>
+          <option value="title" <?= $sort === 'title' ? 'selected' : '' ?>>Title (A-Z)</option>
+        </select>
+      </div>
+
       <button type="submit" class="filter-btn">Search</button>
       <?php if ($query || $gameId || $gameName || $clipper): ?>
       <a href="?login=<?= htmlspecialchars($login) ?>" class="clear-btn">Clear All</a>
       <?php endif; ?>
     </form>
 
+    <?php
+      $sortParam = ($sort !== 'views') ? '&sort=' . htmlspecialchars($sort) : '';
+    ?>
     <?php if ($query || $gameId || $gameName || $clipper): ?>
     <div class="active-filters">
       <?php if ($query): ?>
       <span class="filter-tag">
         Search: "<?= htmlspecialchars($query) ?>"
-        <a href="?login=<?= htmlspecialchars($login) ?><?= $gameId ? '&game_id=' . htmlspecialchars($gameId) : '' ?><?= $gameName ? '&game=' . htmlspecialchars($gameName) : '' ?><?= $clipper ? '&clipper=' . htmlspecialchars($clipper) : '' ?>">&times;</a>
+        <a href="?login=<?= htmlspecialchars($login) ?><?= $gameId ? '&game_id=' . htmlspecialchars($gameId) : '' ?><?= $gameName ? '&game=' . htmlspecialchars($gameName) : '' ?><?= $clipper ? '&clipper=' . htmlspecialchars($clipper) : '' ?><?= $sortParam ?>">&times;</a>
       </span>
       <?php endif; ?>
       <?php if ($clipper): ?>
       <span class="filter-tag">
         Clipper: <?= htmlspecialchars($clipper) ?>
-        <a href="?login=<?= htmlspecialchars($login) ?><?= $query ? '&q=' . htmlspecialchars($query) : '' ?><?= $gameId ? '&game_id=' . htmlspecialchars($gameId) : '' ?><?= $gameName ? '&game=' . htmlspecialchars($gameName) : '' ?>">&times;</a>
+        <a href="?login=<?= htmlspecialchars($login) ?><?= $query ? '&q=' . htmlspecialchars($query) : '' ?><?= $gameId ? '&game_id=' . htmlspecialchars($gameId) : '' ?><?= $gameName ? '&game=' . htmlspecialchars($gameName) : '' ?><?= $sortParam ?>">&times;</a>
       </span>
       <?php endif; ?>
       <?php if ($gameId): ?>
       <span class="filter-tag">
         Category: <?= htmlspecialchars($currentGameName) ?>
-        <a href="?login=<?= htmlspecialchars($login) ?><?= $query ? '&q=' . htmlspecialchars($query) : '' ?><?= $clipper ? '&clipper=' . htmlspecialchars($clipper) : '' ?>">&times;</a>
+        <a href="?login=<?= htmlspecialchars($login) ?><?= $query ? '&q=' . htmlspecialchars($query) : '' ?><?= $clipper ? '&clipper=' . htmlspecialchars($clipper) : '' ?><?= $sortParam ?>">&times;</a>
       </span>
       <?php endif; ?>
       <?php if ($gameName && !$gameId): ?>
       <span class="filter-tag">
         Category: "<?= htmlspecialchars($gameName) ?>"
-        <a href="?login=<?= htmlspecialchars($login) ?><?= $query ? '&q=' . htmlspecialchars($query) : '' ?><?= $clipper ? '&clipper=' . htmlspecialchars($clipper) : '' ?>">&times;</a>
+        <a href="?login=<?= htmlspecialchars($login) ?><?= $query ? '&q=' . htmlspecialchars($query) : '' ?><?= $clipper ? '&clipper=' . htmlspecialchars($clipper) : '' ?><?= $sortParam ?>">&times;</a>
       </span>
       <?php endif; ?>
     </div>
@@ -744,6 +770,7 @@ if ($pdo) {
         if ($clipper) $baseParams['clipper'] = $clipper;
         if ($gameId) $baseParams['game_id'] = $gameId;
         if ($gameName) $baseParams['game'] = $gameName;
+        if ($sort !== 'views') $baseParams['sort'] = $sort;
 
         function pageUrl($params, $pageNum) {
           $params['page'] = $pageNum;
