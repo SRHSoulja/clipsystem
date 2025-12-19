@@ -482,6 +482,12 @@
   let prepareTimer = null;
   let playlistAdvanceTimer = null; // Timer for playlist auto-advance
 
+  // Playlist mode state (from API response)
+  let playlistMode = false;
+  let playlistIndex = 0;
+  let playlistTotal = 0;
+  let playlistName = "";
+
   let nextClip = null;
   let nextToken = 0;
 
@@ -948,6 +954,14 @@
   function log10Safe(x){ return Math.log10 ? Math.log10(x) : (Math.log(x) / Math.LN10); }
 
   function pickNextClip() {
+    // In playlist mode, just return the first clip (index 0)
+    // The API gives us clips starting from current position
+    if (playlistMode && clips.length > 0) {
+      console.log("[PLAYLIST] Picking next clip from playlist, index 0 of", clips.length);
+      return clips[0];
+    }
+
+    // Normal weighted random selection
     const state = loadState();
     state.recent = Array.isArray(state.recent) ? state.recent : [];
     state.playCounts = state.playCounts || {};
@@ -1013,7 +1027,7 @@
   function scheduleNext(durationSec) {
     clearTimers();
     const d = Math.max(6, Number(durationSec) || 20);
-    console.log("[SCHEDULE] Scheduling next clip in", d, "seconds (duration was:", durationSec, ")");
+    console.log("[SCHEDULE] Scheduling next clip in", d, "seconds (duration was:", durationSec, ") playlist:", playlistMode);
 
     const preAt = Math.max(0, (d * 1000) - TRANSITION_PREROLL_MS);
 
@@ -1026,7 +1040,7 @@
       showTransition();
     }, preAt);
 
-    if (fastMode) {
+    if (fastMode && !playlistMode) {
       const preloadAtMs = Math.min(
         Math.max(1500, Math.floor(d * 0.85) * 1000),
         Math.max(1500, (d - 3) * 1000)
@@ -1037,8 +1051,41 @@
       }, preloadAtMs);
     }
 
-    advanceTimer = setTimeout(() => {
+    advanceTimer = setTimeout(async () => {
       console.log("[SCHEDULE] Advance timer fired, switching to next clip");
+
+      // In playlist mode, fetch new clip list with advance=1 to move to next playlist clip
+      if (playlistMode) {
+        console.log("[PLAYLIST] Advancing to next playlist clip...");
+        try {
+          const advanceUrl = apiUrl + (apiUrl.includes('?') ? '&' : '?') + 'advance=1';
+          const r = await fetch(advanceUrl, { cache: "no-store" });
+          const d = await r.json();
+
+          if (d.playlist_mode && Array.isArray(d.clips) && d.clips.length > 0) {
+            clips = d.clips;
+            playlistIndex = d.playlist_index || 0;
+            playlistTotal = d.playlist_total || clips.length;
+            console.log("[PLAYLIST] Advanced to clip", (playlistIndex + 1), "of", playlistTotal);
+
+            const next = pickNextClip();
+            if (next) {
+              switchToClip(next);
+              return;
+            }
+          } else {
+            // Playlist finished, switch to normal mode
+            console.log("[PLAYLIST] Playlist finished, returning to normal mode");
+            playlistMode = false;
+            clips = Array.isArray(d.clips) ? d.clips : clips;
+          }
+        } catch (err) {
+          console.error("[PLAYLIST] Error advancing:", err);
+          playlistMode = false;
+        }
+      }
+
+      // Normal mode or playlist finished
       if (fastMode) switchFast();
       else switchSmoothBuffered();
     }, (d + 1) * 1000);
@@ -1382,6 +1429,18 @@
     if (!clips.length) {
       console.error("[INIT] No clips in response, aborting");
       return;
+    }
+
+    // Check if we're in playlist mode (from API response)
+    if (data.playlist_mode) {
+      playlistMode = true;
+      playlistIndex = data.playlist_index || 0;
+      playlistTotal = data.playlist_total || clips.length;
+      playlistName = data.playlist_name || "";
+      console.log("[INIT] PLAYLIST MODE - Playing:", playlistName, "clip", (playlistIndex + 1), "of", playlistTotal);
+    } else {
+      playlistMode = false;
+      console.log("[INIT] Normal weighted mode");
     }
 
     // Fetch vote data for weighting

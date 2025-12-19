@@ -97,6 +97,28 @@ function init_votes_tables($pdo) {
         ");
         $pdo->exec("CREATE INDEX IF NOT EXISTS idx_blocklist_login ON blocklist(login)");
 
+        // Playlist active table - tracks currently playing playlist
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS playlist_active (
+                id SERIAL PRIMARY KEY,
+                login VARCHAR(64) NOT NULL UNIQUE,
+                playlist_id INTEGER NOT NULL,
+                current_index INTEGER DEFAULT 0,
+                started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ");
+
+        // Games cache table
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS games_cache (
+                game_id VARCHAR(32) PRIMARY KEY,
+                name VARCHAR(255),
+                box_art_url TEXT,
+                fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ");
+
         return true;
     } catch (PDOException $e) {
         error_log("Failed to create tables: " . $e->getMessage());

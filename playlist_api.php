@@ -232,7 +232,7 @@ switch ($action) {
     break;
 
   case 'play':
-    // Queue a playlist for playback
+    // Queue a playlist for playback using database
     $id = (int)($_GET["id"] ?? 0);
     if ($id <= 0) json_error("Missing playlist id");
 
@@ -243,11 +243,11 @@ switch ($action) {
       $playlist = $stmt->fetch();
       if (!$playlist) json_error("Playlist not found", 404);
 
-      // Get clips in order
+      // Get clips in order to verify playlist has valid clips
       $stmt = $pdo->prepare("
         SELECT pc.clip_seq as seq, c.clip_id, c.title, c.duration
         FROM playlist_clips pc
-        LEFT JOIN clips c ON c.login = ? AND c.seq = pc.clip_seq
+        JOIN clips c ON c.login = ? AND c.seq = pc.clip_seq
         WHERE pc.playlist_id = ?
         ORDER BY pc.position
       ");
@@ -255,57 +255,27 @@ switch ($action) {
       $clips = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
       if (empty($clips)) {
-        json_response(["success" => false, "message" => "Playlist is empty"]);
+        json_response(["success" => false, "message" => "Playlist is empty or clips were deleted"]);
       }
 
-      // Validate first clip has required data
+      // Set this playlist as active in the database
+      // This replaces any previous active playlist for this login
+      $stmt = $pdo->prepare("
+        INSERT INTO playlist_active (login, playlist_id, current_index, started_at, updated_at)
+        VALUES (?, ?, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ON CONFLICT (login) DO UPDATE SET
+          playlist_id = EXCLUDED.playlist_id,
+          current_index = 0,
+          started_at = CURRENT_TIMESTAMP,
+          updated_at = CURRENT_TIMESTAMP
+      ");
+      $stmt->execute([$login, $id]);
+
       $first = $clips[0];
-      if (empty($first['clip_id'])) {
-        // This can happen if the clip was deleted from the database
-        // Try to find any clip with valid data
-        $validClips = array_filter($clips, fn($c) => !empty($c['clip_id']));
-        if (empty($validClips)) {
-          json_response(["success" => false, "message" => "No valid clips in playlist - clips may have been deleted"]);
-        }
-        $clips = array_values($validClips);
-        $first = $clips[0];
-      }
-
-      // Write playlist queue file
-      $runtimeDir = is_writable("/tmp") ? "/tmp/clipsystem_cache" : __DIR__ . "/cache";
-      if (!is_dir($runtimeDir)) @mkdir($runtimeDir, 0777, true);
-
-      $queuePath = $runtimeDir . "/playlist_queue_" . $login . ".json";
-      $payload = [
-        "login" => $login,
-        "playlist_id" => $id,
-        "playlist_name" => $playlist['name'],
-        "clips" => $clips,
-        "current_index" => 0,
-        "set_at" => gmdate("c"),
-      ];
-      @file_put_contents($queuePath, json_encode($payload, JSON_UNESCAPED_SLASHES), LOCK_EX);
-
-      // Also set first clip as force_play (use $first from validation above)
-      $forcePath = $runtimeDir . "/force_play_" . $login . ".json";
-      $forcePayload = [
-        "login" => $login,
-        "seq" => (int)$first['seq'],
-        "clip_id" => $first['clip_id'],
-        "title" => $first['title'] ?? "",
-        "duration" => (float)($first['duration'] ?? 30),
-        "nonce" => (string)(time() . "_" . bin2hex(random_bytes(4))),
-        "set_at" => gmdate("c"),
-        "playlist_id" => $id,
-        "playlist_index" => 0,
-        "playlist_name" => $playlist['name'],
-        "playlist_total" => count($clips),
-      ];
-      @file_put_contents($forcePath, json_encode($forcePayload, JSON_UNESCAPED_SLASHES), LOCK_EX);
-
       json_response([
         "success" => true,
         "message" => "Playing playlist: " . $playlist['name'] . " (" . count($clips) . " clips)",
+        "playlist_id" => $id,
         "first_clip" => [
           "seq" => $first['seq'],
           "clip_id" => $first['clip_id'],
@@ -354,6 +324,50 @@ switch ($action) {
       if (!$playlist) json_error("Playlist not found", 404);
 
       json_response(["playlist" => $playlist]);
+    } catch (PDOException $e) {
+      json_error("Database error: " . $e->getMessage(), 500);
+    }
+    break;
+
+  case 'stop':
+    // Stop the currently playing playlist
+    try {
+      $stmt = $pdo->prepare("DELETE FROM playlist_active WHERE login = ?");
+      $stmt->execute([$login]);
+      json_response(["success" => true, "message" => "Playlist stopped"]);
+    } catch (PDOException $e) {
+      json_error("Database error: " . $e->getMessage(), 500);
+    }
+    break;
+
+  case 'status':
+    // Get current playlist status
+    try {
+      $stmt = $pdo->prepare("
+        SELECT pa.playlist_id, pa.current_index, p.name as playlist_name
+        FROM playlist_active pa
+        JOIN playlists p ON p.id = pa.playlist_id
+        WHERE pa.login = ?
+      ");
+      $stmt->execute([$login]);
+      $active = $stmt->fetch(PDO::FETCH_ASSOC);
+
+      if ($active) {
+        // Get total clips in playlist
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM playlist_clips WHERE playlist_id = ?");
+        $stmt->execute([$active['playlist_id']]);
+        $totalClips = (int)$stmt->fetchColumn();
+
+        json_response([
+          "active" => true,
+          "playlist_id" => $active['playlist_id'],
+          "playlist_name" => $active['playlist_name'],
+          "current_index" => $active['current_index'],
+          "total_clips" => $totalClips
+        ]);
+      } else {
+        json_response(["active" => false]);
+      }
     } catch (PDOException $e) {
       json_error("Database error: " . $e->getMessage(), 500);
     }

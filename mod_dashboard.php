@@ -392,6 +392,7 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
             <span id="currentPlaylistName">Playlist</span>
             <div style="display:flex;gap:4px;">
               <button class="btn-primary" style="padding:6px 10px;font-size:12px;" onclick="playPlaylist()" title="Play All">▶ Play</button>
+              <button class="btn-secondary" style="padding:6px 10px;font-size:12px;background:#c9302c;" onclick="stopPlaylist()" title="Stop Playlist">⏹ Stop</button>
               <button class="btn-secondary" style="padding:6px 8px;font-size:12px;" onclick="showRenameModal()" title="Rename">✏️</button>
               <button class="btn-danger" style="padding:6px 8px;font-size:12px;" onclick="confirmDeletePlaylist()" title="Delete">🗑️</button>
             </div>
@@ -803,14 +804,27 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
         if (data.error) {
           alert('Error: ' + data.error);
         } else if (data.message) {
-          alert(data.message);
-          if (data.first_clip) {
-            console.log('First clip to play:', data.first_clip);
-          }
+          alert(data.message + '\n\nNote: Refresh the player page to start the playlist.');
         }
       } catch (err) {
         console.error('Error playing playlist:', err);
         alert('Error playing playlist: ' + err.message);
+      }
+    }
+
+    async function stopPlaylist() {
+      try {
+        const res = await fetch(`${API_BASE}/playlist_api.php?action=stop&login=${LOGIN}&key=${encodeURIComponent(adminKey)}`);
+        const data = await res.json();
+        console.log('Playlist stop response:', data);
+        if (data.error) {
+          alert('Error: ' + data.error);
+        } else {
+          alert('Playlist stopped. Player will return to normal mode after current clip.');
+        }
+      } catch (err) {
+        console.error('Error stopping playlist:', err);
+        alert('Error stopping playlist: ' + err.message);
       }
     }
 

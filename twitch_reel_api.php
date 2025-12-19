@@ -60,6 +60,80 @@ $pool  = isset($_GET['pool']) ? intval($_GET['pool']) : 400;
 if ($pool < 50) $pool = 50;
 if ($pool > 2000) $pool = 2000; // allow bigger, but keep response sane
 
+// Check if advance=1 is passed (player finished a clip and wants to advance playlist)
+$advance = isset($_GET['advance']) && $_GET['advance'] === '1';
+
+// ---- Check for active playlist first ----
+$pdo = get_db_connection();
+if ($pdo) {
+  try {
+    // Check if there's an active playlist for this login
+    $stmt = $pdo->prepare("SELECT playlist_id, current_index FROM playlist_active WHERE login = ?");
+    $stmt->execute([$login]);
+    $active = $stmt->fetch();
+
+    if ($active) {
+      $playlistId = (int)$active['playlist_id'];
+      $currentIndex = (int)$active['current_index'];
+
+      // If advance=1, increment the current index
+      if ($advance) {
+        $currentIndex++;
+        $stmt = $pdo->prepare("UPDATE playlist_active SET current_index = ?, updated_at = CURRENT_TIMESTAMP WHERE login = ?");
+        $stmt->execute([$currentIndex, $login]);
+      }
+
+      // Get playlist clips in order
+      $stmt = $pdo->prepare("
+        SELECT c.clip_id as id, c.seq, c.title, c.duration, c.created_at, c.view_count, c.game_id
+        FROM playlist_clips pc
+        JOIN clips c ON c.login = ? AND c.seq = pc.clip_seq
+        WHERE pc.playlist_id = ?
+        ORDER BY pc.position
+      ");
+      $stmt->execute([$login, $playlistId]);
+      $playlistClips = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+      // Get playlist name
+      $stmt = $pdo->prepare("SELECT name FROM playlists WHERE id = ?");
+      $stmt->execute([$playlistId]);
+      $playlistInfo = $stmt->fetch();
+      $playlistName = $playlistInfo ? $playlistInfo['name'] : 'Unknown';
+
+      // Check if we've finished the playlist
+      if ($currentIndex >= count($playlistClips)) {
+        // Playlist finished - clear it and fall through to normal clips
+        $stmt = $pdo->prepare("DELETE FROM playlist_active WHERE login = ?");
+        $stmt->execute([$login]);
+        // Don't return - fall through to normal weighted clips
+      } else {
+        // Return playlist clips starting from current index
+        // The player will play them in order
+        $remainingClips = array_slice($playlistClips, $currentIndex);
+
+        $out = [
+          "login" => $login,
+          "source" => "playlist",
+          "playlist_mode" => true,
+          "playlist_id" => $playlistId,
+          "playlist_name" => $playlistName,
+          "playlist_index" => $currentIndex,
+          "playlist_total" => count($playlistClips),
+          "count" => count($remainingClips),
+          "clips" => $remainingClips,
+          "fetched_at" => gmdate('c'),
+        ];
+
+        echo json_encode($out, JSON_UNESCAPED_SLASHES);
+        exit;
+      }
+    }
+  } catch (PDOException $e) {
+    error_log("playlist check error: " . $e->getMessage());
+    // Fall through to normal clips
+  }
+}
+
 // ---- small output cache (prevents OBS rapid refresh reshuffling constantly) ----
 $cacheDir = __DIR__ . '/cache';
 if (!is_dir($cacheDir)) @mkdir($cacheDir, 0755, true);
