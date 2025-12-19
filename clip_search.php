@@ -22,6 +22,7 @@ function clean_login($s){
 $login  = clean_login($_GET["login"] ?? "");
 $query  = trim((string)($_GET["q"] ?? ""));
 $gameId = trim((string)($_GET["game_id"] ?? ""));
+$clipper = trim((string)($_GET["clipper"] ?? ""));
 $page   = max(1, (int)($_GET["page"] ?? 1));
 $perPage = 100;
 
@@ -76,6 +77,12 @@ if ($pdo) {
       $params[] = $gameId;
     }
 
+    // Clipper filter
+    if ($clipper) {
+      $whereClauses[] = "creator_name ILIKE ?";
+      $params[] = '%' . $clipper . '%';
+    }
+
     // Check if query is a clip number (all digits)
     $isClipNumber = $query && preg_match('/^\d+$/', $query);
 
@@ -84,9 +91,10 @@ if ($pdo) {
       $whereClauses[] = "seq = ?";
       $params[] = (int)$query;
     } else {
-      // Search filter by title words
+      // Search filter by title OR creator_name words (all words must match somewhere)
       foreach ($queryWords as $word) {
-        $whereClauses[] = "title ILIKE ?";
+        $whereClauses[] = "(title ILIKE ? OR creator_name ILIKE ?)";
+        $params[] = '%' . $word . '%';
         $params[] = '%' . $word . '%';
       }
     }
@@ -103,7 +111,7 @@ if ($pdo) {
     $offset = ($page - 1) * $perPage;
     $paginatedParams = array_merge($params, [$perPage, $offset]);
     $stmt = $pdo->prepare("
-      SELECT seq, clip_id, title, view_count, created_at, duration, game_id, thumbnail_url
+      SELECT seq, clip_id, title, view_count, created_at, duration, game_id, thumbnail_url, creator_name
       FROM clips
       WHERE {$whereSQL}
       ORDER BY view_count DESC
@@ -383,15 +391,27 @@ if ($pdo) {
       align-items: center;
       gap: 4px;
     }
+    .clip-clipper {
+      color: #bf94ff;
+      font-size: 12px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 120px;
+    }
+    .clip-game-row {
+      margin-top: 6px;
+    }
     .clip-game {
       background: #26262c;
       padding: 3px 8px;
       border-radius: 4px;
       font-size: 11px;
-      max-width: 120px;
+      max-width: 100%;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      display: inline-block;
     }
 
     .no-results {
@@ -514,6 +534,11 @@ if ($pdo) {
       </div>
 
       <div class="filter-group">
+        <label>Clipper</label>
+        <input type="text" name="clipper" value="<?= htmlspecialchars($clipper) ?>" placeholder="Filter by clipper name...">
+      </div>
+
+      <div class="filter-group">
         <label>Category</label>
         <select name="game_id">
           <option value="">All Categories</option>
@@ -527,23 +552,29 @@ if ($pdo) {
       </div>
 
       <button type="submit" class="filter-btn">Search</button>
-      <?php if ($query || $gameId): ?>
+      <?php if ($query || $gameId || $clipper): ?>
       <a href="?login=<?= htmlspecialchars($login) ?>" class="clear-btn">Clear All</a>
       <?php endif; ?>
     </form>
 
-    <?php if ($query || $gameId): ?>
+    <?php if ($query || $gameId || $clipper): ?>
     <div class="active-filters">
       <?php if ($query): ?>
       <span class="filter-tag">
         Search: "<?= htmlspecialchars($query) ?>"
-        <a href="?login=<?= htmlspecialchars($login) ?><?= $gameId ? '&game_id=' . htmlspecialchars($gameId) : '' ?>">&times;</a>
+        <a href="?login=<?= htmlspecialchars($login) ?><?= $gameId ? '&game_id=' . htmlspecialchars($gameId) : '' ?><?= $clipper ? '&clipper=' . htmlspecialchars($clipper) : '' ?>">&times;</a>
+      </span>
+      <?php endif; ?>
+      <?php if ($clipper): ?>
+      <span class="filter-tag">
+        Clipper: <?= htmlspecialchars($clipper) ?>
+        <a href="?login=<?= htmlspecialchars($login) ?><?= $query ? '&q=' . htmlspecialchars($query) : '' ?><?= $gameId ? '&game_id=' . htmlspecialchars($gameId) : '' ?>">&times;</a>
       </span>
       <?php endif; ?>
       <?php if ($gameId): ?>
       <span class="filter-tag">
         Category: <?= htmlspecialchars($currentGameName) ?>
-        <a href="?login=<?= htmlspecialchars($login) ?><?= $query ? '&q=' . htmlspecialchars($query) : '' ?>">&times;</a>
+        <a href="?login=<?= htmlspecialchars($login) ?><?= $query ? '&q=' . htmlspecialchars($query) : '' ?><?= $clipper ? '&clipper=' . htmlspecialchars($clipper) : '' ?>">&times;</a>
       </span>
       <?php endif; ?>
     </div>
@@ -603,10 +634,15 @@ if ($pdo) {
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
               <?= number_format((int)($clip['view_count'] ?? 0)) ?>
             </span>
-            <?php if ($gameName): ?>
-            <span class="clip-game" title="<?= htmlspecialchars($gameName) ?>"><?= htmlspecialchars($gameName) ?></span>
+            <?php if (!empty($clip['creator_name'])): ?>
+            <span class="clip-clipper" title="Clipped by <?= htmlspecialchars($clip['creator_name']) ?>">&#9986; <?= htmlspecialchars($clip['creator_name']) ?></span>
             <?php endif; ?>
           </div>
+          <?php if ($gameName): ?>
+          <div class="clip-game-row">
+            <span class="clip-game" title="<?= htmlspecialchars($gameName) ?>"><?= htmlspecialchars($gameName) ?></span>
+          </div>
+          <?php endif; ?>
         </div>
       </div>
       <?php endforeach; ?>
@@ -617,6 +653,7 @@ if ($pdo) {
       <?php
         $baseParams = ['login' => $login];
         if ($query) $baseParams['q'] = $query;
+        if ($clipper) $baseParams['clipper'] = $clipper;
         if ($gameId) $baseParams['game_id'] = $gameId;
 
         function pageUrl($params, $pageNum) {
