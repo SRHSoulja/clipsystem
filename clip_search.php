@@ -91,10 +91,9 @@ if ($pdo) {
       $whereClauses[] = "seq = ?";
       $params[] = (int)$query;
     } else {
-      // Search filter by title OR creator_name words (all words must match somewhere)
+      // Search filter by title only (clipper filter handles creator_name separately)
       foreach ($queryWords as $word) {
-        $whereClauses[] = "(title ILIKE ? OR creator_name ILIKE ?)";
-        $params[] = '%' . $word . '%';
+        $whereClauses[] = "title ILIKE ?";
         $params[] = '%' . $word . '%';
       }
     }
@@ -529,13 +528,13 @@ if ($pdo) {
       <input type="hidden" name="login" value="<?= htmlspecialchars($login) ?>">
 
       <div class="filter-group">
-        <label>Search</label>
-        <input type="text" name="q" value="<?= htmlspecialchars($query) ?>" placeholder="Search clip titles..." autofocus>
+        <label>Title Search</label>
+        <input type="text" name="q" value="<?= htmlspecialchars($query) ?>" placeholder="Search titles..." autofocus>
       </div>
 
       <div class="filter-group">
         <label>Clipper</label>
-        <input type="text" name="clipper" value="<?= htmlspecialchars($clipper) ?>" placeholder="Filter by clipper name...">
+        <input type="text" name="clipper" value="<?= htmlspecialchars($clipper) ?>" placeholder="Filter by clipper...">
       </div>
 
       <div class="filter-group">
