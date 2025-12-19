@@ -302,9 +302,7 @@ const commands = {
     }
 
     const query = args.join(' ').trim();
-    if (query.length < 2) {
-      return 'Usage: !cfind <search term>';
-    }
+    // Let the API handle empty queries - it returns the search page link
 
     try {
       // Use fresh https request to avoid any connection reuse issues
