@@ -417,6 +417,39 @@ if ($pdo) {
       background: transparent;
       padding: 10px;
     }
+    .page-jump {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-left: 10px;
+    }
+    .page-jump input {
+      width: 60px;
+      padding: 8px 10px;
+      border: 1px solid #3d3d42;
+      border-radius: 6px;
+      background: #1f1f23;
+      color: #efeff1;
+      font-size: 14px;
+      text-align: center;
+    }
+    .page-jump input:focus {
+      outline: none;
+      border-color: #9147ff;
+    }
+    .page-jump button {
+      padding: 8px 14px;
+      border: none;
+      border-radius: 6px;
+      background: #9147ff;
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .page-jump button:hover {
+      background: #772ce8;
+    }
 
     /* Empty state */
     .no-results {
@@ -514,7 +547,7 @@ if ($pdo) {
         $thumbUrl = !empty($clip['thumbnail_url']) && $clip['thumbnail_url'] !== 'NOT_FOUND'
           ? $clip['thumbnail_url']
           : "https://clips-media-assets2.twitch.tv/{$clipId}-preview-480x272.jpg";
-        $twitchUrl = "https://clips.twitch.tv/" . rawurlencode($clipId);
+        $twitchUrl = "https://clips.twitch.tv/" . rawurlencode($clipId) . "?dark=true";
         $duration = isset($clip['duration']) ? gmdate("i:s", (int)$clip['duration']) : '';
         $title = $clip['title'] ?? '(no title)';
         $seq = (int)$clip['seq'];
@@ -585,7 +618,26 @@ if ($pdo) {
         <span class="disabled">Next &rsaquo;</span>
         <span class="disabled">Last &raquo;</span>
       <?php endif; ?>
+
+      <div class="page-jump">
+        <input type="number" id="pageInput" min="1" max="<?= $totalPages ?>" value="<?= $page ?>" placeholder="#">
+        <button onclick="goToPage()">Go</button>
+      </div>
     </div>
+    <script>
+      function goToPage() {
+        const input = document.getElementById('pageInput');
+        const page = parseInt(input.value);
+        if (page >= 1 && page <= <?= $totalPages ?>) {
+          const params = new URLSearchParams(window.location.search);
+          params.set('page', page);
+          window.location.search = params.toString();
+        }
+      }
+      document.getElementById('pageInput').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') goToPage();
+      });
+    </script>
     <?php endif; ?>
 
     <?php endif; ?>
