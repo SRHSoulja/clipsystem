@@ -80,11 +80,6 @@ function isMod(tags) {
   return tags.mod || tags.badges?.broadcaster === '1';
 }
 
-// Check if user is subscriber or higher (sub, VIP, mod, broadcaster)
-function isSubOrHigher(tags) {
-  return tags.subscriber || tags.badges?.vip === '1' || isMod(tags);
-}
-
 // Fetch helper with timeout
 async function fetchWithTimeout(url, timeoutMs = 5000) {
   const controller = new AbortController();
@@ -244,58 +239,9 @@ const commands = {
     }
   },
 
-  // !cfind <query> - Search clips by title (subscribers+)
+  // !cfind - Link to clip search/browse site
   async cfind(channel, tags, args) {
-    if (!isSubOrHigher(tags)) {
-      return null; // Silently ignore non-subs
-    }
-
-    const query = args.join(' ').trim();
-    if (query.length < 2) {
-      return 'Usage: !cfind <search term>';
-    }
-
-    try {
-      const url = `${config.apiBaseUrl}/cfind.php?login=${clipChannel}&key=${config.adminKey}&q=${encodeURIComponent(query)}`;
-      const res = await fetchWithTimeout(url);
-      return await res.text();
-    } catch (err) {
-      console.error('!cfind error:', err.message);
-      return 'Could not search clips.';
-    }
-  },
-
-  // !playlist <name> - Play a saved playlist (mod only)
-  async playlist(channel, tags, args) {
-    if (!isMod(tags)) {
-      return null; // Silently ignore non-mods
-    }
-
-    const name = args.join(' ').trim();
-    if (!name) {
-      return 'Usage: !playlist <name>';
-    }
-
-    try {
-      // First find playlist by name
-      const findUrl = `${config.apiBaseUrl}/playlist_api.php?action=get_by_name&login=${clipChannel}&key=${config.adminKey}&name=${encodeURIComponent(name)}`;
-      const findRes = await fetchWithTimeout(findUrl);
-      const findData = await findRes.json();
-
-      if (findData.error) {
-        return `Playlist "${name}" not found`;
-      }
-
-      // Now play it
-      const playUrl = `${config.apiBaseUrl}/playlist_api.php?action=play&login=${clipChannel}&key=${config.adminKey}&id=${findData.playlist.id}`;
-      const playRes = await fetchWithTimeout(playUrl);
-      const playData = await playRes.json();
-
-      return playData.message || 'Playing playlist';
-    } catch (err) {
-      console.error('!playlist error:', err.message);
-      return 'Could not play playlist.';
-    }
+    return `Browse & search clips: ${config.apiBaseUrl}/clip_search.php?login=${clipChannel}`;
   },
 
   // !cskip - Skip the current clip (mod only)
@@ -322,12 +268,9 @@ const commands = {
   // !chelp - Show available clip commands
   async chelp(channel, tags, args) {
     if (isMod(tags)) {
-      return 'Clip commands: !clip, !like/!dislike [#], !cfind <query>, !pclip <#>, !cskip, !cremove <#>, !cadd <#>, !playlist <name>';
+      return 'Clip commands: !clip, !cfind, !like/!dislike [#], !pclip <#>, !cskip, !cremove <#>, !cadd <#>';
     }
-    if (isSubOrHigher(tags)) {
-      return 'Clip commands: !clip (current), !like/!dislike [#] (vote), !cfind <query> (search)';
-    }
-    return 'Clip commands: !clip (see current), !like [#] (upvote), !dislike [#] (downvote)';
+    return 'Clip commands: !clip (current), !cfind (browse), !like [#] (upvote), !dislike [#] (downvote)';
   }
 };
 
@@ -369,7 +312,7 @@ client.on('connected', (addr, port) => {
   console.log(`Attempting to join channels: ${channels.join(', ')}`);
   console.log(`Clip channel: ${clipChannel}`);
   console.log(`Bot username: ${config.botUsername}`);
-  console.log('Commands active: !clip, !pclip, !cskip, !cfind, !playlist, !like, !dislike, !cremove, !cadd, !chelp');
+  console.log('Commands active: !clip, !cfind, !like, !dislike, !pclip, !cskip, !cremove, !cadd, !chelp');
 });
 
 client.on('join', (channel, username, self) => {
