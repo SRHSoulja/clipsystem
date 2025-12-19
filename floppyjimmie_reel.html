@@ -1554,6 +1554,56 @@
         // Silent fail - don't spam console
       }
     }, 5000);
+
+    // Poll for skip requests (every 1 second)
+    setInterval(async () => {
+      if (!hasStartedPlayback) return;
+      if (isSwitching) return;
+
+      try {
+        const r = await fetch(`${API_BASE}/skip_check.php?login=${encodeURIComponent(login)}`, { cache: "no-store" });
+        const d = await r.json();
+
+        if (d.skip) {
+          console.log("[SKIP] Skip requested! Switching to next clip...");
+
+          // Cancel current advance timer
+          clearTimers();
+
+          // In playlist mode, advance to next playlist clip
+          if (playlistMode) {
+            console.log("[SKIP] Playlist mode - advancing to next clip");
+            try {
+              const advanceUrl = apiUrl + (apiUrl.includes('?') ? '&' : '?') + 'advance=1';
+              const ar = await fetch(advanceUrl, { cache: "no-store" });
+              const ad = await ar.json();
+
+              if (ad.playlist_mode && Array.isArray(ad.clips) && ad.clips.length > 0) {
+                clips = ad.clips;
+                playlistIndex = ad.playlist_index || 0;
+                playlistTotal = ad.playlist_total || clips.length;
+                const next = pickNextClip();
+                if (next) switchToClip(next);
+              } else {
+                // Playlist finished
+                playlistMode = false;
+                clips = Array.isArray(ad.clips) ? ad.clips : clips;
+                switchToClip(pickNextClip());
+              }
+            } catch (err) {
+              console.error("[SKIP] Error advancing playlist:", err);
+              playlistMode = false;
+              switchToClip(pickNextClip());
+            }
+          } else {
+            // Normal mode - just pick next clip
+            switchToClip(pickNextClip());
+          }
+        }
+      } catch (err) {
+        // Silent fail
+      }
+    }, 1000);
   }
 
   init();
