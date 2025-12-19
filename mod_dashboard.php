@@ -29,17 +29,23 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
   <title>Mod Dashboard - <?php echo htmlspecialchars($login); ?></title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    html {
+      background: #0e0e10;
+      min-height: 100%;
+    }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background: #0e0e10;
       color: #efeff1;
       min-height: 100vh;
+      min-height: -webkit-fill-available;
     }
     .login-screen {
       display: flex;
       justify-content: center;
       align-items: center;
       min-height: 100vh;
+      min-height: -webkit-fill-available;
       padding: 20px;
     }
     .login-box {
