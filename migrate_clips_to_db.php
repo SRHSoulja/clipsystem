@@ -46,6 +46,11 @@ if (php_sapi_name() === 'cli' && isset($argv[1])) {
 }
 $login = preg_replace('/[^a-z0-9_]/', '', $login);
 
+// Chunking support for web execution (Railway has ~30s timeout)
+$startOffset = isset($_GET['offset']) ? max(0, (int)$_GET['offset']) : 0;
+$chunkSize = isset($_GET['chunk']) ? max(100, min(5000, (int)$_GET['chunk'])) : 2000;
+$startTime = time();
+
 echo "=== Clips Migration to PostgreSQL ===\n";
 echo "Login: $login\n\n";
 
@@ -121,7 +126,15 @@ if (!$data || !isset($data['clips']) || !is_array($data['clips'])) {
 
 $clips = $data['clips'];
 $totalClips = count($clips);
-echo "Found $totalClips clips to migrate.\n\n";
+echo "Found $totalClips clips in JSON.\n";
+
+// Apply chunking for web requests
+$isWeb = php_sapi_name() !== 'cli';
+if ($isWeb && $startOffset > 0) {
+    echo "Starting from offset: $startOffset (chunk size: $chunkSize)\n";
+}
+$endOffset = $isWeb ? min($totalClips, $startOffset + $chunkSize) : $totalClips;
+echo "Processing clips $startOffset to $endOffset of $totalClips\n\n";
 
 // Check existing count
 $existingCount = $pdo->query("SELECT COUNT(*) FROM clips WHERE login = " . $pdo->quote($login))->fetchColumn();
@@ -161,7 +174,8 @@ $batchSize = 100;
 
 $pdo->beginTransaction();
 
-foreach ($clips as $i => $clip) {
+for ($i = $startOffset; $i < $endOffset; $i++) {
+    $clip = $clips[$i];
     $clipId = $clip['id'] ?? '';
     if (!$clipId) {
         $skipped++;
@@ -220,13 +234,23 @@ foreach ($clips as $i => $clip) {
         $pdo->beginTransaction();
         $pct = round(($i + 1) / $totalClips * 100);
         echo "  Progress: " . ($i + 1) . "/$totalClips ($pct%) - Inserted: $inserted, Skipped: $skipped\n";
+
+        // Check timeout for web requests (stop after 20 seconds to avoid 504)
+        if ($isWeb && (time() - $startTime) > 20) {
+            echo "\n⚠️  TIMEOUT PREVENTION: Stopping to avoid gateway timeout.\n";
+            $nextOffset = $i + 1;
+            break;
+        }
     }
 }
 
+// Track where we stopped for chunked processing
+$nextOffset = isset($nextOffset) ? $nextOffset : $endOffset;
+
 $pdo->commit();
 
-echo "\n=== Migration Complete ===\n";
-echo "Total processed: $totalClips\n";
+echo "\n=== Chunk Complete ===\n";
+echo "Processed: " . ($nextOffset - $startOffset) . " clips (from $startOffset to $nextOffset)\n";
 echo "Inserted: $inserted\n";
 echo "Skipped: $skipped\n";
 echo "Errors: $errors\n";
@@ -239,4 +263,12 @@ echo "\nTotal clips in database for $login: $finalCount\n";
 $maxSeq = $pdo->query("SELECT MAX(seq) FROM clips WHERE login = " . $pdo->quote($login))->fetchColumn();
 echo "Max seq number: $maxSeq\n";
 
-echo "\nDone!\n";
+// Show next URL if more to process
+if ($isWeb && $nextOffset < $totalClips) {
+    $nextUrl = "migrate_clips_to_db.php?login=$login&key=" . ($_GET['key'] ?? '') . "&offset=$nextOffset&chunk=$chunkSize";
+    echo "\n📋 MORE CLIPS TO PROCESS!\n";
+    echo "Next chunk: $nextOffset to " . min($totalClips, $nextOffset + $chunkSize) . " of $totalClips\n";
+    echo "Continue URL: $nextUrl\n";
+} else {
+    echo "\n✅ All clips migrated!\n";
+}

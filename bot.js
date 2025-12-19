@@ -100,8 +100,8 @@ const commands = {
   // !clip - Show currently playing clip
   async clip(channel, tags, args) {
     try {
-      const url = `${config.apiBaseUrl}/now_playing_get.php?login=${clipChannel}`;
-      const res = await fetchWithTimeout(url);
+      const apiUrl = `${config.apiBaseUrl}/now_playing_get.php?login=${clipChannel}`;
+      const res = await fetchWithTimeout(apiUrl);
       const data = await res.json();
 
       if (!data || !data.seq) {
@@ -109,7 +109,8 @@ const commands = {
       }
 
       const title = data.title || 'Unknown';
-      return `Now playing Clip #${data.seq}: ${title}`;
+      const clipUrl = data.url || `https://clips.twitch.tv/${data.clip_id}`;
+      return `Clip #${data.seq}: ${title} - ${clipUrl}`;
     } catch (err) {
       console.error('!clip error:', err.message);
       return 'Could not fetch current clip.';

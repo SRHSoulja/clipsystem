@@ -22,8 +22,13 @@ function load_env($path) {
 }
 
 function arg($name, $default = null) {
-  $prefix = $name . '=';
+  // Check URL query params first (for browser access)
+  if (isset($_GET[$name])) {
+    return $_GET[$name];
+  }
 
+  // Check CLI arguments
+  $prefix = $name . '=';
   foreach ($_SERVER['argv'] ?? [] as $a) {
     if (strpos($a, $prefix) === 0) {
       return substr($a, strlen($prefix));
