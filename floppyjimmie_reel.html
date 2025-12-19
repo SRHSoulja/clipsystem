@@ -1502,6 +1502,7 @@
     startPclipPolling();
     console.log("[INIT] pclip polling started");
 
+    // Periodic refresh of clip list (every 10 min)
     setInterval(async () => {
       try {
         const r = await fetch(apiUrl, { cache: "no-store" });
@@ -1518,6 +1519,41 @@
         }
       } catch {}
     }, 10 * 60 * 1000);
+
+    // Poll for playlist activation (every 5 seconds when not in playlist mode)
+    setInterval(async () => {
+      // Only check when NOT already in playlist mode
+      if (playlistMode) return;
+
+      try {
+        const r = await fetch(apiUrl, { cache: "no-store" });
+        const d = await r.json();
+
+        // If API returns playlist_mode, switch to it immediately
+        if (d.playlist_mode && Array.isArray(d.clips) && d.clips.length > 0) {
+          console.log("[PLAYLIST-POLL] Playlist detected! Switching to playlist mode...");
+          playlistMode = true;
+          playlistIndex = d.playlist_index || 0;
+          playlistTotal = d.playlist_total || d.clips.length;
+          playlistName = d.playlist_name || "";
+          clips = d.clips;
+
+          // Cancel current advance timer and switch to first playlist clip
+          if (advanceTimer) {
+            clearTimeout(advanceTimer);
+            advanceTimer = null;
+          }
+
+          const next = pickNextClip();
+          if (next) {
+            console.log("[PLAYLIST-POLL] Starting playlist:", playlistName, "- first clip:", next.title);
+            switchToClip(next);
+          }
+        }
+      } catch (err) {
+        // Silent fail - don't spam console
+      }
+    }, 5000);
   }
 
   init();
