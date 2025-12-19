@@ -566,7 +566,8 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
 
       <div class="content">
         <div class="search-bar">
-          <input type="text" id="searchInput" placeholder="Search clips by title..." oninput="filterClips()">
+          <input type="text" id="searchInput" placeholder="Search by title or clipper..." oninput="filterClips()">
+          <input type="text" id="creatorFilter" placeholder="Filter by clipper..." oninput="filterClips()" style="max-width:180px;">
           <select id="gameFilter" onchange="filterClips()">
             <option value="">All Games</option>
           </select>
@@ -680,12 +681,14 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
       isLoading = true;
 
       const search = document.getElementById('searchInput').value.trim();
+      const creator = document.getElementById('creatorFilter').value.trim();
       const gameId = document.getElementById('gameFilter').value;
 
       try {
         // Build query params
         let url = `${API_BASE}/clips_api.php?action=list&login=${LOGIN}&key=${encodeURIComponent(adminKey)}&page=${page}&per_page=${perPage}`;
         if (search) url += `&q=${encodeURIComponent(search)}`;
+        if (creator) url += `&creator=${encodeURIComponent(creator)}`;
         if (gameId) url += `&game_id=${encodeURIComponent(gameId)}`;
 
         const res = await fetch(url);
@@ -765,6 +768,9 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
           <div class="meta">
             <span>${c.duration ? Math.round(c.duration) + 's' : ''}</span>
             <span>${c.view_count ? Number(c.view_count).toLocaleString() + ' views' : ''}</span>
+            <span>${c.creator_name ? '✂️ ' + escapeHtml(c.creator_name) : ''}</span>
+          </div>
+          <div class="meta" style="margin-top:4px;">
             <span>${c.game_id ? (gameNames[c.game_id] || c.game_id) : ''}</span>
           </div>
         </div>

@@ -138,49 +138,49 @@
 
     #voteHud{
       position:absolute;
-      left:50%;
+      right:24px;
       top:24px;
       z-index:11000;
       display:flex;
       flex-direction:column;
-      gap:10px;
-      align-items:center;
-      padding:14px 20px;
-      border-radius:14px;
-      background: rgba(0,0,0,0.8);
-      border: 2px solid rgba(255,255,255,0.25);
+      gap:12px;
+      align-items:flex-end;
+      padding:18px 24px;
+      border-radius:16px;
+      background: rgba(0,0,0,0.6);
+      border: 2px solid rgba(255,255,255,0.2);
       color:#fff;
-      font: 16px/1.3 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      font: 18px/1.3 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
       user-select:none;
       pointer-events:none;
-      backdrop-filter: blur(8px);
+      backdrop-filter: blur(10px);
       opacity:0;
-      transform: translateX(-50%) translateY(-6px);
+      transform: translateX(6px);
       transition: opacity 180ms linear, transform 180ms linear;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-      max-width:500px;
-      text-align:center;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+      max-width:550px;
+      text-align:right;
     }
     #voteHud.show{
       opacity:1;
-      transform: translateX(-50%) translateY(0);
+      transform: translateX(0);
     }
     #voteHud .clip-info{
       display:flex;
       flex-direction:column;
-      gap:4px;
+      gap:6px;
       width:100%;
     }
     #voteHud .seq{
       font-weight:800;
-      font-size:18px;
+      font-size:22px;
       letter-spacing:.3px;
       color:#fff;
       text-shadow: 0 1px 3px rgba(0,0,0,0.5);
     }
     #voteHud .clip-title{
       font-weight:600;
-      font-size:15px;
+      font-size:17px;
       color:#e0e0e0;
       max-width:100%;
       overflow:hidden;
@@ -188,11 +188,11 @@
       white-space:nowrap;
     }
     #voteHud .clip-meta{
-      font-size:13px;
+      font-size:15px;
       color:#a0a0a0;
       display:flex;
-      gap:10px;
-      justify-content:center;
+      gap:12px;
+      justify-content:flex-end;
       flex-wrap:wrap;
     }
     #voteHud .clip-meta span{
@@ -202,21 +202,21 @@
     }
     #voteHud .vote-section{
       display:flex;
-      gap:12px;
+      gap:14px;
       align-items:center;
-      padding-top:6px;
+      padding-top:8px;
       border-top: 1px solid rgba(255,255,255,0.15);
       width:100%;
-      justify-content:center;
+      justify-content:flex-end;
     }
     #voteHud .pill{
       display:inline-flex;
       align-items:center;
       gap:6px;
-      padding:6px 12px;
+      padding:8px 14px;
       border-radius:999px;
       font-weight:700;
-      font-size:16px;
+      font-size:18px;
     }
     #voteHud .pill.up{
       background: rgba(34,197,94,0.2);

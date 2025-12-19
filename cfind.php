@@ -35,7 +35,13 @@ $key   = (string)($_GET["key"] ?? "");
 $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
 
 if ($key !== $ADMIN_KEY) { http_response_code(403); echo "forbidden"; exit; }
-if (strlen($query) < 2) { echo "Usage: !cfind <search term>"; exit; }
+
+// If no query provided, just return the search page link
+$baseUrl = getenv('API_BASE_URL') ?: 'https://clipsystem-production.up.railway.app';
+if (strlen($query) < 2) {
+  echo "Search clips: {$baseUrl}/clip_search.php?login=" . urlencode($login);
+  exit;
+}
 
 // Split query into words for multi-word search
 $queryWords = preg_split('/\s+/', trim($query));
@@ -58,11 +64,12 @@ if (!$pdo) {
 
 if ($pdo && !empty($queryWords)) {
   try {
-    // Build WHERE clause for each word (all must match)
+    // Build WHERE clause for each word (all must match in title OR creator_name)
     $whereClauses = ["login = ?", "blocked = FALSE"];
     $params = [$login];
     foreach ($queryWords as $word) {
-      $whereClauses[] = "title ILIKE ?";
+      $whereClauses[] = "(title ILIKE ? OR creator_name ILIKE ?)";
+      $params[] = '%' . $word . '%';
       $params[] = '%' . $word . '%';
     }
     $whereSQL = implode(' AND ', $whereClauses);

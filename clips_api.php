@@ -144,14 +144,22 @@ switch ($action) {
     $whereClauses = ["login = ?", "blocked = FALSE"];
     $params = [$login];
 
-    // Multi-word search (AND logic)
+    // Multi-word search (AND logic) - searches title and creator_name
     if ($search) {
       $searchWords = preg_split('/\s+/', trim($search));
       $searchWords = array_filter($searchWords, function($w) { return strlen($w) >= 2; });
       foreach ($searchWords as $word) {
-        $whereClauses[] = "title ILIKE ?";
+        $whereClauses[] = "(title ILIKE ? OR creator_name ILIKE ?)";
+        $params[] = '%' . $word . '%';
         $params[] = '%' . $word . '%';
       }
+    }
+
+    // Creator filter
+    $creator = isset($_GET['creator']) ? trim($_GET['creator']) : '';
+    if ($creator) {
+      $whereClauses[] = "creator_name ILIKE ?";
+      $params[] = '%' . $creator . '%';
     }
 
     // Game filter
@@ -173,7 +181,7 @@ switch ($action) {
     $paginatedParams = array_merge($params, [$perPage, $offset]);
 
     $stmt = $pdo->prepare("
-      SELECT seq, clip_id, title, duration, view_count, game_id, created_at, thumbnail_url
+      SELECT seq, clip_id, title, duration, view_count, game_id, created_at, thumbnail_url, creator_name
       FROM clips
       WHERE {$whereSQL}
       ORDER BY seq DESC
