@@ -130,35 +130,22 @@ usort($matches, function($a, $b) {
   return $b['score'] - $a['score'];
 });
 
-$best = $matches[0];
 $count = count($matches);
-
-// Force play the best match
-$forcePath = $runtimeDir . "/force_play_" . $login . ".json";
-$payload = [
-  "login"    => $login,
-  "seq"      => (int)$best['seq'],
-  "clip_id"  => $best['clip_id'],
-  "title"    => $best['title'] ?? "",
-  "nonce"    => (string)(time() . "_" . bin2hex(random_bytes(4))),
-  "set_at"   => gmdate("c"),
-];
-@file_put_contents($forcePath, json_encode($payload, JSON_UNESCAPED_SLASHES), LOCK_EX);
-
-// Format response based on match count
-$title = $best['title'] ?? "(no title)";
-$seq = (int)$best['seq'];
 
 // Build search URL for multiple results
 $baseUrl = getenv('API_BASE_URL') ?: 'https://clipsystem-production.up.railway.app';
 $searchUrl = $baseUrl . '/clip_search.php?login=' . urlencode($login) . '&q=' . urlencode($query) . '&key=' . urlencode($ADMIN_KEY);
 
+// Just show results - don't auto-play. Mod can use !pclip to play.
 if ($count === 1) {
-  echo "Playing #{$seq}: {$title}";
-} elseif ($count <= 3) {
-  // Show all seq numbers
-  $seqs = array_map(function($m) { return '#' . $m['seq']; }, $matches);
-  echo "Found " . implode(', ', $seqs) . " - Playing #{$seq}: {$title}";
+  $m = $matches[0];
+  echo "Found #{$m['seq']}: " . ($m['title'] ?? '(no title)') . " - Use !pclip {$m['seq']} to play";
+} elseif ($count <= 5) {
+  // Show all seq numbers and titles
+  $results = array_map(function($m) {
+    return '#' . $m['seq'];
+  }, $matches);
+  echo "Found " . implode(', ', $results) . " - Use !pclip <#> to play";
 } else {
-  echo "Found {$count} clips - Playing #{$seq}: {$title} | See all: {$searchUrl}";
+  echo "Found {$count} clips - Use !pclip <#> to play | See all: {$searchUrl}";
 }
