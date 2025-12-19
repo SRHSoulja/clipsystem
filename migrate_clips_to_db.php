@@ -8,7 +8,16 @@
  *   php migrate_clips_to_db.php [login]
  *   Default login: floppyjimmie
  *
- * Can be run via browser: migrate_clips_to_db.php?login=floppyjimmie&key=flopjim2024
+ * Browser usage:
+ *   migrate_clips_to_db.php?login=floppyjimmie&key=YOUR_ADMIN_KEY
+ *
+ * Options:
+ *   &update=1  - Update existing clips with creator_name from JSON
+ *   &fresh=1   - Delete all existing clips for this login before importing
+ *   &offset=N  - Start from clip N (for chunked processing)
+ *   &chunk=N   - Process N clips per request (default 2000)
+ *
+ * Note: fresh=1 only affects the specified login, other logins are preserved.
  */
 
 // Buffer output so we can add auto-redirect header
@@ -50,6 +59,7 @@ $login = preg_replace('/[^a-z0-9_]/', '', $login);
 // Chunking support for web execution (Railway has ~30s timeout)
 $startOffset = isset($_GET['offset']) ? max(0, (int)$_GET['offset']) : 0;
 $chunkSize = isset($_GET['chunk']) ? max(100, min(5000, (int)$_GET['chunk'])) : 2000;
+$freshMode = isset($_GET['fresh']) && $_GET['fresh'] === '1';
 $startTime = time();
 
 echo "=== Clips Migration to PostgreSQL ===\n";
@@ -159,6 +169,15 @@ echo "Processing clips $startOffset to $endOffset of $totalClips\n\n";
 // Check existing count
 $existingCount = $pdo->query("SELECT COUNT(*) FROM clips WHERE login = " . $pdo->quote($login))->fetchColumn();
 echo "Existing clips in database for $login: $existingCount\n";
+
+// Fresh mode: delete all existing clips for this login (preserves other logins)
+if ($freshMode && $startOffset === 0 && $existingCount > 0) {
+    echo "\n🔄 FRESH MODE: Deleting $existingCount existing clips for $login...\n";
+    $deleteStmt = $pdo->prepare("DELETE FROM clips WHERE login = ?");
+    $deleteStmt->execute([$login]);
+    echo "  Deleted. Database ready for fresh import.\n";
+    $existingCount = 0;
+}
 
 if ($existingCount > 0) {
     echo "\nWARNING: Clips already exist. This will skip existing clips (upsert mode).\n";
@@ -301,8 +320,9 @@ echo "Max seq number: $maxSeq\n";
 
 // Determine if we need to continue
 $needsContinue = $isWeb && $nextOffset < $totalClips;
+$freshParam = $freshMode ? "&fresh=1" : "";
 $nextUrl = $needsContinue
-    ? "migrate_clips_to_db.php?login=$login&key=" . urlencode($_GET['key'] ?? '') . "&offset=$nextOffset&chunk=$chunkSize" . ($updateMode ? "&update=1" : "")
+    ? "migrate_clips_to_db.php?login=$login&key=" . urlencode($_GET['key'] ?? '') . "&offset=$nextOffset&chunk=$chunkSize" . ($updateMode ? "&update=1" : "") . $freshParam
     : null;
 
 if ($needsContinue) {

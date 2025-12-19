@@ -2,12 +2,10 @@
 .env
 .env.*
 
-# Keep cache directory
+# Ignore ALL cache files (they're generated at runtime)
+# Only keep .gitkeep to preserve the directory
+cache/*
 !cache/.gitkeep
-
-# Ignore runtime-generated files only
-cache/reel_*.json
-cache/now_playing_debug.txt
 
 # OS files
 .DS_Store

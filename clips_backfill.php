@@ -3,6 +3,12 @@
 // One-time backfill: builds a local clip catalog for the past N years.
 // Usage (browser):  clips_backfill.php?login=floppyjimmie&years=5
 // Usage (cli):      php clips_backfill.php login=floppyjimmie years=5
+//
+// Fresh mode (re-fetch all clips with creator_name, ignoring cache):
+//   clips_backfill.php?login=floppyjimmie&years=5&fresh=1
+//
+// Note: Without fresh=1, existing clips keep their seq numbers.
+//       New clips get seq numbers starting from max+1.
 
 // Buffer output so we can add auto-redirect header
 ob_start();
@@ -94,6 +100,7 @@ $startWindow = (int) arg('window', 1);  // Which window to start from (1-indexed
 $maxWindows = (int) arg('maxwin', 5);   // Max windows per request
 if ($maxWindows < 1) $maxWindows = 1;
 if ($maxWindows > 20) $maxWindows = 20;
+$freshMode = arg('fresh', '0') === '1'; // Fresh mode: delete cache and re-fetch everything
 $isWeb = php_sapi_name() !== 'cli';
 $startTime = time();
 
@@ -113,7 +120,23 @@ $staticIndexFile = $staticCacheDir . '/clips_index_' . $safeLogin . '.json';
 
 echo "Backfill starting for login={$login}, years={$years}\n";
 echo "Index file: {$indexFile}\n";
-echo "Cache dir writable: " . (is_writable($cacheDir) ? "yes" : "no") . "\n\n";
+echo "Cache dir writable: " . (is_writable($cacheDir) ? "yes" : "no") . "\n";
+
+// Fresh mode: delete existing cache files on first window
+if ($freshMode && $startWindow === 1) {
+  echo "🔄 FRESH MODE: Deleting existing cache to re-fetch all clips with creator_name...\n";
+  if (file_exists($indexFile)) {
+    @unlink($indexFile);
+    echo "  Deleted: $indexFile\n";
+  }
+  if (file_exists($metaFile)) {
+    @unlink($metaFile);
+    echo "  Deleted: $metaFile\n";
+  }
+  // Note: static cache is read-only on Railway, can't delete it there
+  echo "  Starting fresh - all clips will be re-fetched from Twitch API\n";
+}
+echo "\n";
 
 // App token
 [$code, $raw] = curl_post('https://id.twitch.tv/oauth2/token', [
@@ -160,25 +183,47 @@ $startAll = $now - ($years * 365 * 24 * 60 * 60);
 $seen = [];
 $clips = [];
 
-// Try writable cache first, then fall back to static cache
-$loadFrom = null;
-if (file_exists($indexFile)) {
-  $loadFrom = $indexFile;
-  echo "Loading from writable cache: $indexFile\n";
-} elseif (file_exists($staticIndexFile)) {
-  $loadFrom = $staticIndexFile;
-  echo "Loading from static cache: $staticIndexFile\n";
-}
-
-if ($loadFrom) {
-  $existing = json_decode(file_get_contents($loadFrom), true);
-  if (is_array($existing) && isset($existing['clips']) && is_array($existing['clips'])) {
-    foreach ($existing['clips'] as $c) {
-      if (!isset($c['id'])) continue;
-      $seen[$c['id']] = true;
-      $clips[] = $c;
+// In fresh mode, ONLY load from writable cache (which has fresh data from previous windows)
+// NEVER load from static cache in fresh mode - it has old data without creator_name
+if ($freshMode) {
+  if ($startWindow === 1) {
+    echo "Fresh mode: starting fresh, will fetch all clips from Twitch\n";
+  } else if (file_exists($indexFile)) {
+    // Window 2+: load from writable cache (has fresh data from window 1+)
+    echo "Fresh mode: loading from writable cache: $indexFile\n";
+    $existing = json_decode(file_get_contents($indexFile), true);
+    if (is_array($existing) && isset($existing['clips']) && is_array($existing['clips'])) {
+      foreach ($existing['clips'] as $c) {
+        if (!isset($c['id'])) continue;
+        $seen[$c['id']] = true;
+        $clips[] = $c;
+      }
+      echo "Loaded existing clips: " . count($clips) . "\n";
     }
-    echo "Loaded existing clips: " . count($clips) . "\n";
+  } else {
+    echo "Fresh mode window $startWindow: no writable cache found, starting empty\n";
+  }
+} else {
+  // Normal mode: try writable cache first, then fall back to static cache
+  $loadFrom = null;
+  if (file_exists($indexFile)) {
+    $loadFrom = $indexFile;
+    echo "Loading from writable cache: $indexFile\n";
+  } elseif (file_exists($staticIndexFile)) {
+    $loadFrom = $staticIndexFile;
+    echo "Loading from static cache: $staticIndexFile\n";
+  }
+
+  if ($loadFrom) {
+    $existing = json_decode(file_get_contents($loadFrom), true);
+    if (is_array($existing) && isset($existing['clips']) && is_array($existing['clips'])) {
+      foreach ($existing['clips'] as $c) {
+        if (!isset($c['id'])) continue;
+        $seen[$c['id']] = true;
+        $clips[] = $c;
+      }
+      echo "Loaded existing clips: " . count($clips) . "\n";
+    }
   }
 }
 
@@ -285,11 +330,34 @@ for ($w = $startWindow; $w <= $endWindow; $w++) {
     return strcmp($a['created_at'] ?? '', $b['created_at'] ?? '');
   });
 
-  // Assign seq numbers (1 = oldest, N = newest)
-  foreach ($clips as $i => &$clip) {
-    $clip['seq'] = $i + 1;
+  // Assign seq numbers - PRESERVE existing seq numbers, only assign to new clips
+  // In fresh mode: assign 1..N (full re-index)
+  // In normal mode: keep existing seq, assign new clips starting from max+1
+  if ($freshMode) {
+    // Fresh mode: re-assign all seq numbers (full rebuild)
+    foreach ($clips as $i => &$clip) {
+      $clip['seq'] = $i + 1;
+    }
+    unset($clip);
+  } else {
+    // Incremental mode: preserve existing seq, assign new ones at end
+    // Find max existing seq
+    $maxExistingSeq = 0;
+    foreach ($clips as $clip) {
+      if (isset($clip['seq']) && $clip['seq'] > $maxExistingSeq) {
+        $maxExistingSeq = $clip['seq'];
+      }
+    }
+
+    // Assign seq to clips that don't have one (new clips)
+    $nextSeq = $maxExistingSeq + 1;
+    foreach ($clips as &$clip) {
+      if (!isset($clip['seq']) || $clip['seq'] <= 0) {
+        $clip['seq'] = $nextSeq++;
+      }
+    }
+    unset($clip);
   }
-  unset($clip);
 
   $out = [
     "login" => $login,
@@ -327,7 +395,8 @@ foreach ($clips as $c) {
 
 // Determine if we need to continue and build next URL
 $needsContinue = $isWeb && $nextWindow > 0 && $nextWindow <= $totalWindows;
-$nextUrl = $needsContinue ? "clips_backfill.php?login=$login&years=$years&window=$nextWindow&maxwin=$maxWindows" : null;
+$freshParam = $freshMode ? "&fresh=1" : "";
+$nextUrl = $needsContinue ? "clips_backfill.php?login=$login&years=$years&window=$nextWindow&maxwin=$maxWindows$freshParam" : null;
 
 echo "=== Chunk Complete ===\n";
 echo "Windows processed: $windowsProcessed\n";
