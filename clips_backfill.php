@@ -88,14 +88,23 @@ $years = (int) arg('years', 5);
 if ($years < 1) $years = 1;
 if ($years > 10) $years = 10;
 
-$cacheDir = __DIR__ . '/cache';
-if (!is_dir($cacheDir)) @mkdir($cacheDir, 0755, true);
+// On Railway, /app/cache is read-only, use /tmp for writable storage
+$cacheDir = is_writable('/tmp') ? '/tmp/clipsystem_cache' : __DIR__ . '/cache';
+if (!is_dir($cacheDir)) @mkdir($cacheDir, 0777, true);
 
-$indexFile = $cacheDir . '/clips_index_' . preg_replace('/[^a-z0-9_]/', '_', $login) . '.json';
-$metaFile  = $cacheDir . '/clips_index_' . preg_replace('/[^a-z0-9_]/', '_', $login) . '.meta.json';
+// Also check the static cache dir for existing data to resume from
+$staticCacheDir = __DIR__ . '/cache';
+
+$safeLogin = preg_replace('/[^a-z0-9_]/', '_', $login);
+$indexFile = $cacheDir . '/clips_index_' . $safeLogin . '.json';
+$metaFile  = $cacheDir . '/clips_index_' . $safeLogin . '.meta.json';
+
+// Check for existing index in static cache (deployed with app) as fallback
+$staticIndexFile = $staticCacheDir . '/clips_index_' . $safeLogin . '.json';
 
 echo "Backfill starting for login={$login}, years={$years}\n";
-echo "Index file: {$indexFile}\n\n";
+echo "Index file: {$indexFile}\n";
+echo "Cache dir writable: " . (is_writable($cacheDir) ? "yes" : "no") . "\n\n";
 
 // App token
 [$code, $raw] = curl_post('https://id.twitch.tv/oauth2/token', [
@@ -142,8 +151,18 @@ $startAll = $now - ($years * 365 * 24 * 60 * 60);
 $seen = [];
 $clips = [];
 
+// Try writable cache first, then fall back to static cache
+$loadFrom = null;
 if (file_exists($indexFile)) {
-  $existing = json_decode(file_get_contents($indexFile), true);
+  $loadFrom = $indexFile;
+  echo "Loading from writable cache: $indexFile\n";
+} elseif (file_exists($staticIndexFile)) {
+  $loadFrom = $staticIndexFile;
+  echo "Loading from static cache: $staticIndexFile\n";
+}
+
+if ($loadFrom) {
+  $existing = json_decode(file_get_contents($loadFrom), true);
   if (is_array($existing) && isset($existing['clips']) && is_array($existing['clips'])) {
     foreach ($existing['clips'] as $c) {
       if (!isset($c['id'])) continue;

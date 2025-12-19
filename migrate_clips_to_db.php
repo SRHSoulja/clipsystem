@@ -108,10 +108,19 @@ try {
     exit(1);
 }
 
-// Load JSON file
-$jsonFile = __DIR__ . "/cache/clips_index_{$login}.json";
-if (!file_exists($jsonFile)) {
-    echo "ERROR: JSON file not found: $jsonFile\n";
+// Load JSON file - check /tmp first (where backfill writes on Railway), then static cache
+$tmpJsonFile = "/tmp/clipsystem_cache/clips_index_{$login}.json";
+$staticJsonFile = __DIR__ . "/cache/clips_index_{$login}.json";
+
+if (file_exists($tmpJsonFile)) {
+    $jsonFile = $tmpJsonFile;
+    echo "Using JSON from /tmp cache (fresh backfill data)\n";
+} elseif (file_exists($staticJsonFile)) {
+    $jsonFile = $staticJsonFile;
+    echo "Using JSON from static cache (deployed with app)\n";
+} else {
+    echo "ERROR: JSON file not found in /tmp or static cache\n";
+    echo "Run clips_backfill.php first to fetch clips from Twitch.\n";
     exit(1);
 }
 
