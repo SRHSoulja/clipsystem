@@ -9,6 +9,8 @@
  */
 header("Content-Type: text/html; charset=utf-8");
 header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+header("Pragma: no-cache");
+header("Expires: 0");
 
 // Load env file if exists
 $envPath = __DIR__ . '/.env';
@@ -36,7 +38,10 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>Mod Dashboard - <?php echo htmlspecialchars($login); ?></title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
