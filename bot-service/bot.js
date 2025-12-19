@@ -273,6 +273,22 @@ const commands = {
     }
   },
 
+  // !cskip - Skip the current clip (mod only)
+  async cskip(channel, tags, args) {
+    if (!isMod(tags)) {
+      return null; // Silently ignore non-mods
+    }
+
+    try {
+      const url = `${config.apiBaseUrl}/cskip.php?login=${clipChannel}&key=${config.adminKey}`;
+      const res = await fetchWithTimeout(url);
+      return await res.text();
+    } catch (err) {
+      console.error('!cskip error:', err.message);
+      return 'Could not skip clip.';
+    }
+  },
+
   // !cfind <query> - Search clips by title (mod only)
   async cfind(channel, tags, args) {
     if (!isMod(tags)) {
@@ -378,7 +394,7 @@ const commands = {
   // !chelp - Show available clip commands
   async chelp(channel, tags, args) {
     if (isMod(tags)) {
-      return 'Clip commands: !clip (current), !like/!dislike [#], !pclip <#>, !cremove <#>, !cadd <#>, !cfind <query>, !playlist <name>';
+      return 'Clip commands: !clip, !like/!dislike [#], !cskip, !pclip <#>, !cremove <#>, !cadd <#>, !cfind <query>, !playlist <name>';
     }
     return 'Clip commands: !clip (see current), !like [#] (upvote), !dislike [#] (downvote)';
   }
@@ -433,7 +449,7 @@ client.on('connected', (addr, port) => {
   console.log(`Joined channels: ${channels.join(', ')}`);
   console.log(`Clip channel: ${clipChannel}`);
   console.log(`Bot username: ${config.botUsername}`);
-  console.log('Commands active: !clip, !pclip, !cfind, !playlist, !like, !dislike, !cremove, !cadd, !chelp');
+  console.log('Commands active: !clip, !cskip, !pclip, !cfind, !playlist, !like, !dislike, !cremove, !cadd, !chelp');
 });
 
 client.on('disconnected', (reason) => {
