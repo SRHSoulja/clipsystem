@@ -62,6 +62,9 @@ const client = new tmi.Client({
 const cooldowns = new Map();
 const COOLDOWN_MS = 3000; // 3 second cooldown per user per command
 
+// Toggle for like/dislike commands (can be disabled by mods)
+let likesEnabled = true;
+
 // Message deduplication - prevent processing duplicate Twitch messages
 const recentMessages = new Map();
 const DEDUP_WINDOW_MS = 5000; // 5 second window for deduplication
@@ -200,6 +203,8 @@ const commands = {
 
   // !like [seq] - Upvote a clip (current clip if no seq provided)
   async like(channel, tags, args) {
+    if (!likesEnabled) return null; // Silently ignore when disabled
+
     let seq = parseInt(args[0]);
 
     // If no seq provided, get current playing clip
@@ -230,6 +235,8 @@ const commands = {
 
   // !dislike [seq] - Downvote a clip (current clip if no seq provided)
   async dislike(channel, tags, args) {
+    if (!likesEnabled) return null; // Silently ignore when disabled
+
     let seq = parseInt(args[0]);
 
     // If no seq provided, get current playing clip
@@ -350,12 +357,30 @@ const commands = {
   // !chelp - Show available clip commands
   async chelp(channel, tags, args) {
     if (isMod(tags)) {
-      return 'Clip commands: !clip, !like/!dislike [#], !cfind <query>, !cskip, !pclip <#>, !cremove <#>, !cadd <#>';
+      return 'Clip commands: !clip, !like/!dislike [#], !cfind <query>, !cskip, !pclip <#>, !cremove <#>, !cadd <#>, !clikeoff/!clikeon';
     }
     if (isSubOrHigher(tags)) {
       return 'Clip commands: !clip (see current), !like/!dislike [#], !cfind <query> (search clips)';
     }
     return 'Clip commands: !clip (see current), !like [#] (upvote), !dislike [#] (downvote)';
+  },
+
+  // !clikeoff - Disable like/dislike commands (mod only)
+  async clikeoff(channel, tags, args) {
+    if (!isMod(tags)) {
+      return null; // Silently ignore non-mods
+    }
+    likesEnabled = false;
+    return 'Clip voting (!like/!dislike) disabled.';
+  },
+
+  // !clikeon - Enable like/dislike commands (mod only)
+  async clikeon(channel, tags, args) {
+    if (!isMod(tags)) {
+      return null; // Silently ignore non-mods
+    }
+    likesEnabled = true;
+    return 'Clip voting (!like/!dislike) enabled.';
   }
 };
 
