@@ -42,6 +42,7 @@ if ($key !== $ADMIN_KEY) {
 
 $login = strtolower(preg_replace('/[^a-z0-9_]/', '', $_GET['login'] ?? 'floppyjimmie'));
 $format = strtolower($_GET['format'] ?? 'json');
+$showMissing = isset($_GET['missing']); // Add ?missing to show only clips without MP4
 
 $pdo = get_db_connection();
 if (!$pdo) {
@@ -101,6 +102,7 @@ $totalClips = count($clips);
 $withThumbnails = 0;
 $withMp4 = 0;
 $results = [];
+$missingMp4 = [];
 
 foreach ($clips as $clip) {
     $thumbnail = $clip['thumbnail_url'] ?? '';
@@ -113,7 +115,7 @@ foreach ($clips as $clip) {
         $withMp4++;
     }
 
-    $results[] = [
+    $clipData = [
         'seq' => (int)$clip['seq'],
         'clip_id' => $clip['clip_id'],
         'title' => $clip['title'],
@@ -125,6 +127,13 @@ foreach ($clips as $clip) {
         'mp4_url' => $mp4,
         'twitch_url' => 'https://clips.twitch.tv/' . $clip['clip_id']
     ];
+
+    $results[] = $clipData;
+
+    // Track clips missing MP4
+    if (!$mp4) {
+        $missingMp4[] = $clipData;
+    }
 }
 
 // Output based on format
@@ -174,14 +183,26 @@ switch ($format) {
         header("Content-Type: application/json; charset=utf-8");
         header("Access-Control-Allow-Origin: *");
 
-        echo json_encode([
-            'login' => $login,
-            'total_clips' => $totalClips,
-            'clips_with_thumbnails' => $withThumbnails,
-            'clips_with_mp4_links' => $withMp4,
-            'missing_thumbnails' => $totalClips - $withThumbnails,
-            'note' => 'Run populate_thumbnails.php first if many thumbnails are missing',
-            'clips' => $results
-        ], JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+        if ($showMissing) {
+            // Show only clips missing MP4
+            echo json_encode([
+                'login' => $login,
+                'total_clips' => $totalClips,
+                'clips_missing_mp4' => count($missingMp4),
+                'note' => 'These clips have no MP4 link (thumbnail missing or unexpected format)',
+                'clips' => $missingMp4
+            ], JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+        } else {
+            echo json_encode([
+                'login' => $login,
+                'total_clips' => $totalClips,
+                'clips_with_thumbnails' => $withThumbnails,
+                'clips_with_mp4_links' => $withMp4,
+                'clips_missing_mp4' => count($missingMp4),
+                'missing_thumbnails' => $totalClips - $withThumbnails,
+                'note' => 'Add ?missing to show only clips without MP4 links',
+                'clips' => $results
+            ], JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+        }
         break;
 }
