@@ -44,7 +44,8 @@ foreach ($skipPaths as $skipPath) {
         if ($data && isset($data["nonce"])) {
             $setAt = isset($data["set_at"]) ? strtotime($data["set_at"]) : 0;
             if ($setAt && (time() - $setAt) <= 5) {
-                @unlink($skipPath);
+                // Delete ALL skip files to prevent double-triggering
+                foreach ($skipPaths as $p) @unlink($p);
                 $response["skip"] = true;
                 break;
             } else {
@@ -68,7 +69,8 @@ foreach ($prevPaths as $prevPath) {
         if ($data && isset($data["nonce"])) {
             $setAt = isset($data["set_at"]) ? strtotime($data["set_at"]) : 0;
             if ($setAt && (time() - $setAt) <= 5) {
-                @unlink($prevPath);
+                // Delete ALL prev files to prevent double-triggering
+                foreach ($prevPaths as $p) @unlink($p);
                 $response["prev"] = true;
                 break;
             } else {
@@ -95,7 +97,8 @@ foreach ($shufflePaths as $shufflePath) {
         if ($data && isset($data["nonce"])) {
             $setAt = isset($data["set_at"]) ? strtotime($data["set_at"]) : 0;
             if ($setAt && (time() - $setAt) <= 30) {
-                @unlink($shufflePath);
+                // Delete ALL shuffle files to prevent double-triggering
+                foreach ($shufflePaths as $p) @unlink($p);
                 $response["shuffle"] = [
                     "nonce" => $data["nonce"]
                 ];
@@ -119,6 +122,8 @@ foreach ($forcePaths as $forcePath) {
         $raw = @file_get_contents($forcePath);
         $data = $raw ? json_decode($raw, true) : null;
         if ($data && isset($data["nonce"])) {
+            // Delete ALL force_play files to prevent double-triggering
+            foreach ($forcePaths as $p) @unlink($p);
             $response["force_play"] = $data;
             break;
         }
