@@ -222,7 +222,7 @@
 
   const login  = (qs.get("login") || "floppyjimmie").toLowerCase();
   const days   = parseInt(qs.get("days") || "0", 10);  // 0 = all time
-  const pool   = parseInt(qs.get("pool") || "2000", 10);  // Large pool, reshuffled on scene reload
+  const pool   = parseInt(qs.get("pool") || "300", 10);  // ~2 hours of clips, refreshed every 10 min
   const forceMuted = qs.get("muted") === "1";
 
   const API_BASE = "https://clipsystem-production.up.railway.app";
@@ -1017,14 +1017,20 @@
       if (first) playClip(first);
     }, 4000);
 
-    // Refresh clips periodically
+    // Refresh clips every 5 minutes for variety from full 14k+ catalog
     setInterval(async () => {
       try {
         const res = await fetch(apiUrl, { cache: "no-store" });
         const data = await res.json();
-        if (Array.isArray(data.clips) && data.clips.length) clips = data.clips;
+        if (Array.isArray(data.clips) && data.clips.length) {
+          // Only update if not in category mode
+          if (!categoryFilter) {
+            clips = data.clips;
+            debugLog(`Refreshed pool: ${clips.length} clips`);
+          }
+        }
       } catch {}
-    }, 10 * 60 * 1000);
+    }, 5 * 60 * 1000);
   }
 
   init();
