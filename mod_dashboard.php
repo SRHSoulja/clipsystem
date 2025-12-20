@@ -981,7 +981,11 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
 
     async function playClip(seq) {
       try {
-        await fetch(`${API_BASE}/pclip.php?login=${LOGIN}&key=${encodeURIComponent(adminKey)}&seq=${seq}`);
+        const url = `${API_BASE}/pclip.php?login=${LOGIN}&key=${encodeURIComponent(adminKey)}&seq=${seq}`;
+        console.log('Playing clip:', url);
+        const res = await fetch(url);
+        const text = await res.text();
+        console.log('pclip response:', res.status, text);
       } catch (err) {
         console.error('Error playing clip:', err);
       }
