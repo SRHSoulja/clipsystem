@@ -1002,8 +1002,12 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
         console.log('Playlist play response:', data);
         if (data.error) {
           alert('Error: ' + data.error);
+        } else if (data.success && data.first_clip) {
+          // Force play the first clip immediately
+          await playClip(data.first_clip.seq);
+          alert(data.message);
         } else if (data.message) {
-          alert(data.message + '\n\nPlaylist will start within a few seconds.');
+          alert(data.message);
         }
       } catch (err) {
         console.error('Error playing playlist:', err);
