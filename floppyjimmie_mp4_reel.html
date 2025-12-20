@@ -100,6 +100,84 @@
     #debugOverlay .ok { color: #4ade80; }
     #debugOverlay .err { color: #f87171; }
     #debugOverlay .warn { color: #fbbf24; }
+
+    /* Top Clips Overlay */
+    #topClipsOverlay {
+      position: absolute;
+      right: 24px;
+      bottom: 24px;
+      z-index: 12000;
+      background: rgba(0,0,0,0.85);
+      border: 2px solid rgba(255,215,0,0.6);
+      border-radius: 16px;
+      padding: 16px 20px;
+      color: #fff;
+      font: 16px/1.4 system-ui, sans-serif;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 4px 24px rgba(0,0,0,0.8);
+      min-width: 280px;
+      max-width: 400px;
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 300ms ease-out, transform 300ms ease-out;
+      pointer-events: none;
+    }
+    #topClipsOverlay.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    #topClipsOverlay .header {
+      font-size: 20px;
+      font-weight: 800;
+      color: #ffd700;
+      margin-bottom: 12px;
+      text-align: center;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+    }
+    #topClipsOverlay .clip-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    #topClipsOverlay .clip-row:last-child {
+      border-bottom: none;
+    }
+    #topClipsOverlay .rank {
+      font-size: 18px;
+      font-weight: 800;
+      color: #ffd700;
+      min-width: 28px;
+      text-align: center;
+    }
+    #topClipsOverlay .rank.gold { color: #ffd700; }
+    #topClipsOverlay .rank.silver { color: #c0c0c0; }
+    #topClipsOverlay .rank.bronze { color: #cd7f32; }
+    #topClipsOverlay .clip-info {
+      flex: 1;
+      overflow: hidden;
+    }
+    #topClipsOverlay .clip-seq {
+      font-weight: 700;
+      color: #a0a0ff;
+      margin-right: 6px;
+    }
+    #topClipsOverlay .clip-title {
+      color: #f0f0f0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    #topClipsOverlay .clip-votes {
+      display: flex;
+      gap: 8px;
+      font-weight: 700;
+      font-size: 14px;
+    }
+    #topClipsOverlay .votes-up { color: #4ade80; }
+    #topClipsOverlay .votes-down { color: #f87171; }
+    #topClipsOverlay .net-score { color: #fbbf24; font-weight: 800; }
   </style>
 </head>
 <body>
@@ -132,6 +210,11 @@
   </div>
 
   <div id="debugOverlay"></div>
+
+  <div id="topClipsOverlay">
+    <div class="header">Top Clips</div>
+    <div id="topClipsList"></div>
+  </div>
 
 <script>
 (() => {
@@ -703,6 +786,62 @@
     } catch {}
   }
 
+  // Top clips overlay
+  const topClipsOverlay = document.getElementById("topClipsOverlay");
+  const topClipsList = document.getElementById("topClipsList");
+  let topClipsTimeout = null;
+  let lastTopNonce = null;
+
+  function showTopClips(clips, count) {
+    if (!clips || !clips.length) return;
+
+    let html = '';
+    clips.forEach((clip, i) => {
+      const rankClass = i === 0 ? 'gold' : (i === 1 ? 'silver' : (i === 2 ? 'bronze' : ''));
+      const rankEmoji = i === 0 ? '🥇' : (i === 1 ? '🥈' : (i === 2 ? '🥉' : `#${i + 1}`));
+      const title = clip.title || '(untitled)';
+      const shortTitle = title.length > 35 ? title.substring(0, 35) + '...' : title;
+
+      html += `
+        <div class="clip-row">
+          <span class="rank ${rankClass}">${rankEmoji}</span>
+          <div class="clip-info">
+            <span class="clip-seq">#${clip.seq}</span>
+            <span class="clip-title">${shortTitle}</span>
+          </div>
+          <div class="clip-votes">
+            <span class="net-score">+${clip.net_score}</span>
+            <span class="votes-up">👍${clip.up_votes}</span>
+            <span class="votes-down">👎${clip.down_votes}</span>
+          </div>
+        </div>
+      `;
+    });
+
+    topClipsList.innerHTML = html;
+    topClipsOverlay.querySelector('.header').textContent = `Top ${count} Clips`;
+    topClipsOverlay.classList.add('show');
+
+    // Auto-hide after 15 seconds
+    if (topClipsTimeout) clearTimeout(topClipsTimeout);
+    topClipsTimeout = setTimeout(() => {
+      topClipsOverlay.classList.remove('show');
+    }, 15000);
+
+    debugLog(`Showing top ${clips.length} clips`, "ok");
+  }
+
+  async function pollTopClips() {
+    try {
+      const res = await fetch(`${API_BASE}/ctop_check.php?login=${encodeURIComponent(login)}`, { cache: "no-store" });
+      const data = await res.json();
+      if (data?.active && data.nonce !== lastTopNonce) {
+        lastTopNonce = data.nonce;
+        showTopClips(data.clips, data.count);
+      }
+    } catch {}
+  }
+
   // Category filter polling
   let originalClips = null; // Store original clips when entering category mode
 
@@ -801,6 +940,7 @@
     setInterval(pollForcePlay, 700);
     setInterval(pollSkip, 1000);
     setInterval(pollPrev, 1000); // Poll for !cprev
+    setInterval(pollTopClips, 2000); // Poll for !ctop
     setInterval(pollCategory, 2000); // Poll category every 2s
 
     // Delay first clip to let page fully initialize and network stabilize

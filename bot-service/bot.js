@@ -387,10 +387,27 @@ const commands = {
     }
   },
 
+  // !ctop [count] - Show top voted clips overlay (mod only)
+  async ctop(channel, tags, args) {
+    if (!isMod(tags)) {
+      return null; // Silently ignore non-mods
+    }
+
+    const count = parseInt(args[0]) || 5;
+    try {
+      const url = `${config.apiBaseUrl}/ctop.php?login=${clipChannel}&key=${config.adminKey}&count=${count}`;
+      const res = await fetchWithTimeout(url);
+      return await res.text();
+    } catch (err) {
+      console.error('!ctop error:', err.message);
+      return 'Could not show top clips.';
+    }
+  },
+
   // !chelp - Show available clip commands
   async chelp(channel, tags, args) {
     if (isMod(tags)) {
-      return 'Clip commands: !clip, !like/!dislike [#], !cfind <query>, !cskip, !cprev, !ccat <game>, !pclip <#>, !cremove <#>, !cadd <#>';
+      return 'Clip commands: !clip, !like/!dislike [#], !cfind <query>, !cskip, !cprev, !ctop [#], !ccat <game>, !pclip <#>, !cremove <#>, !cadd <#>';
     }
     if (isSubOrHigher(tags)) {
       return 'Clip commands: !clip (see current), !like/!dislike [#], !cfind <query> (search clips)';
