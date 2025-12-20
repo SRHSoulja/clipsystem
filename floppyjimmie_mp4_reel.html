@@ -562,14 +562,14 @@
     };
 
     // Buffer requirements:
-    // - First clip (scene init): 15s max buffer (70% of clip)
+    // - First clip (scene init): 12s max buffer (60% of clip)
     // - Command-triggered (!pclip, !cskip): 5s buffer
     // - Normal progression: 2s buffer
     const clipDur = c.duration || 30;
     let requiredBuffer = 2;
     if (isFirstClip) {
-      // For first clip, buffer 15s max (or 70% for short clips)
-      requiredBuffer = Math.min(clipDur * 0.7, 15);
+      // For first clip, buffer 12s max (or 60% for short clips)
+      requiredBuffer = Math.min(clipDur * 0.6, 12);
     } else if (isCommandTriggered) {
       requiredBuffer = 5;
     }
@@ -607,8 +607,8 @@
             setTimeout(() => {
               const finalBuffer = player.buffered.length > 0 ? player.buffered.end(0) : 0;
               debugLog(`Final buffer: ${finalBuffer.toFixed(1)}s`);
-              // Re-verify buffer is still sufficient before playing (need at least 10s)
-              const minBufferToPlay = Math.min(10, requiredBuffer);
+              // Re-verify buffer is still sufficient before playing (need at least 8s)
+              const minBufferToPlay = Math.min(8, requiredBuffer);
               if (finalBuffer >= minBufferToPlay) {
                 startPlayback();
               } else {
@@ -635,7 +635,8 @@
 
     bufferCheckInterval = setInterval(checkBuffer, 200);
 
-    // Cleanup on timeout
+    // Cleanup on timeout - give first clip more time (25s), others 15s
+    const loadTimeoutMs = isFirstClip ? 25000 : 15000;
     loadTimeout = setTimeout(() => {
       if (hasStarted) return;
       clearInterval(bufferCheckInterval);
@@ -644,7 +645,7 @@
       player.src = "";
       isSwitching = false;
       playNext();
-    }, 15000);
+    }, loadTimeoutMs);
 
     // Reset stall timer on progress
     player.ontimeupdate = () => {
