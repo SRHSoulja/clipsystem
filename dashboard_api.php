@@ -88,9 +88,13 @@ try {
             last_refresh TIMESTAMP
         )
     ");
-    // Add columns if they don't exist (for existing tables)
+    // Add ALL columns if they don't exist (for existing tables)
+    $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS hud_position VARCHAR(10) DEFAULT 'tr'");
+    $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS top_position VARCHAR(10) DEFAULT 'br'");
     $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS blocked_words TEXT DEFAULT '[]'");
     $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS blocked_clippers TEXT DEFAULT '[]'");
+    $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS voting_enabled BOOLEAN DEFAULT TRUE");
+    $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS last_refresh TIMESTAMP");
 } catch (PDOException $e) {
     // Ignore - table might already be correct
 }
