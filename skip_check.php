@@ -30,23 +30,16 @@ if (!$pdo) {
 }
 
 try {
-  // Check for recent skip request (within last 5 seconds)
+  // Atomic: DELETE and return in one query to avoid race conditions
   $stmt = $pdo->prepare("
-    SELECT requested_at FROM skip_requests
+    DELETE FROM skip_requests
     WHERE login = ? AND requested_at > NOW() - INTERVAL '5 seconds'
+    RETURNING requested_at
   ");
   $stmt->execute([$login]);
   $row = $stmt->fetch();
 
-  if ($row) {
-    // Clear the request so it's not picked up again
-    $stmt = $pdo->prepare("DELETE FROM skip_requests WHERE login = ?");
-    $stmt->execute([$login]);
-
-    echo json_encode(["skip" => true]);
-  } else {
-    echo json_encode(["skip" => false]);
-  }
+  echo json_encode(["skip" => $row ? true : false]);
 } catch (PDOException $e) {
   error_log("skip_check error: " . $e->getMessage());
   echo json_encode(["skip" => false]);

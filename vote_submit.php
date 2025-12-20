@@ -150,18 +150,23 @@ if ($pdo) {
       // Different direction - change the vote
       $pdo->beginTransaction();
 
-      // Decrement old vote, increment new vote
-      $oldColumn = ($oldDir === "up") ? "up_votes" : "down_votes";
-      $newColumn = ($dir === "up") ? "up_votes" : "down_votes";
-
+      // Use CASE statements to avoid dynamic column names (SQL injection safe)
       $stmt = $pdo->prepare("
         UPDATE votes SET
-          {$oldColumn} = GREATEST(0, {$oldColumn} - 1),
-          {$newColumn} = {$newColumn} + 1,
+          up_votes = CASE
+            WHEN ? = 'up' THEN GREATEST(0, up_votes - 1)
+            WHEN ? = 'up' THEN up_votes + 1
+            ELSE up_votes
+          END,
+          down_votes = CASE
+            WHEN ? = 'down' THEN GREATEST(0, down_votes - 1)
+            WHEN ? = 'down' THEN down_votes + 1
+            ELSE down_votes
+          END,
           updated_at = CURRENT_TIMESTAMP
         WHERE login = ? AND clip_id = ?
       ");
-      $stmt->execute([$login, $clipId]);
+      $stmt->execute([$oldDir, $dir, $oldDir, $dir, $login, $clipId]);
 
       // Update ledger with new vote direction
       $stmt = $pdo->prepare("UPDATE vote_ledger SET vote_dir = ?, voted_at = CURRENT_TIMESTAMP WHERE id = ?");
@@ -183,16 +188,16 @@ if ($pdo) {
     // Record the vote
     $pdo->beginTransaction();
 
-    // Insert or update votes aggregate
-    $column = ($dir === "up") ? "up_votes" : "down_votes";
+    // Insert or update votes aggregate (use CASE to avoid dynamic column names)
     $stmt = $pdo->prepare("
-      INSERT INTO votes (login, clip_id, seq, title, {$column}, updated_at)
-      VALUES (?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
+      INSERT INTO votes (login, clip_id, seq, title, up_votes, down_votes, updated_at)
+      VALUES (?, ?, ?, ?, CASE WHEN ? = 'up' THEN 1 ELSE 0 END, CASE WHEN ? = 'down' THEN 1 ELSE 0 END, CURRENT_TIMESTAMP)
       ON CONFLICT (login, clip_id) DO UPDATE SET
-        {$column} = votes.{$column} + 1,
+        up_votes = CASE WHEN ? = 'up' THEN votes.up_votes + 1 ELSE votes.up_votes END,
+        down_votes = CASE WHEN ? = 'down' THEN votes.down_votes + 1 ELSE votes.down_votes END,
         updated_at = CURRENT_TIMESTAMP
     ");
-    $stmt->execute([$login, $clipId, $seq, $clipTitle]);
+    $stmt->execute([$login, $clipId, $seq, $clipTitle, $dir, $dir, $dir, $dir]);
 
     // Record in ledger to prevent duplicate votes
     $stmt = $pdo->prepare("INSERT INTO vote_ledger (login, clip_id, username, vote_dir) VALUES (?, ?, ?, ?)");

@@ -363,6 +363,16 @@
     } catch {}
   }
 
+  // Report clip play to server for rotation tracking
+  async function reportClipPlayed(c) {
+    if (!c?.id) return;
+    try {
+      await fetch(`${API_BASE}/clip_played.php?login=${encodeURIComponent(login)}&clip_id=${encodeURIComponent(c.id)}`, {
+        cache: "no-store"
+      });
+    } catch {}
+  }
+
   // Play clip with robust timeout handling
   let loadTimeout = null;
   let stallTimeout = null;
@@ -443,6 +453,7 @@
         updateHud(c);
         markPlayed(c);
         setNowPlaying(c);
+        reportClipPlayed(c); // Report to server for rotation tracking
         scheduleNext(c.duration || 30);
         isSwitching = false;
         isFirstClip = false;
@@ -458,14 +469,16 @@
     };
 
     // Buffer requirements:
-    // - First clip (scene init): 10s buffer for smooth start
-    // - Command-triggered (!pclip, !cskip): 2s buffer
-    // - Normal progression: 1s buffer (already playing, just need next ready)
-    let requiredBuffer = 1;
+    // - First clip (scene init): buffer entire clip or 20s minimum
+    // - Command-triggered (!pclip, !cskip): 5s buffer
+    // - Normal progression: 2s buffer
+    const clipDur = c.duration || 30;
+    let requiredBuffer = 2;
     if (isFirstClip) {
-      requiredBuffer = 10;
+      // For first clip, buffer the whole thing if short, or at least 20s
+      requiredBuffer = Math.min(clipDur - 1, 20);
     } else if (isCommandTriggered) {
-      requiredBuffer = 2;
+      requiredBuffer = 5;
     }
     debugLog(`Waiting for ${requiredBuffer}s buffer (first=${isFirstClip}, cmd=${isCommandTriggered})...`);
     let hasStarted = false;
@@ -478,16 +491,32 @@
       if (player.buffered.length > 0) {
         const bufferedEnd = player.buffered.end(0);
         const clipDuration = c.duration || player.duration || 30;
+        // readyState: 0=nothing, 1=metadata, 2=current, 3=future, 4=enough
+        const readyState = player.readyState;
         // Start if we have enough buffer OR if we've buffered the entire clip
+        // AND the browser says it has enough data to play (readyState >= 3)
         const hasEnoughBuffer = bufferedEnd >= requiredBuffer;
         const hasFullClip = bufferedEnd >= (clipDuration - 0.5);
-        if (hasEnoughBuffer || hasFullClip) {
+        const browserReady = readyState >= 3; // HAVE_FUTURE_DATA or HAVE_ENOUGH_DATA
+
+        if ((hasEnoughBuffer || hasFullClip) && browserReady) {
           hasStarted = true;
           clearInterval(bufferCheckInterval);
-          debugLog(`Buffered: ${bufferedEnd.toFixed(1)}s (needed ${requiredBuffer}s, clip=${clipDuration.toFixed(0)}s)`, "ok");
-          startPlayback();
+          debugLog(`Buffered: ${bufferedEnd.toFixed(1)}s (needed ${requiredBuffer}s, ready=${readyState})`, "ok");
+          // On first clip, wait extra time and verify buffer is stable
+          if (isFirstClip) {
+            debugLog("Stabilizing...");
+            setTimeout(() => {
+              // Check buffer again before starting
+              const finalBuffer = player.buffered.length > 0 ? player.buffered.end(0) : 0;
+              debugLog(`Final buffer: ${finalBuffer.toFixed(1)}s`);
+              startPlayback();
+            }, 2000);
+          } else {
+            startPlayback();
+          }
         } else {
-          debugLog(`Buffered: ${bufferedEnd.toFixed(1)}s / ${requiredBuffer}s`);
+          debugLog(`Buffered: ${bufferedEnd.toFixed(1)}s / ${requiredBuffer}s (ready=${readyState})`);
         }
       }
     };

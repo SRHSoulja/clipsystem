@@ -261,6 +261,28 @@ const commands = {
     }
   },
 
+  // !ccat <game> - Filter clips by category/game (mod only)
+  // Use !ccat off to return to all games
+  async ccat(channel, tags, args) {
+    if (!isMod(tags)) {
+      return null; // Silently ignore non-mods
+    }
+
+    const category = args.join(' ').trim();
+    if (!category) {
+      return 'Usage: !ccat <game> to filter, !ccat off to exit';
+    }
+
+    try {
+      const url = `${config.apiBaseUrl}/ccat.php?login=${clipChannel}&key=${config.adminKey}&category=${encodeURIComponent(category)}`;
+      const res = await fetchWithTimeout(url);
+      return await res.text();
+    } catch (err) {
+      console.error('!ccat error:', err.message);
+      return 'Could not set category.';
+    }
+  },
+
   // !clips - Alias for !clip
   async clips(channel, tags, args) {
     return commands.clip(channel, tags, args);
@@ -269,7 +291,7 @@ const commands = {
   // !chelp - Show available clip commands
   async chelp(channel, tags, args) {
     if (isMod(tags)) {
-      return 'Clip commands: !clip, !cfind, !like/!dislike [#], !pclip <#>, !cskip, !cremove <#>, !cadd <#>';
+      return 'Clip commands: !clip, !cfind, !like/!dislike [#], !pclip <#>, !cskip, !ccat <game>, !cremove <#>, !cadd <#>';
     }
     return 'Clip commands: !clip (current), !cfind (browse), !like [#] (upvote), !dislike [#] (downvote)';
   }
@@ -313,7 +335,7 @@ client.on('connected', (addr, port) => {
   console.log(`Attempting to join channels: ${channels.join(', ')}`);
   console.log(`Clip channel: ${clipChannel}`);
   console.log(`Bot username: ${config.botUsername}`);
-  console.log('Commands active: !clip, !cfind, !like, !dislike, !pclip, !cskip, !cremove, !cadd, !chelp');
+  console.log('Commands active: !clip, !cfind, !like, !dislike, !pclip, !cskip, !ccat, !cremove, !cadd, !chelp');
 });
 
 client.on('join', (channel, username, self) => {

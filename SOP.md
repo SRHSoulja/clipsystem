@@ -179,3 +179,125 @@ seq_import.php?login=floppyjimmie&key=YOUR_ADMIN_KEY
 [Update Metadata]
   backfill?fresh=1 → migrate?update=1 → Metadata updated!
 ```
+
+---
+
+## Bot Commands Reference
+
+### All Users
+| Command | Description |
+|---------|-------------|
+| `!clip` | Show currently playing clip with link |
+| `!clips` | Alias for !clip |
+| `!cfind` | Get link to clip search page |
+| `!like [#]` | Upvote current clip or specific clip# |
+| `!dislike [#]` | Downvote current clip or specific clip# |
+| `!chelp` | Show available commands |
+
+### Mod-Only Commands
+| Command | Description |
+|---------|-------------|
+| `!pclip <#>` | Force play a specific clip by seq number |
+| `!cskip` | Skip the current clip |
+| `!ccat <game>` | Filter clips to specific game/category |
+| `!ccat off` | Return to all games (exit category filter) |
+| `!cremove <#>` | Remove clip from rotation |
+| `!cadd <#>` | Restore a removed clip |
+
+### Category Filter (!ccat)
+- Works with fuzzy matching: `!ccat elden` matches "Elden Ring"
+- Exit keywords: `off`, `clear`, `all`, `exit`, `reset`, `none`
+- Shows available games if no match found
+
+---
+
+## Player Features
+
+### Reel Player (floppyjimmie_mp4_reel.html)
+
+**URL Parameters:**
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `login` | floppyjimmie | Twitch username for clips |
+| `days` | 180 | Only clips from last N days |
+| `pool` | 400 | Number of clips in rotation |
+| `rotate` | 0 | Enable smart rotation (1=on) |
+| `hud` | 1 | Show vote HUD (0=off) |
+| `debug` | 0 | Show debug overlay (1=on) |
+| `muted` | 0 | Force muted playback (1=on) |
+
+**Buffering Behavior:**
+- First clip (scene init): Buffer 20s or full clip
+- Command-triggered (!pclip, !cskip): 5s buffer
+- Normal progression: 2s buffer
+
+### Smart Rotation (rotate=1)
+When enabled, the pool of 400 clips rotates through all 14,000+ clips:
+- 70% fresh/never-played clips
+- 20% least-recently-played clips
+- 10% top-voted favorites
+
+Requires `clip_played.php` tracking to be active.
+
+---
+
+## API Endpoints Reference
+
+### Player APIs
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `twitch_reel_api.php` | GET | Get clip pool for player |
+| `now_playing.php` | POST | Report currently playing clip |
+| `now_playing_get.php` | GET | Get current clip (for !clip command) |
+| `clip_played.php` | GET | Report clip was played (for rotation) |
+| `force_play_get.php` | GET | Check for force play command |
+| `force_play_clear.php` | GET | Clear force play after playing |
+| `skip_check.php` | GET | Check for skip command |
+| `category_get.php` | GET | Get active category filter |
+
+### Command APIs (require admin key)
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `pclip.php` | GET | Set force play by seq |
+| `cskip.php` | GET | Trigger skip |
+| `ccat.php` | GET | Set/clear category filter |
+| `cremove.php` | GET | Remove clip from pool |
+| `cadd.php` | GET | Restore removed clip |
+
+### Voting APIs
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `vote_submit.php` | GET | Submit vote |
+| `vote_status.php` | GET | Get current vote counts |
+| `votes_export.php` | GET | Export all vote data |
+
+---
+
+## Database Tables
+
+| Table | Purpose |
+|-------|---------|
+| `clips` | All clips with metadata, seq numbers, blocked status |
+| `votes` | Aggregate vote counts per clip |
+| `vote_ledger` | Individual votes (prevents duplicates) |
+| `blocklist` | Removed clips |
+| `clip_plays` | Play history for smart rotation |
+| `playlist_active` | Currently playing playlist |
+| `playlists` | Saved playlists |
+| `playlist_clips` | Clips in playlists |
+| `games_cache` | Cached game names from Twitch |
+
+---
+
+## Environment Variables (Railway)
+
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| `DATABASE_URL` | Yes | PostgreSQL connection string |
+| `ADMIN_KEY` | Yes | Secret key for mod commands |
+| `TWITCH_BOT_USERNAME` | For bot | Bot's Twitch username |
+| `TWITCH_OAUTH_TOKEN` | For bot | Bot OAuth token |
+| `TWITCH_CHANNEL` | For bot | Channel to join |
+| `CLIP_CHANNEL` | For bot | Channel whose clips to play |
+| `TWITCH_CLIENT_ID` | For games | Twitch API client ID |
+| `TWITCH_CLIENT_SECRET` | For games | Twitch API secret |
