@@ -668,13 +668,43 @@
       resetStallTimer();
     };
 
-    // Handle stall/waiting events
+    // Handle stall/waiting events - try to recover from freezes
+    let waitingCount = 0;
+    let lastWaitingTime = 0;
+
     player.onstalled = () => {
       debugLog("Video stalling...", "warn");
     };
 
     player.onwaiting = () => {
-      debugLog("Video buffering...", "warn");
+      if (!playbackStarted) return; // Don't count pre-playback waiting
+
+      waitingCount++;
+      const now = Date.now();
+      debugLog(`Video buffering... (count=${waitingCount})`, "warn");
+
+      // If we've been waiting multiple times in quick succession, try to recover
+      if (waitingCount >= 3 && (now - lastWaitingTime) < 5000) {
+        debugLog("Multiple stalls detected, attempting recovery...", "warn");
+        waitingCount = 0;
+
+        // Try to nudge playback by seeking slightly forward
+        const currentTime = player.currentTime;
+        const buffered = player.buffered.length > 0 ? player.buffered.end(0) : 0;
+
+        if (buffered > currentTime + 0.5) {
+          // We have buffer ahead, try seeking to it
+          player.currentTime = currentTime + 0.1;
+          player.play().catch(() => {});
+          debugLog(`Seeked to ${(currentTime + 0.1).toFixed(1)}s`, "warn");
+        }
+      }
+      lastWaitingTime = now;
+    };
+
+    // Reset waiting count when video is playing smoothly
+    player.onplaying = () => {
+      waitingCount = 0;
     };
 
     player.onerror = () => {
