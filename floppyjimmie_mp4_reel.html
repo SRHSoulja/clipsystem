@@ -1059,11 +1059,24 @@
       }
     }, 2000);
 
-    // Delay first clip briefly to let page initialize
-    debugLog("Waiting 2s for page to stabilize...");
+    // Preload first clip's MP4 URL while page initializes
+    debugLog("Preloading first clip...");
+    const first = pickNextClip();
+    if (first) {
+      // Start fetching MP4 URL immediately (non-blocking)
+      getMp4Url(first.id).then(mp4Url => {
+        if (mp4Url) {
+          preloadedClip = first;
+          preloadedMp4Url = mp4Url;
+          debugLog("First clip preloaded", "ok");
+        }
+      }).catch(() => {});
+    }
+
+    // Delay first clip briefly to let preload complete
+    debugLog("Waiting 2s for preload...");
     setTimeout(() => {
       debugLog("Starting first clip...");
-      const first = pickNextClip();
       if (first) playClip(first);
     }, 2000);
 
