@@ -323,8 +323,7 @@
   let categoryFilter = null; // { game_id, game_name, clip_ids: Set }
   let lastCategoryNonce = null;
 
-  // HUD
-  const hudEnabled = qs.get("hud") !== "0";
+  // HUD poll interval (hudEnabled already declared above for position polling)
   const hudPollMs = parseInt(qs.get("hudpoll") || "900", 10);
 
   function formatDuration(s) {

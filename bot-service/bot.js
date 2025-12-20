@@ -360,6 +360,23 @@ const commands = {
     }
   },
 
+  // !cprev - Go back to the previous clip (mod only)
+  async cprev(channel, tags, args) {
+    if (!isMod(tags)) {
+      return null; // Silently ignore non-mods
+    }
+
+    const login = getClipChannel(channel);
+    try {
+      const url = `${config.apiBaseUrl}/cprev.php?login=${login}&key=${config.adminKey}`;
+      const res = await fetchWithTimeout(url);
+      return await res.text();
+    } catch (err) {
+      console.error('!cprev error:', err.message);
+      return 'Could not go to previous clip.';
+    }
+  },
+
   // !ccat <game> - Filter clips by category/game (mod only)
   // Use !ccat off to return to all games
   async ccat(channel, tags, args) {
@@ -405,7 +422,7 @@ const commands = {
   // !chelp - Show available clip commands
   async chelp(channel, tags, args) {
     if (isMod(tags)) {
-      return 'Mod: !pclip <#>, !cskip, !ccat <game>, !ctop [#], !chud <pos>, !cremove/!cadd <#> | All: !clip, !cfind, !like/!dislike [#]';
+      return 'Mod: !pclip <#>, !cskip, !cprev, !ccat <game>, !ctop [#], !chud <pos>, !cremove/!cadd <#> | All: !clip, !cfind, !like/!dislike [#]';
     }
     return 'Clip commands: !clip (current), !cfind (browse), !like [#] (upvote), !dislike [#] (downvote)';
   },
@@ -553,7 +570,7 @@ client.on('connected', (addr, port) => {
   console.log(`Joining channels: ${channels.join(', ')}`);
   console.log(`Multi-channel mode: commands use clips from the channel they're typed in`);
   console.log(`Bot username: ${config.botUsername}`);
-  console.log('Commands: !clip, !cfind, !like, !dislike, !pclip, !cskip, !ccat, !cremove, !cadd, !cswitch, !clikeon, !clikeoff, !chelp');
+  console.log('Commands: !clip, !cfind, !like, !dislike, !pclip, !cskip, !cprev, !ccat, !ctop, !chud, !cremove, !cadd, !cswitch, !clikeon, !clikeoff, !chelp');
 });
 
 client.on('join', (channel, username, self) => {

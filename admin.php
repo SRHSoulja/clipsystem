@@ -42,8 +42,7 @@ $messageType = '';
 $playerUrl = '';
 
 if ($successLogin && $authenticated) {
-  $baseUrl = getenv('API_BASE_URL') ?: 'https://clipsystem-production.up.railway.app';
-  $playerUrl = $baseUrl . "/clipplayer_mp4_reel.html?login=" . urlencode($successLogin);
+  $playerUrl = "https://gmgnrepeat.com/flop/clipplayer_mp4_reel.html?login=" . urlencode($successLogin);
   $message = "Successfully added {$successLogin} with {$successClips} clips!";
   $messageType = 'success';
 }

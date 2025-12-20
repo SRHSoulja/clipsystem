@@ -156,6 +156,12 @@ header("Content-Type: text/html; charset=utf-8");
     </div>
 
     <div class="command">
+      <span class="command-name">!cprev</span>
+      <span class="mod-only">MOD</span>
+      <div class="command-desc">Go back to the previously played clip.</div>
+    </div>
+
+    <div class="command">
       <span class="command-name">!ccat &lt;game&gt;</span>
       <span class="mod-only">MOD</span>
       <div class="command-desc">Filter clips to only show a specific game/category.</div>
