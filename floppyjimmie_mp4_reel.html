@@ -523,13 +523,22 @@
 
     // Use preloaded URL if available for this clip
     let mp4Url = null;
+    let hasPreloadedBuffer = false;
     if (preloadedClip && preloadedClip.id === c.id && preloadedMp4Url) {
       mp4Url = preloadedMp4Url;
-      debugLog("Using preloaded URL", "ok");
+      // Check if preload video has buffer we can use
+      if (preloadVideo && preloadVideo.buffered.length > 0) {
+        hasPreloadedBuffer = true;
+        const buffered = preloadVideo.buffered.end(0);
+        debugLog(`Using preloaded buffer (${buffered.toFixed(1)}s)`, "ok");
+      } else {
+        debugLog("Using preloaded URL", "ok");
+      }
       preloadedClip = null;
       preloadedMp4Url = null;
     } else {
       mp4Url = await getMp4Url(c.id);
+      cleanupPreloadVideo(); // Clean up any stale preload
     }
 
     if (!mp4Url) {
@@ -604,17 +613,26 @@
     };
 
     // Buffer requirements - keep it simple
-    // - First clip: 8s buffer (enough to start smoothly)
+    // - Preloaded clip: 2s (browser cache should make this fast)
+    // - First clip (not preloaded): 8s buffer
     // - Command-triggered: 4s buffer
     // - Normal progression: 2s buffer
     const clipDur = c.duration || 30;
     let requiredBuffer = 2;
-    if (isFirstClip) {
+    if (hasPreloadedBuffer) {
+      requiredBuffer = 2; // Preloaded - browser cache will help, minimal wait
+    } else if (isFirstClip) {
       requiredBuffer = 8;
     } else if (isCommandTriggered) {
       requiredBuffer = 4;
     }
-    debugLog(`Waiting for ${requiredBuffer}s buffer (first=${isFirstClip}, cmd=${isCommandTriggered})...`);
+    debugLog(`Waiting for ${requiredBuffer}s buffer (first=${isFirstClip}, cmd=${isCommandTriggered}, preloaded=${hasPreloadedBuffer})...`);
+
+    // Cleanup preload video after setting main player src (browser should cache the data)
+    if (hasPreloadedBuffer) {
+      // Small delay to let browser register the cache
+      setTimeout(() => cleanupPreloadVideo(), 500);
+    }
     let hasStarted = false;
 
     // Clear any existing buffer check
@@ -639,8 +657,8 @@
           hasStarted = true;
           clearInterval(bufferCheckInterval);
           debugLog(`Buffered: ${bufferedEnd.toFixed(1)}s (needed ${requiredBuffer}s, ready=${readyState})`, "ok");
-          // On first clip, wait 1s for network to stabilize
-          if (isFirstClip) {
+          // On first clip without preload, wait 1s for network to stabilize
+          if (isFirstClip && !hasPreloadedBuffer) {
             debugLog("Stabilizing (1s)...");
             setTimeout(() => {
               const finalBuffer = player.buffered.length > 0 ? player.buffered.end(0) : 0;
@@ -826,9 +844,19 @@
   // Category filter state
   let originalClips = null; // Store original clips when entering category mode
 
-  // Preloading - fetch next clip's MP4 URL in advance
+  // Preloading - fetch next clip's MP4 URL AND pre-buffer video data
   let preloadedClip = null;
   let preloadedMp4Url = null;
+  let preloadVideo = null; // Hidden video element for actual buffering
+
+  function cleanupPreloadVideo() {
+    if (preloadVideo) {
+      preloadVideo.pause();
+      preloadVideo.src = '';
+      preloadVideo.load();
+      preloadVideo = null;
+    }
+  }
 
   async function preloadNextClip() {
     const next = pickNextClip();
@@ -839,7 +867,35 @@
       if (mp4Url) {
         preloadedClip = next;
         preloadedMp4Url = mp4Url;
-        debugLog(`Preloaded: ${next.id.substring(0,15)}...`);
+
+        // Actually pre-buffer the video using a hidden video element
+        cleanupPreloadVideo();
+        preloadVideo = document.createElement('video');
+        preloadVideo.preload = 'auto';
+        preloadVideo.muted = true;
+        preloadVideo.src = mp4Url;
+        preloadVideo.load(); // Start buffering
+
+        debugLog(`Preloading: ${next.id.substring(0,15)}...`);
+
+        // Wait for some buffer before declaring ready
+        await new Promise((resolve) => {
+          const checkBuffer = () => {
+            if (preloadVideo && preloadVideo.buffered.length > 0) {
+              const buffered = preloadVideo.buffered.end(0);
+              if (buffered >= 4) { // At least 4 seconds buffered
+                debugLog(`Preloaded ${buffered.toFixed(1)}s`, "ok");
+                resolve();
+                return;
+              }
+            }
+            // Timeout after 5 seconds regardless
+            setTimeout(resolve, 100);
+          };
+          preloadVideo.addEventListener('progress', checkBuffer);
+          preloadVideo.addEventListener('canplay', () => resolve());
+          setTimeout(resolve, 5000); // Max 5s wait
+        });
       }
     } catch {}
   }
@@ -1059,7 +1115,7 @@
       }
     }, 2000);
 
-    // Preload and start first clip - await the MP4 URL before playing
+    // Preload and start first clip - pre-buffer video data before playing
     debugLog("Preloading first clip...");
     const first = pickNextClip();
     if (first) {
@@ -1068,10 +1124,48 @@
         if (mp4Url) {
           preloadedClip = first;
           preloadedMp4Url = mp4Url;
+
+          // Pre-buffer the first clip's video data
+          cleanupPreloadVideo();
+          preloadVideo = document.createElement('video');
+          preloadVideo.preload = 'auto';
+          preloadVideo.muted = true;
+          preloadVideo.src = mp4Url;
+          preloadVideo.load();
+
+          debugLog("Buffering first clip...");
+
+          // Wait for at least 8 seconds buffered (or timeout)
+          await new Promise((resolve) => {
+            const checkBuffer = () => {
+              if (preloadVideo && preloadVideo.buffered.length > 0) {
+                const buffered = preloadVideo.buffered.end(0);
+                debugLog(`First clip buffered: ${buffered.toFixed(1)}s`);
+                if (buffered >= 8) {
+                  resolve();
+                  return;
+                }
+              }
+            };
+            preloadVideo.addEventListener('progress', checkBuffer);
+            preloadVideo.addEventListener('canplaythrough', () => resolve());
+            // Check periodically
+            const interval = setInterval(() => {
+              if (preloadVideo && preloadVideo.buffered.length > 0) {
+                const buffered = preloadVideo.buffered.end(0);
+                if (buffered >= 8) {
+                  clearInterval(interval);
+                  resolve();
+                }
+              }
+            }, 200);
+            setTimeout(() => { clearInterval(interval); resolve(); }, 10000); // Max 10s wait
+          });
+
           debugLog("First clip ready", "ok");
         }
       } catch {}
-      // Play immediately - URL is already fetched
+      // Play - video data is pre-buffered
       debugLog("Starting first clip...");
       playClip(first);
     }
