@@ -176,35 +176,6 @@ header("Content-Type: text/html; charset=utf-8");
       <div class="command-example">!cadd 42</div>
     </div>
 
-    <h2>Cross-Channel Control</h2>
-
-    <div class="command">
-      <span class="command-name">!cswitch &lt;channel&gt;</span>
-      <span class="mod-only">MOD</span>
-      <div class="command-desc">Temporarily control another channel's clips from your chat. (TheArsonDragon only)</div>
-      <div class="command-example">!cswitch joshbelmar &nbsp;(control josh's clips)<br>!cswitch off &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(return to normal)</div>
-    </div>
-
-    <div class="command">
-      <span class="command-name">!clikeon [channel]</span>
-      <span class="mod-only">MOD</span>
-      <div class="command-desc">Enable voting (!like/!dislike) for a channel. If no channel specified, uses current.</div>
-      <div class="command-example">!clikeon &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(enable for this channel)<br>!clikeon joshbelmar &nbsp;(enable for josh's channel)</div>
-    </div>
-
-    <div class="command">
-      <span class="command-name">!clikeoff [channel]</span>
-      <span class="mod-only">MOD</span>
-      <div class="command-desc">Disable voting (!like/!dislike) for a channel.</div>
-      <div class="command-example">!clikeoff &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(disable for this channel)<br>!clikeoff joshbelmar &nbsp;(disable for josh's channel)</div>
-    </div>
-
-    <div class="note">
-      <div class="note-title">Using !cswitch</div>
-      When you use !cswitch, ALL clip commands in your chat will affect the target channel until you switch back.
-      This is useful for managing another streamer's clip reel from your own chat.
-    </div>
-
   </div>
 </body>
 </html>
