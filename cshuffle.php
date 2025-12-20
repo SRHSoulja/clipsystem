@@ -28,20 +28,27 @@ $runtimeDir = get_runtime_dir();
 // Generate nonce to trigger shuffle
 $nonce = bin2hex(random_bytes(8));
 
-$payload = [
+$payload = json_encode([
   "login" => $login,
   "nonce" => $nonce,
   "set_at" => gmdate("c"),
-];
+], JSON_UNESCAPED_SLASHES);
 
-$fileSuffix = $instance ? "_{$instance}" : "";
-$shufflePath = $runtimeDir . "/shuffle_request_" . $login . $fileSuffix . ".json";
-$result = file_put_contents($shufflePath, json_encode($payload, JSON_UNESCAPED_SLASHES), LOCK_EX);
+// Write to BOTH generic and instance-specific paths
+// Always write generic file (for basic sources)
+$genericPath = $runtimeDir . "/shuffle_request_" . $login . ".json";
+$result = file_put_contents($genericPath, $payload, LOCK_EX);
 
 if ($result === false) {
-  error_log("cshuffle: Failed to write shuffle request to $shufflePath");
+  error_log("cshuffle: Failed to write shuffle request to $genericPath");
   echo "Error: Could not save shuffle request";
   exit;
+}
+
+// Also write instance-specific file if streamer has instance
+if ($instance) {
+  $instancePath = $runtimeDir . "/shuffle_request_" . $login . "_" . $instance . ".json";
+  @file_put_contents($instancePath, $payload, LOCK_EX);
 }
 
 echo "Shuffling fresh 300 clips from catalog...";

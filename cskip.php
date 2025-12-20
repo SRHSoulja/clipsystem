@@ -42,14 +42,21 @@ try {
   ");
   $stmt->execute([$login, $nonce]);
 
-  // Write file-based request to streamer's instance
+  // Write file-based request to BOTH generic and instance-specific paths
+  // Generic path: for basic sources without instance param
+  // Instance path: for streamers using their own player with instance
   $runtimeDir = get_runtime_dir();
-  $fileSuffix = $instance ? "_{$instance}" : "";
-  $skipPath = $runtimeDir . "/skip_request_" . $login . $fileSuffix . ".json";
-  @file_put_contents($skipPath, json_encode([
-    "nonce" => $nonce,
-    "set_at" => date('c')
-  ]));
+  $payload = json_encode(["nonce" => $nonce, "set_at" => date('c')]);
+
+  // Always write generic file (for basic sources)
+  $genericPath = $runtimeDir . "/skip_request_" . $login . ".json";
+  @file_put_contents($genericPath, $payload);
+
+  // Also write instance-specific file if streamer has instance
+  if ($instance) {
+    $instancePath = $runtimeDir . "/skip_request_" . $login . "_" . $instance . ".json";
+    @file_put_contents($instancePath, $payload);
+  }
 
   echo "Skipping current clip...";
 } catch (PDOException $e) {

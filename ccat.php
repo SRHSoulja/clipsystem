@@ -117,10 +117,6 @@ if ($totalClips === 0) {
   exit;
 }
 
-// Save the category filter (supports multiple game IDs)
-$fileSuffix = $instance ? "_{$instance}" : "";
-$filterPath = $runtimeDir . "/category_filter_" . $login . $fileSuffix . ".json";
-
 // Build display name
 if (count($matchedGames) === 1) {
   $displayName = $matchedGames[0]['name'];
@@ -129,7 +125,7 @@ if (count($matchedGames) === 1) {
   $displayName = ucfirst($category) . " (" . count($matchedGames) . " games)";
 }
 
-$payload = [
+$payload = json_encode([
   "login" => $login,
   "game_ids" => $gameIds,  // Array of game IDs
   "game_id" => $gameIds[0],  // Keep single ID for backwards compat
@@ -138,14 +134,23 @@ $payload = [
   "clip_count" => $totalClips,
   "nonce" => (string)(time() . "_" . bin2hex(random_bytes(4))),
   "set_at" => gmdate("c"),
-];
+], JSON_UNESCAPED_SLASHES);
 
-$result = file_put_contents($filterPath, json_encode($payload, JSON_UNESCAPED_SLASHES), LOCK_EX);
+// Write to BOTH generic and instance-specific paths
+// Always write generic file (for basic sources)
+$genericPath = $runtimeDir . "/category_filter_" . $login . ".json";
+$result = file_put_contents($genericPath, $payload, LOCK_EX);
 
 if ($result === false) {
-  error_log("ccat: Failed to write category filter to $filterPath");
+  error_log("ccat: Failed to write category filter to $genericPath");
   echo "Error: Could not save category filter";
   exit;
+}
+
+// Also write instance-specific file if streamer has instance
+if ($instance) {
+  $instancePath = $runtimeDir . "/category_filter_" . $login . "_" . $instance . ".json";
+  @file_put_contents($instancePath, $payload, LOCK_EX);
 }
 
 echo "Category set to {$displayName} ({$totalClips} clips)";

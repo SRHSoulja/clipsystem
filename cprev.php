@@ -42,14 +42,19 @@ try {
   ");
   $stmt->execute([$login, $nonce]);
 
-  // Write file-based request to streamer's instance
+  // Write file-based request to BOTH generic and instance-specific paths
   $runtimeDir = get_runtime_dir();
-  $fileSuffix = $instance ? "_{$instance}" : "";
-  $prevPath = $runtimeDir . "/prev_request_" . $login . $fileSuffix . ".json";
-  @file_put_contents($prevPath, json_encode([
-    "nonce" => $nonce,
-    "set_at" => date('c')
-  ]));
+  $payload = json_encode(["nonce" => $nonce, "set_at" => date('c')]);
+
+  // Always write generic file (for basic sources)
+  $genericPath = $runtimeDir . "/prev_request_" . $login . ".json";
+  @file_put_contents($genericPath, $payload);
+
+  // Also write instance-specific file if streamer has instance
+  if ($instance) {
+    $instancePath = $runtimeDir . "/prev_request_" . $login . "_" . $instance . ".json";
+    @file_put_contents($instancePath, $payload);
+  }
 
   echo "Going back to previous clip...";
 } catch (PDOException $e) {
