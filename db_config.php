@@ -119,6 +119,20 @@ function init_votes_tables($pdo) {
             )
         ");
 
+        // Clip plays table - tracks when clips were last played for rotation
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS clip_plays (
+                id SERIAL PRIMARY KEY,
+                login VARCHAR(64) NOT NULL,
+                clip_id VARCHAR(255) NOT NULL,
+                play_count INTEGER DEFAULT 1,
+                last_played_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(login, clip_id)
+            )
+        ");
+        $pdo->exec("CREATE INDEX IF NOT EXISTS idx_clip_plays_login ON clip_plays(login)");
+        $pdo->exec("CREATE INDEX IF NOT EXISTS idx_clip_plays_last ON clip_plays(login, last_played_at)");
+
         return true;
     } catch (PDOException $e) {
         error_log("Failed to create tables: " . $e->getMessage());

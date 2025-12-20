@@ -33,10 +33,11 @@ $key = (string)($_GET["key"] ?? "");
 $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
 
 if ($key !== $ADMIN_KEY) { http_response_code(403); echo "forbidden"; exit; }
-if ($category === "") { echo "Usage: !ccat <game> or !ccat off"; exit; }
+if ($category === "") { echo "Usage: !ccat <game> to filter, !ccat off to exit"; exit; }
 
-// Handle "off" to clear category filter
-if (strtolower($category) === "off" || strtolower($category) === "clear" || strtolower($category) === "all") {
+// Handle "off" to clear category filter - also handle common variations
+$catLower = strtolower($category);
+if ($catLower === "off" || $catLower === "clear" || $catLower === "all" || $catLower === "exit" || $catLower === "reset" || $catLower === "none") {
   $filterPath = $runtimeDir . "/category_filter_" . $login . ".json";
   if (file_exists($filterPath)) {
     @unlink($filterPath);
@@ -50,47 +51,62 @@ $pdo = get_db_connection();
 $matchedGame = null;
 $availableGames = [];
 
-if ($pdo) {
-  try {
-    // First try exact match (case-insensitive)
-    $stmt = $pdo->prepare("SELECT DISTINCT game_id, name FROM games_cache WHERE LOWER(name) = LOWER(?) LIMIT 1");
-    $stmt->execute([$category]);
-    $row = $stmt->fetch();
+if (!$pdo) {
+  echo "Database unavailable";
+  exit;
+}
 
-    if ($row) {
-      $matchedGame = $row;
-    } else {
-      // Try fuzzy match with LIKE
-      $stmt = $pdo->prepare("SELECT DISTINCT game_id, name FROM games_cache WHERE LOWER(name) LIKE LOWER(?) ORDER BY name LIMIT 5");
-      $stmt->execute(["%" . $category . "%"]);
-      $matches = $stmt->fetchAll();
+try {
+  // First try exact match in games_cache (case-insensitive)
+  $stmt = $pdo->prepare("SELECT DISTINCT game_id, name FROM games_cache WHERE LOWER(name) = LOWER(?) LIMIT 1");
+  $stmt->execute([$category]);
+  $row = $stmt->fetch();
 
-      if (count($matches) === 1) {
-        $matchedGame = $matches[0];
-      } elseif (count($matches) > 1) {
-        // Multiple matches - show options
-        $names = array_column($matches, 'name');
-        echo "Multiple matches found: " . implode(", ", $names);
-        exit;
+  if ($row) {
+    $matchedGame = $row;
+  } else {
+    // Try fuzzy match with LIKE in games_cache
+    $stmt = $pdo->prepare("SELECT DISTINCT game_id, name FROM games_cache WHERE LOWER(name) LIKE LOWER(?) ORDER BY name LIMIT 5");
+    $stmt->execute(["%" . $category . "%"]);
+    $matches = $stmt->fetchAll();
+
+    if (count($matches) === 1) {
+      $matchedGame = $matches[0];
+    } elseif (count($matches) > 1) {
+      // Multiple matches - show options
+      $names = array_column($matches, 'name');
+      echo "Multiple matches: " . implode(", ", $names) . " - be more specific";
+      exit;
+    }
+  }
+
+  // If still no match, get list of available games for this channel from clips table
+  if (!$matchedGame) {
+    // First check what games this channel actually has clips for
+    $stmt = $pdo->prepare("
+      SELECT DISTINCT c.game_id, COALESCE(g.name, c.game_id) as name, COUNT(*) as clip_count
+      FROM clips c
+      LEFT JOIN games_cache g ON c.game_id = g.game_id
+      WHERE c.login = ? AND c.blocked = false AND c.game_id IS NOT NULL AND c.game_id != ''
+      GROUP BY c.game_id, g.name
+      ORDER BY clip_count DESC
+      LIMIT 30
+    ");
+    $stmt->execute([$login]);
+    $availableGames = $stmt->fetchAll();
+
+    // Try to match by partial name in available games
+    foreach ($availableGames as $game) {
+      if (stripos($game['name'], $category) !== false) {
+        $matchedGame = $game;
+        break;
       }
     }
-
-    // If still no match, get list of available games for this channel
-    if (!$matchedGame) {
-      $stmt = $pdo->prepare("
-        SELECT DISTINCT g.game_id, g.name
-        FROM clips c
-        JOIN games_cache g ON c.game_id = g.game_id
-        WHERE c.login = ? AND c.blocked = false
-        ORDER BY g.name
-        LIMIT 20
-      ");
-      $stmt->execute([$login]);
-      $availableGames = $stmt->fetchAll();
-    }
-  } catch (PDOException $e) {
-    error_log("pcategory db error: " . $e->getMessage());
   }
+} catch (PDOException $e) {
+  error_log("ccat db error: " . $e->getMessage());
+  echo "Database error: " . $e->getMessage();
+  exit;
 }
 
 if (!$matchedGame) {

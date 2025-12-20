@@ -63,6 +63,9 @@ if ($pool > 15000) $pool = 15000; // allow full catalog export
 // Check if advance=1 is passed (player finished a clip and wants to advance playlist)
 $advance = isset($_GET['advance']) && $_GET['advance'] === '1';
 
+// Check if rotate=1 is passed (enable smart rotation mode)
+$rotate = isset($_GET['rotate']) && $_GET['rotate'] === '1';
+
 // ---- Check for active playlist first ----
 $pdo = get_db_connection();
 if ($pdo) {
@@ -141,7 +144,8 @@ $cacheDir = __DIR__ . '/cache';
 if (!is_dir($cacheDir)) @mkdir($cacheDir, 0755, true);
 
 $safe = safe_login($login);
-$cacheKey = "reel_{$safe}_days{$days}_pool{$pool}.json";
+$rotateStr = $rotate ? '_rotate' : '';
+$cacheKey = "reel_{$safe}_days{$days}_pool{$pool}{$rotateStr}.json";
 $cacheFile = $cacheDir . '/' . $cacheKey;
 
 // keep short so it still feels fresh, but doesn't churn constantly
@@ -266,42 +270,6 @@ if (empty($all)) {
   $blockedCount = count($blockedIds);
 }
 
-$now = time();
-$recentCut = ($days > 0) ? ($now - ($days * 86400)) : 0;
-
-// Buckets to keep variety:
-// - 60% recent (within days window)
-// - 30% mid (older than days, within 2 years)
-// - 10% old (older than 2 years)
-$recent = [];
-$mid = [];
-$old = [];
-
-$twoYearsCut = $now - (730 * 86400);
-
-foreach ($all as $c) {
-  $ts = parse_iso_time(isset($c['created_at']) ? $c['created_at'] : '');
-  if ($ts <= 0) {
-    $old[] = $c;
-    continue;
-  }
-
-  if ($days > 0 && $ts >= $recentCut) {
-    $recent[] = $c;
-  } elseif ($ts >= $twoYearsCut) {
-    $mid[] = $c;
-  } else {
-    $old[] = $c;
-  }
-}
-
-// If days=0, treat everything as "mid" for a balanced shuffle
-if ($days === 0) {
-  $mid = $all;
-  $recent = [];
-  $old = [];
-}
-
 function shuffle_in_place(&$arr) {
   // stronger shuffle than default in some environments by reseeding
   for ($i = count($arr) - 1; $i > 0; $i--) {
@@ -312,52 +280,225 @@ function shuffle_in_place(&$arr) {
   }
 }
 
-shuffle_in_place($recent);
-shuffle_in_place($mid);
-shuffle_in_place($old);
-
-// Determine target counts
-$wantRecent = (int)floor($pool * 0.60);
-$wantMid    = (int)floor($pool * 0.30);
-$wantOld    = $pool - $wantRecent - $wantMid;
-
-// If a bucket is short, spill into others
-$pick = [];
-
 $take = function($src, $n) {
   if ($n <= 0) return [];
   return array_slice($src, 0, min($n, count($src)));
 };
 
-$pickRecent = $take($recent, $wantRecent);
-$pickMid    = $take($mid, $wantMid);
-$pickOld    = $take($old, $wantOld);
+// ---- Smart Rotation Mode ----
+if ($rotate && $pdo) {
+  try {
+    // Get all clip IDs from our collection
+    $allClipIds = array_map(function($c) { return $c['id']; }, $all);
+    $clipIdMap = [];
+    foreach ($all as $c) {
+      $clipIdMap[$c['id']] = $c;
+    }
 
-$pick = array_merge($pickRecent, $pickMid, $pickOld);
+    // Get clip play history for this login
+    $playedClips = [];
+    if (count($allClipIds) > 0) {
+      $placeholders = str_repeat('?,', count($allClipIds) - 1) . '?';
+      $stmt = $pdo->prepare("
+        SELECT clip_id, last_played_at, play_count
+        FROM clip_plays
+        WHERE login = ? AND clip_id IN ($placeholders)
+        ORDER BY last_played_at ASC NULLS FIRST
+      ");
+      $params = array_merge([$login], $allClipIds);
+      $stmt->execute($params);
+      while ($row = $stmt->fetch()) {
+        $playedClips[$row['clip_id']] = $row;
+      }
+    }
 
-// Fill remainder from anywhere (recent -> mid -> old -> all)
-$remain = $pool - count($pick);
-if ($remain > 0) $pick = array_merge($pick, $take(array_slice($recent, count($pickRecent)), $remain));
-$remain = $pool - count($pick);
-if ($remain > 0) $pick = array_merge($pick, $take(array_slice($mid, count($pickMid)), $remain));
-$remain = $pool - count($pick);
-if ($remain > 0) $pick = array_merge($pick, $take(array_slice($old, count($pickOld)), $remain));
-$remain = $pool - count($pick);
-if ($remain > 0) {
-  shuffle_in_place($all);
-  $pick = array_merge($pick, $take($all, $remain));
+    // Get top-voted clips (net score > 0)
+    $topVoted = [];
+    $stmt = $pdo->prepare("
+      SELECT clip_id, (up_votes - down_votes) as net_score
+      FROM votes
+      WHERE login = ? AND (up_votes - down_votes) > 0
+      ORDER BY net_score DESC
+      LIMIT 1000
+    ");
+    $stmt->execute([$login]);
+    while ($row = $stmt->fetch()) {
+      if (isset($clipIdMap[$row['clip_id']])) {
+        $topVoted[$row['clip_id']] = $row['net_score'];
+      }
+    }
+
+    // Categorize clips
+    $neverPlayed = [];
+    $leastRecentlyPlayed = [];
+
+    foreach ($all as $c) {
+      $id = $c['id'];
+      if (!isset($playedClips[$id])) {
+        // Never played
+        $neverPlayed[] = $c;
+      } else {
+        // Has been played - add to least recently played list
+        $leastRecentlyPlayed[] = $c;
+      }
+    }
+
+    // Sort least recently played by last_played_at ascending (oldest first)
+    usort($leastRecentlyPlayed, function($a, $b) use ($playedClips) {
+      $timeA = strtotime($playedClips[$a['id']]['last_played_at']);
+      $timeB = strtotime($playedClips[$b['id']]['last_played_at']);
+      return $timeA - $timeB;
+    });
+
+    // Shuffle within categories for variety
+    shuffle_in_place($neverPlayed);
+
+    // Build rotation pool with target distribution:
+    // 70% fresh/unplayed, 20% least-recently-played, 10% top-voted
+    $wantFresh = (int)floor($pool * 0.70);
+    $wantLRP = (int)floor($pool * 0.20);
+    $wantTopVoted = $pool - $wantFresh - $wantLRP;
+
+    $pick = [];
+
+    // 1. Fresh/unplayed clips (70%)
+    $pickFresh = $take($neverPlayed, $wantFresh);
+    $pick = array_merge($pick, $pickFresh);
+
+    // 2. Least-recently-played (20%)
+    $pickLRP = $take($leastRecentlyPlayed, $wantLRP);
+    $pick = array_merge($pick, $pickLRP);
+
+    // 3. Top-voted favorites (10%)
+    // Filter to clips we have and sort by score
+    $topVotedClips = [];
+    foreach ($all as $c) {
+      if (isset($topVoted[$c['id']])) {
+        $topVotedClips[] = $c;
+      }
+    }
+    usort($topVotedClips, function($a, $b) use ($topVoted) {
+      return $topVoted[$b['id']] - $topVoted[$a['id']];
+    });
+    $pickTopVoted = $take($topVotedClips, $wantTopVoted);
+    $pick = array_merge($pick, $pickTopVoted);
+
+    // Fill remainder from remaining pool if we're short
+    $remain = $pool - count($pick);
+    if ($remain > 0) {
+      $pickFreshRem = $take(array_slice($neverPlayed, count($pickFresh)), $remain);
+      $pick = array_merge($pick, $pickFreshRem);
+    }
+    $remain = $pool - count($pick);
+    if ($remain > 0) {
+      $pickLRPRem = $take(array_slice($leastRecentlyPlayed, count($pickLRP)), $remain);
+      $pick = array_merge($pick, $pickLRPRem);
+    }
+    $remain = $pool - count($pick);
+    if ($remain > 0) {
+      shuffle_in_place($all);
+      $pick = array_merge($pick, $take($all, $remain));
+    }
+
+    // Final dedupe by ID
+    $seen = [];
+    $clips = [];
+    foreach ($pick as $c) {
+      $id = isset($c['id']) ? $c['id'] : '';
+      if (!$id) continue;
+      if (isset($seen[$id])) continue;
+      $seen[$id] = true;
+      $clips[] = $c;
+      if (count($clips) >= $pool) break;
+    }
+
+  } catch (PDOException $e) {
+    error_log("smart rotation error: " . $e->getMessage());
+    // Fall back to regular mode
+    $rotate = false;
+  }
 }
 
-// Final dedupe by ID (paranoia-safe)
-$seen = [];
-$clips = [];
-foreach ($pick as $c) {
-  $id = isset($c['id']) ? $c['id'] : '';
-  if (!$id) continue;
-  if (isset($seen[$id])) continue;
-  $seen[$id] = true;
-  $clips[] = $c;
-  if (count($clips) >= $pool) break;
+// ---- Standard Time-Based Rotation Mode (default) ----
+if (!$rotate) {
+  $now = time();
+  $recentCut = ($days > 0) ? ($now - ($days * 86400)) : 0;
+
+  // Buckets to keep variety:
+  // - 60% recent (within days window)
+  // - 30% mid (older than days, within 2 years)
+  // - 10% old (older than 2 years)
+  $recent = [];
+  $mid = [];
+  $old = [];
+
+  $twoYearsCut = $now - (730 * 86400);
+
+  foreach ($all as $c) {
+    $ts = parse_iso_time(isset($c['created_at']) ? $c['created_at'] : '');
+    if ($ts <= 0) {
+      $old[] = $c;
+      continue;
+    }
+
+    if ($days > 0 && $ts >= $recentCut) {
+      $recent[] = $c;
+    } elseif ($ts >= $twoYearsCut) {
+      $mid[] = $c;
+    } else {
+      $old[] = $c;
+    }
+  }
+
+  // If days=0, treat everything as "mid" for a balanced shuffle
+  if ($days === 0) {
+    $mid = $all;
+    $recent = [];
+    $old = [];
+  }
+
+  shuffle_in_place($recent);
+  shuffle_in_place($mid);
+  shuffle_in_place($old);
+
+  // Determine target counts
+  $wantRecent = (int)floor($pool * 0.60);
+  $wantMid    = (int)floor($pool * 0.30);
+  $wantOld    = $pool - $wantRecent - $wantMid;
+
+  // If a bucket is short, spill into others
+  $pick = [];
+
+  $pickRecent = $take($recent, $wantRecent);
+  $pickMid    = $take($mid, $wantMid);
+  $pickOld    = $take($old, $wantOld);
+
+  $pick = array_merge($pickRecent, $pickMid, $pickOld);
+
+  // Fill remainder from anywhere (recent -> mid -> old -> all)
+  $remain = $pool - count($pick);
+  if ($remain > 0) $pick = array_merge($pick, $take(array_slice($recent, count($pickRecent)), $remain));
+  $remain = $pool - count($pick);
+  if ($remain > 0) $pick = array_merge($pick, $take(array_slice($mid, count($pickMid)), $remain));
+  $remain = $pool - count($pick);
+  if ($remain > 0) $pick = array_merge($pick, $take(array_slice($old, count($pickOld)), $remain));
+  $remain = $pool - count($pick);
+  if ($remain > 0) {
+    shuffle_in_place($all);
+    $pick = array_merge($pick, $take($all, $remain));
+  }
+
+  // Final dedupe by ID (paranoia-safe)
+  $seen = [];
+  $clips = [];
+  foreach ($pick as $c) {
+    $id = isset($c['id']) ? $c['id'] : '';
+    if (!$id) continue;
+    if (isset($seen[$id])) continue;
+    $seen[$id] = true;
+    $clips[] = $c;
+    if (count($clips) >= $pool) break;
+  }
 }
 
 $out = [
@@ -366,6 +507,7 @@ $out = [
   "index_total" => $totalAll,
   "blocked_count" => $blockedCount,
   "days_window" => $days,
+  "rotation_mode" => $rotate ? "smart" : "time-based",
   "count" => count($clips),
   "clips" => $clips,
   "fetched_at" => gmdate('c'),
