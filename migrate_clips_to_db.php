@@ -329,7 +329,7 @@ $nextUrl = $needsContinue
 // Success URL - redirect to admin with success message
 $baseUrl = getenv('API_BASE_URL') ?: 'https://clipsystem-production.up.railway.app';
 $successUrl = "admin.php?success=" . urlencode($login) . "&clips=" . $totalClips;
-$playerUrl = $baseUrl . "/floppyjimmie_reel.html?login=" . urlencode($login);
+$playerUrl = $baseUrl . "/clipplayer_mp4_reel.html?login=" . urlencode($login);
 
 if ($needsContinue) {
     echo "\n🔄 AUTO-CONTINUING in 2 seconds...\n";
