@@ -163,6 +163,13 @@ header("Content-Type: text/html; charset=utf-8");
     </div>
 
     <div class="command">
+      <span class="command-name">!chud &lt;position&gt;</span>
+      <span class="mod-only">MOD</span>
+      <div class="command-desc">Move the clip info HUD to a different corner.</div>
+      <div class="command-example">!chud tl &nbsp;(top-left)<br>!chud tr &nbsp;(top-right)<br>!chud bl &nbsp;(bottom-left)<br>!chud br &nbsp;(bottom-right)</div>
+    </div>
+
+    <div class="command">
       <span class="command-name">!cremove &lt;#&gt;</span>
       <span class="mod-only">MOD</span>
       <div class="command-desc">Remove a clip from the rotation pool.</div>

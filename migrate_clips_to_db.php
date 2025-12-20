@@ -321,15 +321,22 @@ echo "Max seq number: $maxSeq\n";
 // Determine if we need to continue
 $needsContinue = $isWeb && $nextOffset < $totalClips;
 $freshParam = $freshMode ? "&fresh=1" : "";
+$fromBackfill = isset($_GET['from_backfill']);
 $nextUrl = $needsContinue
-    ? "migrate_clips_to_db.php?login=$login&key=" . urlencode($_GET['key'] ?? '') . "&offset=$nextOffset&chunk=$chunkSize" . ($updateMode ? "&update=1" : "") . $freshParam
+    ? "migrate_clips_to_db.php?login=$login&key=" . urlencode($_GET['key'] ?? '') . "&offset=$nextOffset&chunk=$chunkSize" . ($updateMode ? "&update=1" : "") . $freshParam . ($fromBackfill ? "&from_backfill=1" : "")
     : null;
+
+// Success URL - redirect to admin with success message
+$baseUrl = getenv('API_BASE_URL') ?: 'https://clipsystem-production.up.railway.app';
+$successUrl = "admin.php?success=" . urlencode($login) . "&clips=" . $totalClips;
+$playerUrl = $baseUrl . "/floppyjimmie_reel.html?login=" . urlencode($login);
 
 if ($needsContinue) {
     echo "\n🔄 AUTO-CONTINUING in 2 seconds...\n";
     echo "Next chunk: $nextOffset to " . min($totalClips, $nextOffset + $chunkSize) . " of $totalClips\n";
 } else {
     echo "\n✅ All clips migrated!\n";
+    echo "\n📺 Player URL: $playerUrl\n";
 }
 
 // Get buffered output and send with proper headers
@@ -344,6 +351,18 @@ if ($needsContinue) {
     echo "<style>body{background:#1a1a2e;color:#0f0;font-family:monospace;padding:20px;font-size:14px;line-height:1.4;} a{color:#0ff;}</style>";
     echo "</head><body><pre>" . htmlspecialchars($output) . "</pre>";
     echo "<p><a href='" . htmlspecialchars($nextUrl) . "'>Click here if not redirected...</a></p>";
+    echo "</body></html>";
+} elseif ($isWeb && $fromBackfill) {
+    // Coming from backfill flow - redirect to admin with success
+    header('Content-Type: text/html; charset=utf-8');
+    echo "<!DOCTYPE html><html><head><meta charset='utf-8'>";
+    echo "<meta http-equiv='refresh' content='3;url=" . htmlspecialchars($successUrl) . "'>";
+    echo "<title>Migration Complete</title>";
+    echo "<style>body{background:#1a1a2e;color:#0f0;font-family:monospace;padding:20px;font-size:14px;line-height:1.4;} a{color:#0ff;} .url{background:#0a0a1e;padding:10px;border-radius:4px;margin:10px 0;word-break:break-all;}</style>";
+    echo "</head><body><pre>" . htmlspecialchars($output) . "</pre>";
+    echo "<div class='url'>📺 Player URL:<br><a href='" . htmlspecialchars($playerUrl) . "'>" . htmlspecialchars($playerUrl) . "</a></div>";
+    echo "<p>🔄 Redirecting to admin panel...</p>";
+    echo "<p><a href='" . htmlspecialchars($successUrl) . "'>Click here if not redirected...</a></p>";
     echo "</body></html>";
 } else {
     // Plain text output

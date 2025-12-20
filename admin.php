@@ -32,9 +32,21 @@ if (isset($_GET['logout'])) {
 // Check if authenticated
 $authenticated = isset($_SESSION['admin_authenticated']) && $_SESSION['admin_authenticated'] === true;
 
+// Handle success message from backfill/migration completion
+$successLogin = isset($_GET['success']) ? preg_replace('/[^a-z0-9_]/', '', strtolower($_GET['success'])) : '';
+$successClips = isset($_GET['clips']) ? intval($_GET['clips']) : 0;
+
 // Handle actions
 $message = '';
 $messageType = '';
+$playerUrl = '';
+
+if ($successLogin && $authenticated) {
+  $baseUrl = getenv('API_BASE_URL') ?: 'https://clipsystem-production.up.railway.app';
+  $playerUrl = $baseUrl . "/floppyjimmie_reel.html?login=" . urlencode($successLogin);
+  $message = "Successfully added {$successLogin} with {$successClips} clips!";
+  $messageType = 'success';
+}
 
 if ($authenticated && $_SERVER['REQUEST_METHOD'] === 'POST') {
   // Add new user action
@@ -311,7 +323,18 @@ if ($authenticated) {
     <h1>Admin Panel</h1>
 
     <?php if ($message): ?>
-      <div class="<?= $messageType === 'error' ? 'error' : 'success' ?>"><?= htmlspecialchars($message) ?></div>
+      <div class="<?= $messageType === 'error' ? 'error' : 'success' ?>">
+        <?= htmlspecialchars($message) ?>
+        <?php if ($playerUrl): ?>
+          <div style="margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 4px;">
+            <strong>Player URL (for OBS Browser Source):</strong><br>
+            <input type="text" value="<?= htmlspecialchars($playerUrl) ?>" readonly onclick="this.select()" style="width: 100%; margin-top: 5px; cursor: pointer;">
+            <div style="margin-top: 8px; font-size: 13px; color: #adadb8;">
+              <strong>Don't forget:</strong> Add <code><?= htmlspecialchars($successLogin) ?></code> to the <code>TWITCH_CHANNEL</code> environment variable in Railway for bot commands to work!
+            </div>
+          </div>
+        <?php endif; ?>
+      </div>
     <?php endif; ?>
 
     <!-- Add New User -->

@@ -1,0 +1,105 @@
+<?php
+/**
+ * hud_position.php - Get/Set HUD position for a channel
+ *
+ * GET: Returns current HUD position
+ * POST: Sets HUD position (requires key)
+ *
+ * Positions: tr (top-right), tl (top-left), br (bottom-right), bl (bottom-left)
+ */
+header("Access-Control-Allow-Origin: *");
+header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
+header("Access-Control-Allow-Headers: Content-Type");
+header("Content-Type: application/json; charset=utf-8");
+header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { exit(0); }
+
+require_once __DIR__ . '/db_config.php';
+
+function clean_login($s) {
+  $s = strtolower(trim((string)$s));
+  $s = preg_replace("/[^a-z0-9_]/", "", $s);
+  return $s ?: "default";
+}
+
+$login = clean_login($_GET["login"] ?? $_POST["login"] ?? "");
+$ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
+
+// Valid positions
+$validPositions = ['tr', 'tl', 'br', 'bl'];
+
+// Use database to store position per channel
+$pdo = get_db_connection();
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['set'])) {
+  // Set position - requires admin key
+  $key = $_GET["key"] ?? $_POST["key"] ?? "";
+  if ($key !== $ADMIN_KEY || $ADMIN_KEY === '') {
+    http_response_code(403);
+    echo json_encode(["error" => "forbidden"]);
+    exit;
+  }
+
+  $position = strtolower($_GET["position"] ?? $_POST["position"] ?? "tr");
+  if (!in_array($position, $validPositions)) {
+    $position = 'tr';
+  }
+
+  if ($pdo) {
+    try {
+      // Use channel_settings table (create if not exists)
+      $pdo->exec("CREATE TABLE IF NOT EXISTS channel_settings (
+        login VARCHAR(50) PRIMARY KEY,
+        hud_position VARCHAR(10) DEFAULT 'tr',
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )");
+
+      $stmt = $pdo->prepare("
+        INSERT INTO channel_settings (login, hud_position, updated_at)
+        VALUES (?, ?, NOW())
+        ON CONFLICT (login) DO UPDATE SET hud_position = ?, updated_at = NOW()
+      ");
+      $stmt->execute([$login, $position, $position]);
+
+      echo json_encode([
+        "ok" => true,
+        "login" => $login,
+        "position" => $position
+      ]);
+    } catch (PDOException $e) {
+      http_response_code(500);
+      echo json_encode(["error" => "database error"]);
+    }
+  } else {
+    http_response_code(500);
+    echo json_encode(["error" => "no database"]);
+  }
+  exit;
+}
+
+// GET - return current position
+if ($pdo) {
+  try {
+    $stmt = $pdo->prepare("SELECT hud_position FROM channel_settings WHERE login = ?");
+    $stmt->execute([$login]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    $position = $row ? $row['hud_position'] : 'tr';
+    echo json_encode([
+      "login" => $login,
+      "position" => $position
+    ]);
+  } catch (PDOException $e) {
+    // Table might not exist yet, return default
+    echo json_encode([
+      "login" => $login,
+      "position" => "tr"
+    ]);
+  }
+} else {
+  echo json_encode([
+    "login" => $login,
+    "position" => "tr"
+  ]);
+}

@@ -138,8 +138,6 @@
 
     #voteHud{
       position:absolute;
-      right:24px;
-      top:24px;
       z-index:11000;
       display:flex;
       flex-direction:column;
@@ -155,16 +153,30 @@
       pointer-events:none;
       backdrop-filter: blur(12px);
       opacity:0;
-      transform: translateX(6px);
-      transition: opacity 180ms linear, transform 180ms linear;
+      transition: opacity 180ms linear, transform 180ms linear, top 300ms ease, bottom 300ms ease, left 300ms ease, right 300ms ease;
       box-shadow: 0 4px 24px rgba(0,0,0,0.6);
       max-width:550px;
       text-align:center;
+      /* Default position: top-right */
+      top:24px;
+      right:24px;
+      bottom:auto;
+      left:auto;
+      transform: translateX(6px);
     }
     #voteHud.show{
       opacity:1;
       transform: translateX(0);
     }
+    /* HUD positions */
+    #voteHud.pos-tr{ top:24px; right:24px; bottom:auto; left:auto; transform: translateX(6px); }
+    #voteHud.pos-tr.show{ transform: translateX(0); }
+    #voteHud.pos-tl{ top:24px; left:24px; bottom:auto; right:auto; transform: translateX(-6px); }
+    #voteHud.pos-tl.show{ transform: translateX(0); }
+    #voteHud.pos-br{ bottom:24px; right:24px; top:auto; left:auto; transform: translateX(6px); }
+    #voteHud.pos-br.show{ transform: translateX(0); }
+    #voteHud.pos-bl{ bottom:24px; left:24px; top:auto; right:auto; transform: translateX(-6px); }
+    #voteHud.pos-bl.show{ transform: translateX(0); }
     #voteHud .clip-info{
       display:flex;
       flex-direction:column;
@@ -539,6 +551,41 @@
   if (hudEnabled) {
     pollHudOnce();
     setInterval(pollHudOnce, hudPollMs);
+  }
+
+  // ===== HUD Position polling =====
+  let currentHudPosition = 'tr'; // Default: top-right
+
+  function setHudPosition(pos) {
+    const validPositions = ['tr', 'tl', 'br', 'bl'];
+    if (!validPositions.includes(pos)) pos = 'tr';
+    if (pos === currentHudPosition) return;
+
+    currentHudPosition = pos;
+    // Remove all position classes
+    voteHud.classList.remove('pos-tr', 'pos-tl', 'pos-br', 'pos-bl');
+    // Add new position class
+    voteHud.classList.add(`pos-${pos}`);
+    console.log('[HUD] Position changed to:', pos);
+  }
+
+  async function pollHudPosition() {
+    if (!hudEnabled) return;
+    try {
+      const res = await fetch(`${API_BASE}/hud_position.php?login=${encodeURIComponent(login)}`, { cache: "no-store" });
+      const data = await res.json();
+      if (data && data.position) {
+        setHudPosition(data.position);
+      }
+    } catch {}
+  }
+
+  if (hudEnabled) {
+    // Set initial position class
+    voteHud.classList.add(`pos-${currentHudPosition}`);
+    // Poll for position changes every 2 seconds
+    pollHudPosition();
+    setInterval(pollHudPosition, 2000);
   }
 
   // ===== Simple loading overlay (replaces old matrix rain) =====

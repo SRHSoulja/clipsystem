@@ -82,6 +82,18 @@ function sleep_backoff($attempt) {
 
 load_env(__DIR__ . '/.env');
 
+// Require admin key for web access (skip for CLI)
+$ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
+$isWeb = php_sapi_name() !== 'cli';
+if ($isWeb) {
+  $providedKey = arg('key', '');
+  if ($providedKey !== $ADMIN_KEY || $ADMIN_KEY === '') {
+    http_response_code(403);
+    echo "Forbidden - admin key required\n";
+    exit;
+  }
+}
+
 $TWITCH_CLIENT_ID = getenv('TWITCH_CLIENT_ID') ?: '';
 $TWITCH_CLIENT_SECRET = getenv('TWITCH_CLIENT_SECRET') ?: '';
 if (!$TWITCH_CLIENT_ID || !$TWITCH_CLIENT_SECRET) {
@@ -101,7 +113,6 @@ $maxWindows = (int) arg('maxwin', 5);   // Max windows per request
 if ($maxWindows < 1) $maxWindows = 1;
 if ($maxWindows > 20) $maxWindows = 20;
 $freshMode = arg('fresh', '0') === '1'; // Fresh mode: delete cache and re-fetch everything
-$isWeb = php_sapi_name() !== 'cli';
 $startTime = time();
 
 // On Railway, /app/cache is read-only, use /tmp for writable storage
@@ -396,7 +407,11 @@ foreach ($clips as $c) {
 // Determine if we need to continue and build next URL
 $needsContinue = $isWeb && $nextWindow > 0 && $nextWindow <= $totalWindows;
 $freshParam = $freshMode ? "&fresh=1" : "";
-$nextUrl = $needsContinue ? "clips_backfill.php?login=$login&years=$years&window=$nextWindow&maxwin=$maxWindows$freshParam" : null;
+$keyParam = "&key=" . urlencode($providedKey);
+$nextUrl = $needsContinue ? "clips_backfill.php?login=$login&years=$years&window=$nextWindow&maxwin=$maxWindows$freshParam$keyParam" : null;
+
+// URL to auto-migrate after backfill completes
+$migrateUrl = "migrate_clips_to_db.php?login=$login&key=" . urlencode($providedKey) . "&update=1&from_backfill=1";
 
 echo "=== Chunk Complete ===\n";
 echo "Windows processed: $windowsProcessed\n";
@@ -407,15 +422,14 @@ if ($needsContinue) {
   echo "\n🔄 AUTO-CONTINUING in 2 seconds...\n";
   echo "Next: window $nextWindow to " . min($totalWindows, $nextWindow + $maxWindows - 1) . " of $totalWindows\n";
 } else {
-  echo "\n✅ All windows complete! Ready for migration.\n";
-  echo "Run: migrate_clips_to_db.php?login=$login&key=YOUR_KEY&update=1\n";
+  echo "\n✅ All windows complete! Auto-migrating to database...\n";
 }
 
 // Get buffered output and send with proper headers
 $output = ob_get_clean();
 
 if ($isWeb && $needsContinue) {
-  // HTML output with auto-refresh
+  // HTML output with auto-refresh to next window
   header('Content-Type: text/html; charset=utf-8');
   echo "<!DOCTYPE html><html><head><meta charset='utf-8'>";
   echo "<meta http-equiv='refresh' content='2;url=" . htmlspecialchars($nextUrl) . "'>";
@@ -424,8 +438,19 @@ if ($isWeb && $needsContinue) {
   echo "</head><body><pre>" . htmlspecialchars($output) . "</pre>";
   echo "<p><a href='" . htmlspecialchars($nextUrl) . "'>Click here if not redirected...</a></p>";
   echo "</body></html>";
+} elseif ($isWeb) {
+  // Backfill complete - auto-redirect to migration
+  header('Content-Type: text/html; charset=utf-8');
+  echo "<!DOCTYPE html><html><head><meta charset='utf-8'>";
+  echo "<meta http-equiv='refresh' content='2;url=" . htmlspecialchars($migrateUrl) . "'>";
+  echo "<title>Clips Backfill Complete</title>";
+  echo "<style>body{background:#1a1a2e;color:#0f0;font-family:monospace;padding:20px;font-size:14px;line-height:1.4;} a{color:#0ff;}</style>";
+  echo "</head><body><pre>" . htmlspecialchars($output) . "</pre>";
+  echo "<p>🔄 Auto-redirecting to database migration...</p>";
+  echo "<p><a href='" . htmlspecialchars($migrateUrl) . "'>Click here if not redirected...</a></p>";
+  echo "</body></html>";
 } else {
-  // Plain text output
+  // Plain text output (CLI)
   header('Content-Type: text/plain; charset=utf-8');
   echo $output;
 }

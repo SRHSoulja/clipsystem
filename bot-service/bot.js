@@ -386,9 +386,48 @@ const commands = {
   // !chelp - Show available clip commands
   async chelp(channel, tags, args) {
     if (isMod(tags)) {
-      return 'Mod: !pclip <#>, !cskip, !ccat <game>, !cremove/!cadd <#>, !cswitch/!clikeon/!clikeoff [channel] | All: !clip, !cfind, !like/!dislike [#]';
+      return 'Mod: !pclip <#>, !cskip, !ccat <game>, !chud <pos>, !cremove/!cadd <#> | All: !clip, !cfind, !like/!dislike [#]';
     }
     return 'Clip commands: !clip (current), !cfind (browse), !like [#] (upvote), !dislike [#] (downvote)';
+  },
+
+  // !chud <position> - Move the HUD overlay (mod only)
+  // Positions: tr (top-right), tl (top-left), br (bottom-right), bl (bottom-left)
+  async chud(channel, tags, args) {
+    if (!isMod(tags)) {
+      return null; // Silently ignore non-mods
+    }
+
+    const login = getClipChannel(channel);
+    const position = (args[0] || '').toLowerCase();
+
+    // Map friendly names to position codes
+    const positionMap = {
+      'tr': 'tr', 'topright': 'tr', 'top-right': 'tr',
+      'tl': 'tl', 'topleft': 'tl', 'top-left': 'tl',
+      'br': 'br', 'bottomright': 'br', 'bottom-right': 'br',
+      'bl': 'bl', 'bottomleft': 'bl', 'bottom-left': 'bl'
+    };
+
+    const pos = positionMap[position];
+    if (!pos) {
+      return 'Usage: !chud <position> - Positions: tl (top-left), tr (top-right), bl (bottom-left), br (bottom-right)';
+    }
+
+    try {
+      const url = `${config.apiBaseUrl}/hud_position.php?login=${encodeURIComponent(login)}&key=${encodeURIComponent(config.adminKey)}&set=1&position=${pos}`;
+      const res = await fetchWithTimeout(url);
+      const data = await res.json();
+
+      if (data.ok) {
+        const posNames = { tr: 'top-right', tl: 'top-left', br: 'bottom-right', bl: 'bottom-left' };
+        return `HUD moved to ${posNames[pos]}.`;
+      }
+      return 'Could not move HUD.';
+    } catch (err) {
+      console.error('!chud error:', err.message);
+      return 'Could not move HUD.';
+    }
   },
 
   // !clikeoff [channel] - Disable voting for a channel (mod only)
