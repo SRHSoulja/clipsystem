@@ -133,6 +133,22 @@ function init_votes_tables($pdo) {
         $pdo->exec("CREATE INDEX IF NOT EXISTS idx_clip_plays_login ON clip_plays(login)");
         $pdo->exec("CREATE INDEX IF NOT EXISTS idx_clip_plays_last ON clip_plays(login, last_played_at)");
 
+        // Command requests table - replaces file-based state for reliability at scale
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS command_requests (
+                login VARCHAR(64) NOT NULL,
+                command_type VARCHAR(32) NOT NULL,
+                payload JSONB,
+                nonce VARCHAR(32),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                consumed BOOLEAN DEFAULT FALSE,
+                PRIMARY KEY (login, command_type)
+            )
+        ");
+
+        // Optimized index for clips pagination with blocked filter
+        $pdo->exec("CREATE INDEX IF NOT EXISTS idx_clips_active_seq ON clips(login, seq DESC) WHERE blocked = false");
+
         return true;
     } catch (PDOException $e) {
         error_log("Failed to create tables: " . $e->getMessage());

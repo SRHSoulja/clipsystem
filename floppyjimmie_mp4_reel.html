@@ -521,7 +521,17 @@
     clearVideoTimeouts();
     debugLog(`Loading: ${c.id.substring(0,20)}...`);
 
-    const mp4Url = await getMp4Url(c.id);
+    // Use preloaded URL if available for this clip
+    let mp4Url = null;
+    if (preloadedClip && preloadedClip.id === c.id && preloadedMp4Url) {
+      mp4Url = preloadedMp4Url;
+      debugLog("Using preloaded URL", "ok");
+      preloadedClip = null;
+      preloadedMp4Url = null;
+    } else {
+      mp4Url = await getMp4Url(c.id);
+    }
+
     if (!mp4Url) {
       debugLog(`No MP4 for ${c.id}`, "err");
       failedClips.add(c.id);
@@ -765,86 +775,6 @@
     } catch {}
   }
 
-  async function pollForcePlay() {
-    if (!pclipEnabled) return;
-
-    try {
-      const res = await fetch(`${API_BASE}/force_play_get.php?login=${encodeURIComponent(login)}`, { cache: "no-store" });
-      const data = await res.json();
-      if (!data || !data.nonce || data.nonce === lastPclipNonce) return;
-
-      // Ignore stale commands (older than 30 seconds)
-      if (data.set_at) {
-        const age = Date.now() - new Date(data.set_at).getTime();
-        if (age > 30000) {
-          // Mark as seen and clear from server
-          lastPclipNonce = data.nonce;
-          localStorage.setItem(pclipNonceKey, data.nonce);
-          clearForcePlay();
-          return;
-        }
-      }
-
-      lastPclipNonce = data.nonce;
-      localStorage.setItem(pclipNonceKey, data.nonce);
-
-      let c = clips.find(x => x.id === data.clip_id);
-      if (!c && data.clip) c = data.clip;
-      if (!c) return;
-
-      debugLog(`Force play: ${c.id.substring(0,15)}`, "warn");
-      clearVideoTimeouts();
-      if (advanceTimer) clearTimeout(advanceTimer);
-
-      // Clear the force play from server immediately so it doesn't replay
-      clearForcePlay();
-
-      // Mark as command-triggered for extra buffering
-      isCommandTriggered = true;
-      playClip(c);
-    } catch {}
-  }
-
-  // Skip polling
-  async function pollSkip() {
-    if (isSwitching) return;
-    try {
-      const res = await fetch(`${API_BASE}/skip_check.php?login=${encodeURIComponent(login)}`, { cache: "no-store" });
-      const data = await res.json();
-      if (data?.skip) {
-        debugLog("Skip requested", "warn");
-        clearVideoTimeouts();
-        if (advanceTimer) clearTimeout(advanceTimer);
-        // Mark as command-triggered for extra buffering
-        isCommandTriggered = true;
-        playNext();
-      }
-    } catch {}
-  }
-
-  // Prev polling (go back to previous clip)
-  async function pollPrev() {
-    if (isSwitching) return;
-    try {
-      const res = await fetch(`${API_BASE}/prev_check.php?login=${encodeURIComponent(login)}`, { cache: "no-store" });
-      const data = await res.json();
-      if (data?.prev) {
-        if (clipHistory.length === 0) {
-          debugLog("No previous clip", "warn");
-          return;
-        }
-        const prevClip = clipHistory.pop();
-        debugLog(`Going back to: ${prevClip.title?.substring(0,20) || prevClip.id}`, "warn");
-        clearVideoTimeouts();
-        if (advanceTimer) clearTimeout(advanceTimer);
-        // Mark as command-triggered for extra buffering
-        isCommandTriggered = true;
-        // Play previous clip, skip adding to history (we're going back)
-        playClip(prevClip, true);
-      }
-    } catch {}
-  }
-
   // Top clips overlay
   const topClipsOverlay = document.getElementById("topClipsOverlay");
   const topClipsList = document.getElementById("topClipsList");
@@ -887,29 +817,104 @@
       topClipsOverlay.classList.remove('show');
     }, 15000);
 
-    debugLog(`Showing top ${clips.length} clips`, "ok");
+    debugLog(`Showing top ${topClipsData.length} clips`, "ok");
   }
 
-  async function pollTopClips() {
+  // Shuffle nonce tracking
+  let lastShuffleNonce = null;
+
+  // Category filter state
+  let originalClips = null; // Store original clips when entering category mode
+
+  // Preloading - fetch next clip's MP4 URL in advance
+  let preloadedClip = null;
+  let preloadedMp4Url = null;
+
+  async function preloadNextClip() {
+    const next = pickNextClip();
+    if (!next || next.id === currentClip?.id || next.id === preloadedClip?.id) return;
+
     try {
-      const res = await fetch(`${API_BASE}/ctop_check.php?login=${encodeURIComponent(login)}`, { cache: "no-store" });
-      const data = await res.json();
-      if (data?.active && data.nonce !== lastTopNonce) {
-        lastTopNonce = data.nonce;
-        showTopClips(data.clips, data.count);
+      const mp4Url = await getMp4Url(next.id);
+      if (mp4Url) {
+        preloadedClip = next;
+        preloadedMp4Url = mp4Url;
+        debugLog(`Preloaded: ${next.id.substring(0,15)}...`);
       }
     } catch {}
   }
 
-  // Shuffle polling - force fresh clip pool
-  let lastShuffleNonce = null;
-
-  async function pollShuffle() {
+  // Consolidated polling - single endpoint for all commands (reduces 7 calls to 1)
+  async function pollAll() {
     try {
-      const res = await fetch(`${API_BASE}/shuffle_check.php?login=${encodeURIComponent(login)}`, { cache: "no-store" });
+      const res = await fetch(`${API_BASE}/poll.php?login=${encodeURIComponent(login)}`, { cache: "no-store" });
       const data = await res.json();
-      if (data?.shuffle && data.nonce !== lastShuffleNonce) {
-        lastShuffleNonce = data.nonce;
+
+      // Handle Skip
+      if (data?.skip && !isSwitching) {
+        debugLog("Skip requested", "warn");
+        clearVideoTimeouts();
+        if (advanceTimer) clearTimeout(advanceTimer);
+        isCommandTriggered = true;
+        preloadedClip = null; // Clear preload on skip
+        preloadedMp4Url = null;
+        playNext();
+        return; // Don't process other commands if skipping
+      }
+
+      // Handle Prev
+      if (data?.prev && !isSwitching) {
+        if (clipHistory.length === 0) {
+          debugLog("No previous clip", "warn");
+        } else {
+          const prevClip = clipHistory.pop();
+          debugLog(`Going back to: ${prevClip.title?.substring(0,20) || prevClip.id}`, "warn");
+          clearVideoTimeouts();
+          if (advanceTimer) clearTimeout(advanceTimer);
+          isCommandTriggered = true;
+          preloadedClip = null;
+          preloadedMp4Url = null;
+          playClip(prevClip, true);
+          return;
+        }
+      }
+
+      // Handle Force Play
+      if (pclipEnabled && data?.force_play) {
+        const fp = data.force_play;
+        if (fp.nonce && fp.nonce !== lastPclipNonce) {
+          // Ignore stale commands (older than 30 seconds)
+          if (fp.set_at) {
+            const age = Date.now() - new Date(fp.set_at).getTime();
+            if (age > 30000) {
+              lastPclipNonce = fp.nonce;
+              localStorage.setItem(pclipNonceKey, fp.nonce);
+              clearForcePlay();
+            } else {
+              lastPclipNonce = fp.nonce;
+              localStorage.setItem(pclipNonceKey, fp.nonce);
+
+              let c = clips.find(x => x.id === fp.clip_id);
+              if (!c && fp.clip) c = fp.clip;
+              if (c) {
+                debugLog(`Force play: ${c.id.substring(0,15)}`, "warn");
+                clearVideoTimeouts();
+                if (advanceTimer) clearTimeout(advanceTimer);
+                clearForcePlay();
+                isCommandTriggered = true;
+                preloadedClip = null;
+                preloadedMp4Url = null;
+                playClip(c);
+                return;
+              }
+            }
+          }
+        }
+      }
+
+      // Handle Shuffle
+      if (data?.shuffle && data.shuffle.nonce !== lastShuffleNonce) {
+        lastShuffleNonce = data.shuffle.nonce;
         debugLog("Shuffle requested, fetching fresh pool...", "warn");
 
         // Clear category filter if active
@@ -930,69 +935,83 @@
           state.recent = [];
           saveState(state);
           debugLog(`Shuffled! New pool: ${clips.length} clips`, "ok");
+          // Clear preload since pool changed
+          preloadedClip = null;
+          preloadedMp4Url = null;
         }
       }
-    } catch {}
-  }
 
-  // Category filter polling
-  let originalClips = null; // Store original clips when entering category mode
-
-  async function pollCategory() {
-    try {
-      const res = await fetch(`${API_BASE}/category_get.php?login=${encodeURIComponent(login)}`, { cache: "no-store" });
-      const data = await res.json();
-
-      if (!data?.active) {
-        // Category filter cleared - restore original clips
-        if (categoryFilter) {
-          debugLog("Category filter cleared", "ok");
-          if (originalClips) {
-            clips = originalClips;
-            originalClips = null;
-            debugLog(`Restored ${clips.length} clips`);
+      // Handle Category
+      const cat = data?.category;
+      if (cat) {
+        if (!cat.active) {
+          // Category filter cleared - restore original clips
+          if (categoryFilter) {
+            debugLog("Category filter cleared", "ok");
+            if (originalClips) {
+              clips = originalClips;
+              originalClips = null;
+              debugLog(`Restored ${clips.length} clips`);
+            }
+            categoryFilter = null;
+            lastCategoryNonce = null;
+            preloadedClip = null;
+            preloadedMp4Url = null;
           }
-          categoryFilter = null;
-          lastCategoryNonce = null;
-        }
-        return;
-      }
+        } else if (cat.nonce && cat.nonce !== lastCategoryNonce) {
+          lastCategoryNonce = cat.nonce;
 
-      // Check if this is a new category command
-      if (data.nonce && data.nonce !== lastCategoryNonce) {
-        lastCategoryNonce = data.nonce;
+          // Store original clips if first time entering category mode
+          if (!originalClips) {
+            originalClips = clips;
+          }
 
-        // Store original clips if first time entering category mode
-        if (!originalClips) {
-          originalClips = clips;
-        }
+          // Replace clips with category-specific clips from server
+          if (cat.clips && cat.clips.length > 0) {
+            clips = cat.clips;
+            debugLog(`Category: ${cat.game_name} - loaded ${clips.length} clips`, "ok");
+          } else {
+            // Fallback: filter existing clips by ID
+            const catIds = new Set(cat.clip_ids || []);
+            clips = originalClips.filter(c => catIds.has(c.id));
+            debugLog(`Category: ${cat.game_name} - filtered to ${clips.length} clips`, "ok");
+          }
 
-        // Replace clips with category-specific clips from server
-        if (data.clips && data.clips.length > 0) {
-          clips = data.clips;
-          debugLog(`Category: ${data.game_name} - loaded ${clips.length} clips`, "ok");
-        } else {
-          // Fallback: filter existing clips by ID
-          const catIds = new Set(data.clip_ids || []);
-          clips = originalClips.filter(c => catIds.has(c.id));
-          debugLog(`Category: ${data.game_name} - filtered to ${clips.length} clips`, "ok");
-        }
+          categoryFilter = {
+            game_id: cat.game_id,
+            game_name: cat.game_name,
+            clip_ids: new Set(cat.clip_ids || [])
+          };
 
-        categoryFilter = {
-          game_id: data.game_id,
-          game_name: data.game_name,
-          clip_ids: new Set(data.clip_ids || [])
-        };
+          // Clear preload since pool changed
+          preloadedClip = null;
+          preloadedMp4Url = null;
 
-        // If we were in the middle of switching, skip to new category clip
-        if (!isSwitching && clips.length > 0) {
-          clearVideoTimeouts();
-          if (advanceTimer) clearTimeout(advanceTimer);
-          isCommandTriggered = true;
-          playNext();
+          // If we were in the middle of switching, skip to new category clip
+          if (!isSwitching && clips.length > 0) {
+            clearVideoTimeouts();
+            if (advanceTimer) clearTimeout(advanceTimer);
+            isCommandTriggered = true;
+            playNext();
+          }
         }
       }
-    } catch {}
+
+      // Handle Top Clips
+      if (data?.top_clips?.active && data.top_clips.nonce !== lastTopNonce) {
+        lastTopNonce = data.top_clips.nonce;
+        showTopClips(data.top_clips.clips, data.top_clips.count);
+      }
+
+      // Update vote HUD from consolidated poll
+      if (hudEnabled && data?.votes) {
+        voteUp.textContent = `👍 ${data.votes.up || 0}`;
+        voteDown.textContent = `👎 ${data.votes.down || 0}`;
+      }
+
+    } catch (e) {
+      debugLog("Poll error: " + e.message, "err");
+    }
   }
 
   // Init
@@ -1025,17 +1044,20 @@
       }
     } catch {}
 
-    // Start polling first, let page stabilize before playing
-    if (hudEnabled) {
-      pollVotes();
-      setInterval(pollVotes, hudPollMs);
-    }
-    setInterval(pollForcePlay, 700);
-    setInterval(pollSkip, 1000);
-    setInterval(pollPrev, 1000); // Poll for !cprev
-    setInterval(pollTopClips, 2000); // Poll for !ctop
-    setInterval(pollShuffle, 2000); // Poll for !cshuffle
-    setInterval(pollCategory, 2000); // Poll category every 2s
+    // Use consolidated polling - single endpoint replaces 7 separate polls
+    // This reduces network overhead by ~85%
+    setInterval(pollAll, 800); // Poll every 800ms
+
+    // Preload next clip at 70% through current clip
+    setInterval(() => {
+      if (currentClip && !preloadedClip && !isSwitching) {
+        const currentTime = player.currentTime || 0;
+        const duration = currentClip.duration || 30;
+        if (currentTime > duration * 0.7) {
+          preloadNextClip();
+        }
+      }
+    }, 2000);
 
     // Delay first clip briefly to let page initialize
     debugLog("Waiting 2s for page to stabilize...");
@@ -1055,6 +1077,9 @@
           if (!categoryFilter) {
             clips = data.clips;
             debugLog(`Refreshed pool: ${clips.length} clips`);
+            // Clear preload since pool refreshed
+            preloadedClip = null;
+            preloadedMp4Url = null;
           }
         }
       } catch {}

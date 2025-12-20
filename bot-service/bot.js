@@ -62,6 +62,17 @@ const client = new tmi.Client({
 const cooldowns = new Map();
 const COOLDOWN_MS = 3000; // 3 second cooldown per user per command
 
+// Clean up cooldowns periodically to prevent memory leak
+const COOLDOWN_CLEANUP_INTERVAL = 60000; // 1 minute
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, time] of cooldowns) {
+    if (now - time > COOLDOWN_MS) {
+      cooldowns.delete(key);
+    }
+  }
+}, COOLDOWN_CLEANUP_INTERVAL);
+
 // Toggle for like/dislike commands (can be disabled by mods)
 let likesEnabled = true;
 
@@ -523,6 +534,48 @@ client.on('connected', (addr, port) => {
 
 client.on('disconnected', (reason) => {
   console.log('Disconnected:', reason);
+});
+
+client.on('reconnect', () => {
+  console.log('Attempting to reconnect to Twitch...');
+});
+
+client.on('error', (err) => {
+  console.error('TMI client error:', err);
+});
+
+// Graceful shutdown handler
+let isShuttingDown = false;
+
+async function shutdown(signal) {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+
+  console.log(`${signal} received, shutting down gracefully...`);
+
+  try {
+    await client.disconnect();
+    console.log('Disconnected from Twitch.');
+  } catch (err) {
+    console.error('Error during disconnect:', err);
+  }
+
+  console.log('Shutdown complete.');
+  process.exit(0);
+}
+
+// Handle process signals for graceful shutdown
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
+
+// Handle uncaught errors to prevent crashes
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+  // Don't exit on uncaught exception - let the bot continue
 });
 
 // Connect

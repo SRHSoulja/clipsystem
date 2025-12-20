@@ -5,35 +5,26 @@
  * Mods can use !ccat <game_name> to filter clips to a specific game.
  * Use !ccat off to disable the filter.
  */
-header("Access-Control-Allow-Origin: *");
-header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
-header("Access-Control-Allow-Headers: Content-Type");
-header("Content-Type: text/plain; charset=utf-8");
-header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
-
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { exit(0); }
-
+require_once __DIR__ . '/includes/helpers.php';
 require_once __DIR__ . '/db_config.php';
 
-// Runtime data goes to /tmp on Railway
-$runtimeDir = is_writable("/tmp") ? "/tmp/clipsystem_cache" : __DIR__ . "/cache";
-if (!is_dir($runtimeDir)) @mkdir($runtimeDir, 0777, true);
-
-function clean_login($s){
-  $s = strtolower(trim((string)$s));
-  $s = preg_replace("/[^a-z0-9_]/", "", $s);
-  return $s ?: "default";
-}
+set_cors_headers();
+handle_options_request();
+set_nocache_headers();
+header("Content-Type: text/plain; charset=utf-8");
 
 $login = clean_login($_GET["login"] ?? "");
 $category = trim($_GET["category"] ?? "");
-$key = (string)($_GET["key"] ?? "");
 
-// Load from environment (set ADMIN_KEY in Railway)
-$ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
+require_admin_auth();
 
-if ($key !== $ADMIN_KEY) { http_response_code(403); echo "forbidden"; exit; }
-if ($category === "") { echo "Usage: !ccat <game> to filter, !ccat off to exit"; exit; }
+if ($category === "") {
+  echo "Usage: !ccat <game> to filter, !ccat off to exit";
+  exit;
+}
+
+// Runtime data directory
+$runtimeDir = get_runtime_dir();
 
 // Handle "off" to clear category filter - also handle common variations
 $catLower = strtolower($category);
@@ -48,13 +39,14 @@ if ($catLower === "off" || $catLower === "clear" || $catLower === "all" || $catL
 
 // Look up the game by name (fuzzy match)
 $pdo = get_db_connection();
-$matchedGame = null;
-$availableGames = [];
 
 if (!$pdo) {
   echo "Database unavailable";
   exit;
 }
+
+$matchedGames = [];
+$availableGames = [];
 
 try {
   // Get all games this channel has clips for that match the search term
@@ -133,6 +125,12 @@ $payload = [
   "set_at" => gmdate("c"),
 ];
 
-@file_put_contents($filterPath, json_encode($payload, JSON_UNESCAPED_SLASHES), LOCK_EX);
+$result = file_put_contents($filterPath, json_encode($payload, JSON_UNESCAPED_SLASHES), LOCK_EX);
+
+if ($result === false) {
+  error_log("ccat: Failed to write category filter to $filterPath");
+  echo "Error: Could not save category filter";
+  exit;
+}
 
 echo "Category set to {$displayName} ({$totalClips} clips)";
