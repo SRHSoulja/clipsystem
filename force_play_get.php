@@ -5,24 +5,17 @@
  * Returns the full clip data so the player can play ANY clip,
  * not just clips in the current pool.
  */
-header("Access-Control-Allow-Origin: *");
-header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
-header("Access-Control-Allow-Headers: Content-Type");
-header("Content-Type: application/json; charset=utf-8");
-header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+require_once __DIR__ . '/includes/helpers.php';
 
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { exit(0); }
+set_cors_headers();
+handle_options_request();
+set_nocache_headers();
+header("Content-Type: application/json; charset=utf-8");
 
 // Static data (clips_index) is in ./cache (read-only on Railway)
 $staticDir = __DIR__ . "/cache";
 // Runtime data (force_play) goes to /tmp on Railway
-$runtimeDir = is_writable("/tmp") ? "/tmp/clipsystem_cache" : __DIR__ . "/cache";
-
-function clean_login($s){
-  $s = strtolower(trim((string)$s));
-  $s = preg_replace("/[^a-z0-9_]/", "", $s);
-  return $s ?: "default";
-}
+$runtimeDir = get_runtime_dir();
 
 $login = clean_login($_GET["login"] ?? "");
 $path = $runtimeDir . "/force_play_" . $login . ".json";
