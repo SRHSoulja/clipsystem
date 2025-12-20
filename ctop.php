@@ -23,8 +23,8 @@ $login = clean_login($_GET["login"] ?? "");
 $key   = (string)($_GET["key"] ?? "");
 $count = (int)($_GET["count"] ?? 5);
 
-// Clamp count between 3 and 10
-$count = max(3, min(10, $count));
+// Clamp count between 3 and 6
+$count = max(3, min(6, $count));
 
 $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
 
