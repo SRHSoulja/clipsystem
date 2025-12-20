@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>MP4 Bulk Test</title>
+  <style>
+    body { background: #1a1a2e; color: #eee; font: 14px monospace; padding: 20px; }
+    h1 { color: #9147ff; margin-bottom: 10px; }
+    #stats { font-size: 24px; margin: 20px 0; }
+    .success { color: #4ade80; }
+    .fail { color: #f87171; }
+    #log { background: #0d0d1a; padding: 15px; border-radius: 8px; height: 400px; overflow-y: auto; }
+    .log-success { color: #4ade80; }
+    .log-fail { color: #f87171; }
+    #progress { width: 100%; height: 30px; background: #333; border-radius: 4px; margin: 10px 0; }
+    #progress-bar { height: 100%; background: linear-gradient(90deg, #4ade80, #22c55e); border-radius: 4px; transition: width 0.1s; }
+    button { background: #9147ff; color: #fff; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-size: 16px; margin-right: 10px; }
+    button:hover { background: #772ce8; }
+    button:disabled { background: #666; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+  <h1>MP4 Availability Bulk Test</h1>
+  <p>Tests if Twitch GQL returns MP4 URLs for clips (doesn't play them, just checks)</p>
+
+  <div>
+    <button id="start">Start Test</button>
+    <button id="stop" disabled>Stop</button>
+    <label><input type="number" id="concurrent" value="10" min="1" max="50" style="width:60px"> concurrent requests</label>
+  </div>
+
+  <div id="progress"><div id="progress-bar" style="width:0%"></div></div>
+
+  <div id="stats">
+    Tested: <span id="tested">0</span> / <span id="total">0</span>
+    | <span class="success">Success: <span id="success">0</span></span>
+    | <span class="fail">Failed: <span id="failed">0</span></span>
+    | Rate: <span id="rate">0</span>%
+  </div>
+
+  <div id="log"></div>
+
+<script>
+const API_BASE = "https://clipsystem-production.up.railway.app";
+const GQL_URL = "https://gql.twitch.tv/gql";
+const CLIENT_ID = "kimne78kx3ncx6brgo4mv6wki5h1ko";
+const QUERY_HASH = "36b89d2507fce29e5ca551df756d27c1cfe079e2609642b4390aa4c35796eb11";
+
+let clips = [];
+let tested = 0;
+let success = 0;
+let failed = 0;
+let running = false;
+let failedClips = [];
+
+const qs = new URLSearchParams(location.search);
+const login = (qs.get("login") || "floppyjimmie").toLowerCase();
+
+const logEl = document.getElementById("log");
+const testedEl = document.getElementById("tested");
+const totalEl = document.getElementById("total");
+const successEl = document.getElementById("success");
+const failedEl = document.getElementById("failed");
+const rateEl = document.getElementById("rate");
+const progressBar = document.getElementById("progress-bar");
+const startBtn = document.getElementById("start");
+const stopBtn = document.getElementById("stop");
+const concurrentInput = document.getElementById("concurrent");
+
+function log(msg, isSuccess) {
+  const div = document.createElement("div");
+  div.className = isSuccess ? "log-success" : "log-fail";
+  div.textContent = msg;
+  logEl.insertBefore(div, logEl.firstChild);
+  if (logEl.children.length > 200) logEl.removeChild(logEl.lastChild);
+}
+
+function updateStats() {
+  testedEl.textContent = tested;
+  successEl.textContent = success;
+  failedEl.textContent = failed;
+  rateEl.textContent = tested > 0 ? ((success / tested) * 100).toFixed(1) : "0";
+  progressBar.style.width = clips.length > 0 ? ((tested / clips.length) * 100) + "%" : "0%";
+}
+
+async function checkClip(clip) {
+  try {
+    const res = await fetch(GQL_URL, {
+      method: "POST",
+      headers: { "Client-ID": CLIENT_ID, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        operationName: "VideoAccessToken_Clip",
+        variables: { slug: clip.id },
+        extensions: { persistedQuery: { version: 1, sha256Hash: QUERY_HASH } }
+      })
+    });
+
+    if (!res.ok) return false;
+
+    const data = await res.json();
+    const clipData = data?.data?.clip;
+    if (!clipData) return false;
+
+    const token = clipData.playbackAccessToken?.value;
+    const sig = clipData.playbackAccessToken?.signature;
+    const qualities = clipData.videoQualities || [];
+
+    return !!(token && sig && qualities.length > 0);
+  } catch {
+    return false;
+  }
+}
+
+async function runTest() {
+  const concurrent = parseInt(concurrentInput.value) || 10;
+  let index = 0;
+
+  async function worker() {
+    while (running && index < clips.length) {
+      const clip = clips[index++];
+      const ok = await checkClip(clip);
+      tested++;
+      if (ok) {
+        success++;
+        log(`✓ ${clip.id} - ${clip.title?.substring(0, 40) || "untitled"}`, true);
+      } else {
+        failed++;
+        failedClips.push(clip.id);
+        log(`✗ ${clip.id} - ${clip.title?.substring(0, 40) || "untitled"}`, false);
+      }
+      updateStats();
+    }
+  }
+
+  // Launch concurrent workers
+  const workers = [];
+  for (let i = 0; i < concurrent; i++) {
+    workers.push(worker());
+  }
+  await Promise.all(workers);
+
+  running = false;
+  startBtn.disabled = false;
+  stopBtn.disabled = true;
+  log(`\n=== DONE === Success: ${success}/${tested} (${((success/tested)*100).toFixed(1)}%) ===`, true);
+
+  if (failedClips.length > 0) {
+    console.log("Failed clip IDs:", failedClips);
+  }
+}
+
+startBtn.onclick = async () => {
+  if (running) return;
+
+  // Reset
+  tested = 0; success = 0; failed = 0; failedClips = [];
+  logEl.innerHTML = "";
+  updateStats();
+
+  log("Fetching clips from API...", true);
+
+  try {
+    const res = await fetch(`${API_BASE}/twitch_reel_api.php?login=${encodeURIComponent(login)}&days=0&pool=15000`);
+    const data = await res.json();
+    clips = data.clips || [];
+    totalEl.textContent = clips.length;
+
+    log(`Loaded ${clips.length} clips, starting test...`, true);
+
+    running = true;
+    startBtn.disabled = true;
+    stopBtn.disabled = false;
+
+    runTest();
+  } catch (err) {
+    log("Error: " + err.message, false);
+  }
+};
+
+stopBtn.onclick = () => {
+  running = false;
+  startBtn.disabled = false;
+  stopBtn.disabled = true;
+  log("Stopped by user", false);
+};
+</script>
+</body>
+</html>

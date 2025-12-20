@@ -43,20 +43,26 @@ if (!is_array($data) || !isset($data["game_id"])) {
   exit;
 }
 
-// Get the list of clip IDs matching this category
+// Get the full clip data matching this category
 $clipIds = [];
+$categoryClips = [];
 $pdo = get_db_connection();
 
 if ($pdo) {
   try {
     $stmt = $pdo->prepare("
-      SELECT clip_id FROM clips
-      WHERE login = ? AND game_id = ? AND blocked = false
-      ORDER BY seq
+      SELECT c.clip_id as id, c.seq, c.title, c.duration, c.created_at, c.view_count,
+             c.game_id, c.video_id, c.vod_offset, c.creator_name, c.thumbnail_url,
+             g.name as game_name
+      FROM clips c
+      LEFT JOIN games_cache g ON c.game_id = g.game_id
+      WHERE c.login = ? AND c.game_id = ? AND c.blocked = false
+      ORDER BY c.created_at DESC
     ");
     $stmt->execute([$login, $data["game_id"]]);
-    while ($row = $stmt->fetch()) {
-      $clipIds[] = $row['clip_id'];
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+      $clipIds[] = $row['id'];
+      $categoryClips[] = $row;
     }
   } catch (PDOException $e) {
     error_log("category_get db error: " . $e->getMessage());
@@ -70,5 +76,6 @@ echo json_encode([
   "nonce" => $data["nonce"] ?? "",
   "set_at" => $data["set_at"] ?? "",
   "clip_ids" => $clipIds,
+  "clips" => $categoryClips,
   "clip_count" => count($clipIds)
 ], JSON_UNESCAPED_SLASHES);

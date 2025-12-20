@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Single Frame Test</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; width: 100%; background: #000; overflow: hidden; }
+
+    iframe {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    #status {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      color: #0f0;
+      font: 12px monospace;
+      z-index: 9999;
+      background: rgba(0,0,0,0.8);
+      padding: 8px;
+      border-radius: 4px;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="status">Loading...</div>
+  <!-- Single iframe, just like static_test -->
+  <iframe id="frame" allow="autoplay; fullscreen" allowfullscreen></iframe>
+
+<script>
+(async () => {
+  const qs = new URLSearchParams(location.search);
+  const login = (qs.get("login") || "floppyjimmie").toLowerCase();
+  const parent = qs.get("parent") || location.hostname;
+
+  const status = document.getElementById("status");
+  const frame = document.getElementById("frame");
+
+  const API_BASE = "https://clipsystem-production.up.railway.app";
+
+  let clips = [];
+  let currentIndex = 0;
+
+  function clipSrc(id) {
+    return `https://clips.twitch.tv/embed?clip=${encodeURIComponent(id)}&parent=${encodeURIComponent(parent)}&autoplay=true&muted=false`;
+  }
+
+  function log(msg) {
+    console.log("[TEST]", msg);
+    status.textContent = msg;
+  }
+
+  // Single frame approach - just change src directly, no second frame
+  function switchToClip(clip) {
+    log(`Switching to: ${clip.title || clip.id}`);
+
+    // Simply set new src - this is what static_test does (but dynamically)
+    frame.src = clipSrc(clip.id);
+
+    // Schedule next
+    const duration = Math.max(10, clip.duration || 30);
+    setTimeout(() => {
+      log(`Playing for ${duration}s...`);
+    }, 500);
+
+    setTimeout(() => {
+      currentIndex = (currentIndex + 1) % clips.length;
+      switchToClip(clips[currentIndex]);
+    }, duration * 1000);
+  }
+
+  // Fetch clips
+  log("Fetching clips...");
+  try {
+    const res = await fetch(`${API_BASE}/twitch_reel_api.php?login=${encodeURIComponent(login)}&days=180&pool=100`);
+    const data = await res.json();
+    clips = data.clips || [];
+
+    if (clips.length === 0) {
+      log("No clips found!");
+      return;
+    }
+
+    log(`Loaded ${clips.length} clips`);
+
+    // Start with first clip
+    currentIndex = Math.floor(Math.random() * clips.length);
+    const first = clips[currentIndex];
+
+    log(`First clip: ${first.title || first.id}`);
+
+    // Set src directly, just like static_test
+    frame.src = clipSrc(first.id);
+
+    const duration = Math.max(10, first.duration || 30);
+    setTimeout(() => {
+      currentIndex = (currentIndex + 1) % clips.length;
+      switchToClip(clips[currentIndex]);
+    }, duration * 1000);
+
+  } catch (err) {
+    log("Error: " + err.message);
+    console.error(err);
+  }
+})();
+</script>
+</body>
+</html>

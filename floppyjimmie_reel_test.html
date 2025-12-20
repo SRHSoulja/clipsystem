@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Clip Reel Test</title>
+  <script>
+    // Attempt to override visibility detection methods before Twitch loads
+    // This runs before any iframes load
+
+    // Override checkVisibility to always return true
+    if (Element.prototype.checkVisibility) {
+      Element.prototype.checkVisibility = function() { return true; };
+    }
+
+    // Override getComputedStyle to report visible styles
+    const originalGetComputedStyle = window.getComputedStyle;
+    window.getComputedStyle = function(el, pseudo) {
+      const style = originalGetComputedStyle.call(window, el, pseudo);
+      // Create a proxy that reports visible for visibility-related properties
+      return new Proxy(style, {
+        get(target, prop) {
+          if (prop === 'visibility') return 'visible';
+          if (prop === 'display') return target.display === 'none' ? 'block' : target.display;
+          if (prop === 'opacity') return '1';
+          const val = target[prop];
+          return typeof val === 'function' ? val.bind(target) : val;
+        }
+      });
+    };
+
+    // Override IntersectionObserver to always report visible
+    const OriginalIntersectionObserver = window.IntersectionObserver;
+    window.IntersectionObserver = function(callback, options) {
+      const observer = new OriginalIntersectionObserver(function(entries, obs) {
+        // Modify entries to always show as intersecting/visible
+        const modifiedEntries = entries.map(entry => ({
+          ...entry,
+          isIntersecting: true,
+          intersectionRatio: 1,
+          isVisible: true
+        }));
+        callback(modifiedEntries, obs);
+      }, options);
+      return observer;
+    };
+    window.IntersectionObserver.prototype = OriginalIntersectionObserver.prototype;
+
+    // Force document to always appear visible/focused
+    Object.defineProperty(document, 'visibilityState', { get: () => 'visible' });
+    Object.defineProperty(document, 'hidden', { get: () => false });
+  </script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      height: 100%;
+      width: 100%;
+      background: #000;
+      overflow: hidden;
+    }
+
+    /* Normal mode - full viewport */
+    .viewport {
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+    }
+
+    .frameWrap {
+      position: absolute;
+      inset: 0;
+    }
+
+    iframe {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    /* Fake mobile mode - fixed size scaled to fit */
+    body.fakeMobile .viewport .frameWrap {
+      width: 1500px;
+      height: 1080px;
+      inset: auto;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%) scale(var(--embed-scale, 1));
+      transform-origin: center;
+    }
+
+    /* Transition video overlay */
+    #transitionVideo {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      object-fit: cover;
+      z-index: 9000;
+      pointer-events: none;
+      display: none;
+    }
+
+    /* Vote HUD */
+    #voteHud{
+      position:absolute;
+      right:24px;
+      top:24px;
+      z-index:11000;
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+      align-items:center;
+      padding:18px 24px;
+      border-radius:16px;
+      background: rgba(0,0,0,0.25);
+      border: 2px solid rgba(255,255,255,0.15);
+      color:#fff;
+      font: 18px/1.3 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      user-select:none;
+      pointer-events:none;
+      backdrop-filter: blur(12px);
+      opacity:0;
+      transform: translateX(6px);
+      transition: opacity 180ms linear, transform 180ms linear;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.6);
+      max-width:550px;
+      text-align:center;
+    }
+    #voteHud.show{
+      opacity:1;
+      transform: translateX(0);
+    }
+    #voteHud .clip-info{
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      width:100%;
+      align-items:center;
+    }
+    #voteHud .seq{
+      font-weight:800;
+      font-size:24px;
+      letter-spacing:.3px;
+      color:#fff;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.7);
+    }
+    #voteHud .clip-date-hud{
+      font-weight:600;
+      font-size:18px;
+      color:#a0a0ff;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.7);
+      margin-left:10px;
+    }
+    #voteHud .clip-title{
+      font-weight:600;
+      font-size:18px;
+      color:#f0f0f0;
+      max-width:100%;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+    }
+    #voteHud .clip-meta{
+      font-size:17px;
+      font-weight:600;
+      color:#e8e8e8;
+      display:flex;
+      gap:14px;
+      justify-content:center;
+      flex-wrap:wrap;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.7);
+    }
+    #voteHud .clip-meta span{
+      display:inline-flex;
+      align-items:center;
+      gap:4px;
+    }
+    #voteHud .meta-duration{
+      color:#fbbf24;
+    }
+    #voteHud .meta-category{
+      color:#22d3ee;
+    }
+    #voteHud .meta-clipper-label{
+      color:#a0a0a0;
+    }
+    #voteHud .meta-clipper-name{
+      color:#c084fc;
+    }
+    #voteHud .vote-section{
+      display:flex;
+      gap:14px;
+      align-items:center;
+      padding-top:8px;
+      border-top: 1px solid rgba(255,255,255,0.2);
+      width:100%;
+      justify-content:center;
+    }
+    #voteHud .pill{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding:8px 14px;
+      border-radius:999px;
+      font-weight:700;
+      font-size:18px;
+    }
+    #voteHud .pill.up{
+      background: rgba(34,197,94,0.2);
+      border: 2px solid rgba(34,197,94,0.6);
+      color: #4ade80;
+    }
+    #voteHud .pill.down{
+      background: rgba(239,68,68,0.2);
+      border: 2px solid rgba(239,68,68,0.6);
+      color: #f87171;
+    }
+    #voteHud .hints{
+      display:flex;
+      flex-direction:column;
+      gap:3px;
+      font-size:16px;
+      font-weight:700;
+    }
+    #voteHud .hint-like{
+      color: #4ade80;
+    }
+    #voteHud .hint-dislike{
+      color: #f87171;
+    }
+  </style>
+</head>
+<body>
+  <div class="viewport" id="viewport">
+    <div class="frameWrap">
+      <iframe id="clip-frame" allow="autoplay; fullscreen; encrypted-media"></iframe>
+    </div>
+  </div>
+
+  <!-- Transition video overlay -->
+  <video id="transitionVideo" muted playsinline preload="auto">
+    <source src="/flop/transition.mp4" type="video/mp4">
+  </video>
+
+  <!-- Vote HUD -->
+  <div id="voteHud" aria-hidden="true">
+    <div class="clip-info">
+      <div style="display:flex;align-items:baseline;justify-content:center;gap:0;">
+        <span class="seq" id="voteSeq">Clip</span>
+        <span class="clip-date-hud" id="clipDateHud"></span>
+      </div>
+      <span class="clip-title" id="clipTitle"></span>
+      <span class="clip-meta" id="clipMeta"></span>
+    </div>
+    <div class="vote-section">
+      <span class="pill up" id="voteUp">👍 0</span>
+      <span class="pill down" id="voteDown">👎 0</span>
+      <div class="hints">
+        <span class="hint-like" id="hintLike">!like #</span>
+        <span class="hint-dislike" id="hintDislike">!dislike #</span>
+      </div>
+    </div>
+  </div>
+
+<script>
+(async () => {
+  const qs = new URLSearchParams(location.search);
+  const login = (qs.get("login") || "floppyjimmie").toLowerCase();
+  const parent = qs.get("parent") || location.hostname;
+  const muted = qs.get("muted") !== "0";
+  const hudEnabled = qs.get("hud") !== "0";
+  const fakeMobile = qs.get("mobile") === "1";
+
+  // Apply fake mobile mode
+  if (fakeMobile) {
+    document.body.classList.add("fakeMobile");
+  }
+
+  const API_BASE = "https://clipsystem-production.up.railway.app";
+  const frame = document.getElementById("clip-frame");
+  const viewport = document.getElementById("viewport");
+  const transitionVideo = document.getElementById("transitionVideo");
+
+  // HUD elements
+  const voteHud = document.getElementById("voteHud");
+  const voteSeq = document.getElementById("voteSeq");
+  const clipDateHud = document.getElementById("clipDateHud");
+  const clipTitle = document.getElementById("clipTitle");
+  const clipMeta = document.getElementById("clipMeta");
+  const voteUp = document.getElementById("voteUp");
+  const voteDown = document.getElementById("voteDown");
+  const hintLike = document.getElementById("hintLike");
+  const hintDislike = document.getElementById("hintDislike");
+
+  let clips = [];
+  let currentIndex = 0;
+  let playCount = 0;
+
+  // Apply fake mobile scaling
+  function applyFakeMobileScale() {
+    if (!fakeMobile) return;
+    const baseW = 390, baseH = 844;
+    const s = Math.min(window.innerWidth / baseW, window.innerHeight / baseH);
+    viewport.style.setProperty("--embed-scale", String(s));
+  }
+  window.addEventListener("resize", applyFakeMobileScale);
+  applyFakeMobileScale();
+
+  // Try VOD player if video_id exists, otherwise fall back to clips.twitch.tv
+  function clipSrc(clip) {
+    // If clip has video_id and vod_offset, use the VOD player instead
+    // This might bypass the visibility check since it's a different player
+    if (clip.video_id && clip.vod_offset !== null && clip.vod_offset !== undefined) {
+      const time = `${Math.floor(clip.vod_offset / 3600)}h${Math.floor((clip.vod_offset % 3600) / 60)}m${clip.vod_offset % 60}s`;
+      console.log("[TEST] Using VOD player:", clip.video_id, "at", time);
+      return `https://player.twitch.tv/?video=${encodeURIComponent(clip.video_id)}&parent=${encodeURIComponent(parent)}&autoplay=true&muted=${muted}&time=${time}`;
+    }
+    // Fall back to clip embed
+    console.log("[TEST] Using clip embed (no VOD):", clip.id);
+    return `https://clips.twitch.tv/embed?clip=${encodeURIComponent(clip.id)}&parent=${encodeURIComponent(parent)}&autoplay=true&muted=${muted}`;
+  }
+
+  function formatDuration(seconds) {
+    if (!seconds || seconds <= 0) return "";
+    const s = Math.round(seconds);
+    if (s < 60) return `${s}s`;
+    const m = Math.floor(s / 60);
+    const rem = s % 60;
+    return `${m}:${rem.toString().padStart(2, '0')}`;
+  }
+
+  function formatClipDate(dateStr) {
+    if (!dateStr) return "";
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return "";
+      return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    } catch {
+      return "";
+    }
+  }
+
+  function updateHud(clip, seq) {
+    if (!hudEnabled) return;
+
+    voteSeq.textContent = `Clip #${seq}`;
+    hintLike.textContent = `!like ${seq}`;
+    hintDislike.textContent = `!dislike ${seq}`;
+
+    const dateStr = formatClipDate(clip.created_at);
+    clipDateHud.textContent = dateStr ? `• ${dateStr}` : "";
+
+    clipTitle.textContent = clip.title || "";
+
+    const metaParts = [];
+    const dur = formatDuration(clip.duration);
+    if (dur) metaParts.push(`<span class="meta-duration">${dur}</span>`);
+    if (clip.game_name) metaParts.push(`<span class="meta-category">${clip.game_name}</span>`);
+    if (clip.creator_name) {
+      metaParts.push(`<span><span class="meta-clipper-label">Clipped by</span> <span class="meta-clipper-name">${clip.creator_name}</span></span>`);
+    }
+    clipMeta.innerHTML = metaParts.join("");
+  }
+
+  function showHud() {
+    if (hudEnabled) voteHud.classList.add("show");
+  }
+
+  function hideHud() {
+    voteHud.classList.remove("show");
+  }
+
+  // Play transition video
+  function playTransition() {
+    transitionVideo.currentTime = 0;
+    transitionVideo.style.display = "block";
+    transitionVideo.play().catch(e => console.warn("[TEST] Transition play failed:", e));
+  }
+
+  // Hide transition video
+  function hideTransition() {
+    transitionVideo.style.display = "none";
+    transitionVideo.pause();
+  }
+
+  function playClip(clip) {
+    playCount++;
+    const seq = currentIndex + 1;
+    console.log("[TEST] Playing:", clip.title || clip.id, clip.duration + "s", "seq:", seq);
+
+    // Hide HUD during switch
+    hideHud();
+
+    // Play transition
+    playTransition();
+
+    // Set iframe src - pass whole clip object for VOD fallback
+    frame.src = clipSrc(clip);
+
+    // Hide transition after it plays
+    setTimeout(hideTransition, 1200);
+
+    // Show HUD after clip starts
+    setTimeout(() => {
+      updateHud(clip, seq);
+      showHud();
+    }, 1500);
+
+    const duration = Math.max(10, clip.duration || 30);
+    setTimeout(() => {
+      currentIndex = (currentIndex + 1) % clips.length;
+      playClip(clips[currentIndex]);
+    }, (duration + 1) * 1000);
+  }
+
+  // Poll for vote counts
+  async function pollVotes() {
+    if (!hudEnabled) return;
+    try {
+      const res = await fetch(`${API_BASE}/vote_status.php?login=${encodeURIComponent(login)}`, { cache: "no-store" });
+      const data = await res.json();
+      voteUp.textContent = `👍 ${Number(data?.up || 0)}`;
+      voteDown.textContent = `👎 ${Number(data?.down || 0)}`;
+    } catch {}
+  }
+
+  console.log("[TEST] Fetching clips...");
+  try {
+    const res = await fetch(`${API_BASE}/twitch_reel_api.php?login=${encodeURIComponent(login)}&days=180&pool=100`, { cache: "no-store" });
+    const data = await res.json();
+    clips = data.clips || [];
+
+    if (clips.length === 0) {
+      console.log("[TEST] No clips found!");
+      return;
+    }
+
+    console.log("[TEST] Loaded", clips.length, "clips. Starting...");
+    currentIndex = Math.floor(Math.random() * clips.length);
+    playClip(clips[currentIndex]);
+
+    // Start vote polling
+    if (hudEnabled) {
+      pollVotes();
+      setInterval(pollVotes, 900);
+    }
+
+  } catch (err) {
+    console.error("[TEST] Error:", err.message);
+  }
+})();
+</script>
+</body>
+</html>

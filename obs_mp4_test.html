@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>OBS MP4 Test (Client-side GQL)</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      height: 100%;
+      width: 100%;
+      background: #000;
+      overflow: hidden;
+    }
+    video {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      background: #000;
+    }
+    #status {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      color: #0f0;
+      font: 14px monospace;
+      z-index: 9999;
+      background: rgba(0,0,0,0.8);
+      padding: 10px;
+      border-radius: 6px;
+      max-width: 600px;
+      white-space: pre-wrap;
+    }
+    #hud {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      color: #fff;
+      font: 16px 'Segoe UI', sans-serif;
+      z-index: 9999;
+      background: rgba(0,0,0,0.7);
+      padding: 12px 16px;
+      border-radius: 8px;
+      max-width: 50%;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    #hud.visible { opacity: 1; }
+    #hud .title {
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    #hud .meta {
+      font-size: 13px;
+      opacity: 0.8;
+    }
+  </style>
+</head>
+<body>
+  <div id="status">Loading...</div>
+  <div id="hud">
+    <div class="title" id="clip-title"></div>
+    <div class="meta" id="clip-meta"></div>
+  </div>
+  <video id="player" autoplay playsinline></video>
+
+<script>
+(async () => {
+  const qs = new URLSearchParams(location.search);
+  const login = (qs.get("login") || "floppyjimmie").toLowerCase();
+  const muted = qs.get("muted") === "1";
+  const stressTest = qs.get("stress") === "1"; // Add ?stress=1 to rapidly test clips
+
+  const status = document.getElementById("status");
+  const player = document.getElementById("player");
+  const hud = document.getElementById("hud");
+  const clipTitle = document.getElementById("clip-title");
+  const clipMeta = document.getElementById("clip-meta");
+
+  const API_BASE = "https://clipsystem-production.up.railway.app";
+
+  // Twitch GQL endpoint and client ID
+  const GQL_URL = "https://gql.twitch.tv/gql";
+  const CLIENT_ID = "kimne78kx3ncx6brgo4mv6wki5h1ko";
+  const QUERY_HASH = "36b89d2507fce29e5ca551df756d27c1cfe079e2609642b4390aa4c35796eb11";
+
+  player.muted = muted;
+
+  let clips = [];
+  let currentIndex = 0;
+  let failedClips = new Set();
+  let playedCount = 0;
+  let failedCount = 0;
+
+  function log(msg) {
+    console.log("[MP4-TEST]", msg);
+    status.textContent = msg;
+  }
+
+  function showHud(clip) {
+    clipTitle.textContent = clip.title || clip.id;
+    clipMeta.textContent = `${clip.view_count?.toLocaleString() || "?"} views • ${clip.duration}s`;
+    hud.classList.add("visible");
+  }
+
+  function hideHud() {
+    hud.classList.remove("visible");
+  }
+
+  // Get MP4 URL directly from Twitch GQL (client-side)
+  async function getMp4Url(clipSlug) {
+    try {
+      const res = await fetch(GQL_URL, {
+        method: "POST",
+        headers: {
+          "Client-ID": CLIENT_ID,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          operationName: "VideoAccessToken_Clip",
+          variables: { slug: clipSlug },
+          extensions: {
+            persistedQuery: {
+              version: 1,
+              sha256Hash: QUERY_HASH
+            }
+          }
+        })
+      });
+
+      if (!res.ok) {
+        console.error("[MP4-TEST] GQL request failed:", res.status);
+        return null;
+      }
+
+      const data = await res.json();
+      const clip = data?.data?.clip;
+      if (!clip) {
+        console.error("[MP4-TEST] No clip in response");
+        return null;
+      }
+
+      const token = clip.playbackAccessToken?.value;
+      const sig = clip.playbackAccessToken?.signature;
+      const qualities = clip.videoQualities || [];
+
+      if (!token || !sig || qualities.length === 0) {
+        console.error("[MP4-TEST] Missing token/sig/qualities");
+        return null;
+      }
+
+      // Get best quality URL and add auth params
+      const best = qualities.sort((a, b) => (parseInt(b.quality) || 0) - (parseInt(a.quality) || 0))[0];
+      const sourceUrl = best.sourceURL;
+      const separator = sourceUrl.includes("?") ? "&" : "?";
+      const signedUrl = `${sourceUrl}${separator}sig=${encodeURIComponent(sig)}&token=${encodeURIComponent(token)}`;
+
+      return signedUrl;
+    } catch (err) {
+      console.error("[MP4-TEST] GQL error:", err);
+      return null;
+    }
+  }
+
+  async function playClip(clip) {
+    log(`Loading: ${clip.title || clip.id}`);
+
+    const mp4Url = await getMp4Url(clip.id);
+
+    if (!mp4Url) {
+      failedCount++;
+      log(`FAILED (${failedCount}/${playedCount + failedCount}): ${clip.id}`);
+      failedClips.add(clip.id);
+      nextClip();
+      return;
+    }
+
+    console.log("[MP4-TEST] Playing:", mp4Url.substring(0, 100) + "...");
+
+    hideHud();
+    player.src = mp4Url;
+    player.load();
+
+    player.oncanplay = () => {
+      player.play().then(() => {
+        playedCount++;
+        log(`SUCCESS (${playedCount}/${playedCount + failedCount}): ${clip.title || clip.id}`);
+        showHud(clip);
+
+        if (stressTest) {
+          // In stress test mode, immediately move to next clip after 2 seconds
+          setTimeout(nextClip, 2000);
+        } else {
+          setTimeout(() => { status.style.display = "none"; }, 2000);
+        }
+      }).catch(err => {
+        log(`Play error: ${err.message}`);
+        failedClips.add(clip.id);
+        nextClip();
+      });
+    };
+
+    player.onerror = () => {
+      log(`Error loading MP4, skipping...`);
+      failedClips.add(clip.id);
+      setTimeout(nextClip, 500);
+    };
+
+    // Report now playing
+    fetch(`${API_BASE}/now_playing.php`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        login, clip_id: clip.id, title: clip.title,
+        duration: clip.duration, view_count: clip.view_count
+      })
+    }).catch(() => {});
+  }
+
+  function nextClip() {
+    let attempts = 0;
+    do {
+      currentIndex = (currentIndex + 1) % clips.length;
+      attempts++;
+    } while (failedClips.has(clips[currentIndex].id) && attempts < clips.length);
+
+    if (attempts >= clips.length) {
+      log("All clips failed!");
+      return;
+    }
+    playClip(clips[currentIndex]);
+  }
+
+  player.onended = () => {
+    console.log("[MP4-TEST] Video ended");
+    nextClip();
+  };
+
+  // Fetch clips
+  log("Fetching clips...");
+  try {
+    // In stress test mode, get a much larger pool to test more clips
+    const poolSize = stressTest ? 2000 : 200;
+    const res = await fetch(`${API_BASE}/twitch_reel_api.php?login=${encodeURIComponent(login)}&days=0&pool=${poolSize}`);
+    const data = await res.json();
+    clips = data.clips || [];
+
+    log(`Loaded ${clips.length} clips, fetching MP4...`);
+
+    if (clips.length === 0) {
+      log("No clips found!");
+      return;
+    }
+
+    clips.sort(() => Math.random() - 0.5);
+    currentIndex = 0;
+    playClip(clips[0]);
+
+  } catch (err) {
+    log("Error: " + err.message);
+    console.error(err);
+  }
+})();
+</script>
+</body>
+</html>

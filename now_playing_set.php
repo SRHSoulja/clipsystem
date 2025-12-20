@@ -19,8 +19,17 @@ function safe_login($s) {
   return $s ?: "default";
 }
 
-// Accept both GET and POST (GET may avoid some host rate-limiting)
+// Accept GET, POST form data, and JSON body
 $input = array_merge($_GET, $_POST);
+
+// Also parse JSON body if present
+$rawBody = file_get_contents('php://input');
+if ($rawBody) {
+  $jsonBody = json_decode($rawBody, true);
+  if (is_array($jsonBody)) {
+    $input = array_merge($input, $jsonBody);
+  }
+}
 $login  = isset($input["login"]) ? safe_login($input["login"]) : "";
 $url    = isset($input["url"]) ? trim((string)$input["url"]) : "";
 $slug   = isset($input["slug"]) ? trim((string)$input["slug"]) : "";

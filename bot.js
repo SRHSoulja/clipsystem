@@ -283,11 +283,6 @@ const commands = {
     }
   },
 
-  // !clips - Alias for !clip
-  async clips(channel, tags, args) {
-    return commands.clip(channel, tags, args);
-  },
-
   // !chelp - Show available clip commands
   async chelp(channel, tags, args) {
     if (isMod(tags)) {

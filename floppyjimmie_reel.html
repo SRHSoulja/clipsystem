@@ -147,8 +147,8 @@
       align-items:center;
       padding:18px 24px;
       border-radius:16px;
-      background: rgba(0,0,0,0.4);
-      border: 2px solid rgba(255,255,255,0.25);
+      background: rgba(0,0,0,0.25);
+      border: 2px solid rgba(255,255,255,0.15);
       color:#fff;
       font: 18px/1.3 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
       user-select:none;
@@ -179,6 +179,13 @@
       color:#fff;
       text-shadow: 0 2px 4px rgba(0,0,0,0.7);
     }
+    #voteHud .clip-date-hud{
+      font-weight:600;
+      font-size:18px;
+      color:#a0a0ff;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.7);
+      margin-left:10px;
+    }
     #voteHud .clip-title{
       font-weight:600;
       font-size:18px;
@@ -190,18 +197,31 @@
       text-shadow: 0 1px 3px rgba(0,0,0,0.5);
     }
     #voteHud .clip-meta{
-      font-size:16px;
-      color:#d0d0d0;
+      font-size:17px;
+      font-weight:600;
+      color:#e8e8e8;
       display:flex;
       gap:14px;
       justify-content:center;
       flex-wrap:wrap;
-      text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+      text-shadow: 0 2px 4px rgba(0,0,0,0.7);
     }
     #voteHud .clip-meta span{
       display:inline-flex;
       align-items:center;
       gap:4px;
+    }
+    #voteHud .meta-duration{
+      color:#fbbf24;
+    }
+    #voteHud .meta-category{
+      color:#22d3ee;
+    }
+    #voteHud .meta-clipper-label{
+      color:#a0a0a0;
+    }
+    #voteHud .meta-clipper-name{
+      color:#c084fc;
     }
     #voteHud .vote-section{
       display:flex;
@@ -235,7 +255,7 @@
       display:flex;
       flex-direction:column;
       gap:3px;
-      font-size:13px;
+      font-size:16px;
       font-weight:700;
     }
     #voteHud .hint-like{
@@ -294,7 +314,10 @@
 
     <div id="voteHud" aria-hidden="true">
       <div class="clip-info">
-        <span class="seq" id="voteSeq">Clip</span>
+        <div style="display:flex;align-items:baseline;justify-content:center;gap:0;">
+          <span class="seq" id="voteSeq">Clip</span>
+          <span class="clip-date-hud" id="clipDateHud"></span>
+        </div>
         <span class="clip-title" id="clipTitle"></span>
         <span class="clip-meta" id="clipMeta"></span>
       </div>
@@ -349,6 +372,8 @@
 
   const fastMode   = qs.get("fast") === "1";
   const fakeMobile = qs.get("mobile") === "1";
+  const autostart  = qs.get("autostart") !== "0";  // Default true
+  const forceMuted = qs.get("muted") === "1";      // Force muted if ?muted=1
 
   if (qs.get("overscan") === "1") document.body.classList.add("overscan");
   if (qs.get("mask") === "1") document.body.classList.add("mask");
@@ -404,6 +429,7 @@
   // ===== Vote HUD polling =====
   const voteHud  = document.getElementById("voteHud");
   const voteSeq  = document.getElementById("voteSeq");
+  const clipDateHud = document.getElementById("clipDateHud");
   const clipTitle = document.getElementById("clipTitle");
   const clipMeta = document.getElementById("clipMeta");
   const voteUp   = document.getElementById("voteUp");
@@ -417,8 +443,9 @@
   // Client-side seq tracking - updates HUD immediately without waiting for server
   let currentHudSeq = 0;
   let currentHudClipId = null;
+  let currentClip = null;
 
-  // Format duration in seconds to mm:ss or just ss for short clips
+  // Helper: format duration as "Xs" or "M:SS"
   function formatDuration(seconds) {
     if (!seconds || seconds <= 0) return "";
     const s = Math.round(seconds);
@@ -428,9 +455,23 @@
     return `${m}:${rem.toString().padStart(2, '0')}`;
   }
 
+  // Helper: format clip date
+  function formatClipDate(dateStr) {
+    if (!dateStr) return "";
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return "";
+      return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    } catch {
+      return "";
+    }
+  }
+
   // Update HUD seq immediately from local clip data (no server needed)
   function updateHudSeqLocal(clip) {
     if (!hudEnabled || !clip) return;
+
+    currentClip = clip;
 
     // Get seq from clip object (set by index) or fallback to array position
     let seq = clip.seq;
@@ -447,35 +488,22 @@
       hintLike.textContent = `!like ${seq}`;
       hintDislike.textContent = `!dislike ${seq}`;
 
-      // Update title
-      if (clipTitle) {
-        clipTitle.textContent = clip.title || "";
+      // Update clip date
+      const dateStr = formatClipDate(clip.created_at);
+      clipDateHud.textContent = dateStr ? `• ${dateStr}` : "";
+
+      // Update clip title
+      clipTitle.textContent = clip.title || "";
+
+      // Update clip meta (duration, category, clipper)
+      const metaParts = [];
+      const dur = formatDuration(clip.duration);
+      if (dur) metaParts.push(`<span class="meta-duration">${dur}</span>`);
+      if (clip.game_name) metaParts.push(`<span class="meta-category">${clip.game_name}</span>`);
+      if (clip.creator_name) {
+        metaParts.push(`<span><span class="meta-clipper-label">Clipped by</span> <span class="meta-clipper-name">${clip.creator_name}</span></span>`);
       }
-
-      // Build meta info (duration, category/game, clipper)
-      if (clipMeta) {
-        const metaParts = [];
-
-        // Duration
-        const dur = formatDuration(clip.duration);
-        if (dur) {
-          metaParts.push(`<span>${dur}</span>`);
-        }
-
-        // Game/Category
-        const game = clip.game_name || "";
-        if (game) {
-          metaParts.push(`<span>${game}</span>`);
-        }
-
-        // Clipper name
-        const clipper = clip.creator_name || "";
-        if (clipper) {
-          metaParts.push(`<span>Clipped by ${clipper}</span>`);
-        }
-
-        clipMeta.innerHTML = metaParts.join("");
-      }
+      clipMeta.innerHTML = metaParts.join("");
 
       voteHud.classList.add("show");
       debugLog("HUD seq=" + seq + " (local)", "ok");
@@ -858,7 +886,8 @@
 
   function clipSrc(id, autoplay) {
     const ap = autoplay ? "true" : "false";
-    return `https://clips.twitch.tv/embed?clip=${encodeURIComponent(id)}&parent=${encodeURIComponent(parent)}&autoplay=${ap}&muted=false`;
+    const mutedParam = forceMuted ? "true" : "false";
+    return `https://clips.twitch.tv/embed?clip=${encodeURIComponent(id)}&parent=${encodeURIComponent(parent)}&autoplay=${ap}&muted=${mutedParam}`;
   }
 
   // Track what we've set as now playing to avoid duplicate calls
@@ -1398,21 +1427,18 @@
       const nonce = (data.nonce != null) ? String(data.nonce) : null;
       console.log("[PCLIP] Nonce check - received:", nonce, "last:", lastPclipNonce);
       if (!nonce || nonce === lastPclipNonce) return;
+      lastPclipNonce = nonce;
 
-      // On fresh page load (lastPclipNonce is null), ignore stale force_play requests
-      // This prevents replaying old clips when switching scenes
-      if (lastPclipNonce === null && data.set_at) {
+      // Ignore stale requests (older than 60 seconds)
+      if (data.set_at) {
         const setAtTime = new Date(data.set_at).getTime();
         const ageMs = Date.now() - setAtTime;
-        const MAX_AGE_MS = 60000; // 60 seconds
-        if (ageMs > MAX_AGE_MS) {
-          console.log("[PCLIP] Ignoring stale force_play request, age:", Math.round(ageMs / 1000), "seconds");
-          lastPclipNonce = nonce; // Mark as seen so we don't check age again
+        if (ageMs > 60000) {
+          console.log("[PCLIP] Ignoring stale request, age:", Math.round(ageMs / 1000), "s");
           return;
         }
       }
 
-      lastPclipNonce = nonce;
       console.log("[PCLIP] Force play command received:", JSON.stringify(data));
 
       // Try to find in current pool first

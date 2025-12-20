@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>OBS Delayed Test</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      height: 100%;
+      width: 100%;
+      background: #000;
+      overflow: hidden;
+    }
+    iframe {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+    #status {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      color: #0f0;
+      font: 14px monospace;
+      z-index: 9999;
+      background: rgba(0,0,0,0.8);
+      padding: 10px;
+      border-radius: 6px;
+    }
+  </style>
+</head>
+<body>
+  <div id="status">Waiting for page ready...</div>
+  <iframe id="clip-frame" allow="autoplay; fullscreen"></iframe>
+
+<script>
+// Wait for everything to be truly ready before doing anything
+window.addEventListener("load", () => {
+  // Additional delay to let OBS browser source fully initialize
+  setTimeout(() => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        startPlayer();
+      });
+    });
+  }, 500);
+});
+
+async function startPlayer() {
+  const qs = new URLSearchParams(location.search);
+  const login = (qs.get("login") || "floppyjimmie").toLowerCase();
+  const parent = qs.get("parent") || location.hostname;
+
+  const status = document.getElementById("status");
+  const frame = document.getElementById("clip-frame");
+
+  const API_BASE = "https://clipsystem-production.up.railway.app";
+
+  status.textContent = "Fetching clips...";
+
+  try {
+    const res = await fetch(`${API_BASE}/twitch_reel_api.php?login=${encodeURIComponent(login)}&days=180&pool=50`);
+    const data = await res.json();
+    const clips = data.clips || [];
+
+    if (clips.length === 0) {
+      status.textContent = "No clips found!";
+      return;
+    }
+
+    const clip = clips[Math.floor(Math.random() * clips.length)];
+    status.textContent = `Playing: ${clip.title || clip.id}`;
+
+    const src = `https://clips.twitch.tv/embed?clip=${encodeURIComponent(clip.id)}&parent=${encodeURIComponent(parent)}&autoplay=true&muted=false`;
+
+    console.log("[DELAYED] Setting iframe src:", src);
+
+    // Set src in next animation frame
+    requestAnimationFrame(() => {
+      frame.src = src;
+    });
+
+    setTimeout(() => {
+      status.style.opacity = "0.3";
+    }, 5000);
+
+  } catch (err) {
+    console.error("[DELAYED] Error:", err);
+    status.textContent = "Error: " + err.message;
+  }
+}
+</script>
+</body>
+</html>

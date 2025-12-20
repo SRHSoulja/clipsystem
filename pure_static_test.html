@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Pure Static Test</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; width: 100%; background: #000; overflow: hidden; }
+    iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; }
+  </style>
+</head>
+<body>
+  <!-- No JavaScript at all - just a hardcoded clip embed -->
+  <!-- This tests if OBS can autoplay ANY Twitch clip right now -->
+  <iframe
+    src="https://clips.twitch.tv/embed?clip=RoughTangentialWatercressRlyTho-bMipLj8Ys8tPpp3a&parent=gmgnrepeat.com&autoplay=true&muted=false"
+    allow="autoplay; fullscreen"
+    allowfullscreen>
+  </iframe>
+</body>
+</html>

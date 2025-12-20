@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>OBS VOD Player Test</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      height: 100%;
+      width: 100%;
+      background: #000;
+      overflow: hidden;
+    }
+    iframe {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+    #status {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      color: #0f0;
+      font: 14px monospace;
+      z-index: 9999;
+      background: rgba(0,0,0,0.8);
+      padding: 10px;
+      border-radius: 6px;
+      max-width: 500px;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <div id="status">Loading...</div>
+  <iframe id="clip-frame" allow="autoplay; fullscreen"></iframe>
+
+<script>
+(async () => {
+  const qs = new URLSearchParams(location.search);
+  const login = (qs.get("login") || "floppyjimmie").toLowerCase();
+  const parent = qs.get("parent") || location.hostname;
+
+  const status = document.getElementById("status");
+  const frame = document.getElementById("clip-frame");
+
+  const API_BASE = "https://clipsystem-production.up.railway.app";
+
+  status.textContent = "Fetching clips with VOD info...";
+
+  try {
+    // Fetch clips - the API returns video_id and vod_offset for clips that have VOD
+    const res = await fetch(`${API_BASE}/twitch_reel_api.php?login=${encodeURIComponent(login)}&days=180&pool=100`);
+    const data = await res.json();
+    const allClips = data.clips || [];
+
+    // Filter to clips that have VOD info
+    const vodClips = allClips.filter(c => c.video_id && c.vod_offset !== null && c.vod_offset !== undefined);
+
+    status.textContent = `Found ${allClips.length} clips, ${vodClips.length} have VOD info`;
+
+    if (vodClips.length === 0) {
+      status.textContent = "No clips with VOD info found!\nTrying regular clip embed...";
+
+      // Fall back to regular clip
+      if (allClips.length > 0) {
+        const clip = allClips[Math.floor(Math.random() * allClips.length)];
+        const src = `https://clips.twitch.tv/embed?clip=${encodeURIComponent(clip.id)}&parent=${encodeURIComponent(parent)}&autoplay=true&muted=false`;
+        status.textContent += `\n\nFallback: ${clip.title || clip.id}`;
+        frame.src = src;
+      }
+      return;
+    }
+
+    // Pick a random VOD clip
+    const clip = vodClips[Math.floor(Math.random() * vodClips.length)];
+
+    // Format time for VOD player: 1h2m3s format
+    const offset = clip.vod_offset;
+    const hours = Math.floor(offset / 3600);
+    const minutes = Math.floor((offset % 3600) / 60);
+    const seconds = offset % 60;
+    const time = `${hours}h${minutes}m${seconds}s`;
+
+    status.textContent = `VOD Player Test\n` +
+      `Clip: ${clip.title || clip.id}\n` +
+      `VOD: ${clip.video_id}\n` +
+      `Offset: ${time} (${offset}s)\n` +
+      `Duration: ${clip.duration}s`;
+
+    // Use player.twitch.tv with video ID and time offset
+    // This is a different player than clips.twitch.tv - might have different autoplay rules
+    const src = `https://player.twitch.tv/?video=${encodeURIComponent(clip.video_id)}&parent=${encodeURIComponent(parent)}&autoplay=true&muted=false&time=${time}`;
+
+    console.log("[VOD-TEST] Using VOD player:", src);
+    console.log("[VOD-TEST] Clip info:", clip);
+
+    frame.src = src;
+
+    // Hide status after a while
+    setTimeout(() => {
+      status.style.opacity = "0.3";
+    }, 8000);
+
+  } catch (err) {
+    console.error("[VOD-TEST] Error:", err);
+    status.textContent = "Error: " + err.message;
+  }
+})();
+</script>
+</body>
+</html>

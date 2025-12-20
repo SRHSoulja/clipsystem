@@ -1,0 +1,59 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Enable Audio - Clip Reel Test</title>
+  <style>
+    html,body{height:100%;margin:0;background:#000;color:#fff;font:600 18px system-ui,Arial}
+    .wrap{height:100%;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px}
+    button{font:600 18px system-ui,Arial;padding:14px 18px;border-radius:12px;border:0;cursor:pointer;background:#9147ff;color:#fff}
+    button:hover{background:#772ce8}
+    .small{opacity:.8;font-weight:400;font-size:14px;max-width:520px;text-align:center;line-height:1.3}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div>Clip Reel Test</div>
+    <button id="go">Start with Audio</button>
+    <div class="small">
+      Click to enable audio and start the clip reel.
+      This user interaction helps browsers allow autoplay with sound.
+    </div>
+  </div>
+
+<script>
+document.getElementById("go").addEventListener("click", async () => {
+  // Prime the AudioContext with user interaction
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (AC) {
+      const ctx = new AC();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      gain.gain.value = 0.00001; // Nearly silent
+      osc.connect(gain).connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.03);
+      await ctx.resume();
+    }
+  } catch {}
+
+  // Mark as primed
+  localStorage.setItem("gmgn_audio_primed", "1");
+
+  // Carry through query params
+  const qs = new URLSearchParams(location.search);
+  if (!qs.get("login")) qs.set("login", "floppyjimmie");
+  if (!qs.get("parent")) qs.set("parent", location.hostname);
+
+  // Enable audio (muted=0) and mobile mode
+  qs.set("muted", "0");
+  if (!qs.has("mobile")) qs.set("mobile", "1");
+
+  // Redirect to the test reel (in /flop/ folder)
+  location.href = "/flop/floppyjimmie_reel_test.html?" + qs.toString();
+});
+</script>
+</body>
+</html>

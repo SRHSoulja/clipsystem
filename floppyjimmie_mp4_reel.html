@@ -138,8 +138,8 @@
   const qs = new URLSearchParams(location.search);
 
   const login  = (qs.get("login") || "floppyjimmie").toLowerCase();
-  const days   = parseInt(qs.get("days") || "180", 10);
-  const pool   = parseInt(qs.get("pool") || "400", 10);
+  const days   = parseInt(qs.get("days") || "0", 10);  // 0 = all time
+  const pool   = parseInt(qs.get("pool") || "500", 10);  // Reasonable pool size (category mode loads all)
   const forceMuted = qs.get("muted") === "1";
 
   const API_BASE = "https://clipsystem-production.up.railway.app";
@@ -288,18 +288,8 @@
 
     const recentSet = new Set(state.recent.slice(-RECENT_BLOCK));
 
-    // Start with all clips, then apply filters
+    // Use current clips array (already filtered if category mode is active)
     let pool = clips;
-
-    // Apply category filter if active
-    if (categoryFilter && categoryFilter.clip_ids && categoryFilter.clip_ids.size > 0) {
-      pool = clips.filter(c => categoryFilter.clip_ids.has(c.id));
-      if (pool.length === 0) {
-        // No clips match filter, fall back to all clips
-        debugLog("Category filter empty, using all clips", "warn");
-        pool = clips;
-      }
-    }
 
     // Exclude recent and failed clips
     const candidates = pool.filter(c => !recentSet.has(c.id) && !failedClips.has(c.id));
@@ -355,10 +345,10 @@
   async function setNowPlaying(c) {
     if (!c?.id) return;
     try {
-      await fetch(`${API_BASE}/now_playing.php`, {
+      await fetch(`${API_BASE}/now_playing_set.php`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ login, clip_id: c.id, title: c.title, duration: c.duration, view_count: c.view_count })
+        body: JSON.stringify({ login, clip_id: c.id, seq: c.seq, title: c.title, duration: c.duration, view_count: c.view_count })
       });
     } catch {}
   }
@@ -666,15 +656,22 @@
   }
 
   // Category filter polling
+  let originalClips = null; // Store original clips when entering category mode
+
   async function pollCategory() {
     try {
       const res = await fetch(`${API_BASE}/category_get.php?login=${encodeURIComponent(login)}`, { cache: "no-store" });
       const data = await res.json();
 
       if (!data?.active) {
-        // Category filter cleared
+        // Category filter cleared - restore original clips
         if (categoryFilter) {
           debugLog("Category filter cleared", "ok");
+          if (originalClips) {
+            clips = originalClips;
+            originalClips = null;
+            debugLog(`Restored ${clips.length} clips`);
+          }
           categoryFilter = null;
           lastCategoryNonce = null;
         }
@@ -684,12 +681,36 @@
       // Check if this is a new category command
       if (data.nonce && data.nonce !== lastCategoryNonce) {
         lastCategoryNonce = data.nonce;
+
+        // Store original clips if first time entering category mode
+        if (!originalClips) {
+          originalClips = clips;
+        }
+
+        // Replace clips with category-specific clips from server
+        if (data.clips && data.clips.length > 0) {
+          clips = data.clips;
+          debugLog(`Category: ${data.game_name} - loaded ${clips.length} clips`, "ok");
+        } else {
+          // Fallback: filter existing clips by ID
+          const catIds = new Set(data.clip_ids || []);
+          clips = originalClips.filter(c => catIds.has(c.id));
+          debugLog(`Category: ${data.game_name} - filtered to ${clips.length} clips`, "ok");
+        }
+
         categoryFilter = {
           game_id: data.game_id,
           game_name: data.game_name,
           clip_ids: new Set(data.clip_ids || [])
         };
-        debugLog(`Category: ${data.game_name} (${data.clip_count} clips)`, "ok");
+
+        // If we were in the middle of switching, skip to new category clip
+        if (!isSwitching && clips.length > 0) {
+          clearVideoTimeouts();
+          if (advanceTimer) clearTimeout(advanceTimer);
+          isCommandTriggered = true;
+          playNext();
+        }
       }
     } catch {}
   }
