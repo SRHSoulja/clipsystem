@@ -168,14 +168,14 @@
       opacity:1;
       transform: translateX(0);
     }
-    /* HUD positions */
-    #voteHud.pos-tr{ top:24px; right:24px; bottom:auto; left:auto; transform: translateX(6px); }
+    /* HUD positions - use !important to override default positioning */
+    #voteHud.pos-tr{ top:24px !important; right:24px !important; bottom:auto !important; left:auto !important; transform: translateX(6px); }
     #voteHud.pos-tr.show{ transform: translateX(0); }
-    #voteHud.pos-tl{ top:24px; left:24px; bottom:auto; right:auto; transform: translateX(-6px); }
+    #voteHud.pos-tl{ top:24px !important; left:24px !important; bottom:auto !important; right:auto !important; transform: translateX(-6px); }
     #voteHud.pos-tl.show{ transform: translateX(0); }
-    #voteHud.pos-br{ bottom:24px; right:24px; top:auto; left:auto; transform: translateX(6px); }
+    #voteHud.pos-br{ bottom:24px !important; right:24px !important; top:auto !important; left:auto !important; transform: translateX(6px); }
     #voteHud.pos-br.show{ transform: translateX(0); }
-    #voteHud.pos-bl{ bottom:24px; left:24px; top:auto; right:auto; transform: translateX(-6px); }
+    #voteHud.pos-bl{ bottom:24px !important; left:24px !important; top:auto !important; right:auto !important; transform: translateX(-6px); }
     #voteHud.pos-bl.show{ transform: translateX(0); }
     #voteHud .clip-info{
       display:flex;
@@ -554,19 +554,19 @@
   }
 
   // ===== HUD Position polling =====
-  let currentHudPosition = 'tr'; // Default: top-right
+  let currentHudPosition = null; // Will be set from API
 
-  function setHudPosition(pos) {
+  function setHudPosition(pos, force = false) {
     const validPositions = ['tr', 'tl', 'br', 'bl'];
     if (!validPositions.includes(pos)) pos = 'tr';
-    if (pos === currentHudPosition) return;
+    if (!force && pos === currentHudPosition) return;
 
     currentHudPosition = pos;
     // Remove all position classes
     voteHud.classList.remove('pos-tr', 'pos-tl', 'pos-br', 'pos-bl');
     // Add new position class
     voteHud.classList.add(`pos-${pos}`);
-    console.log('[HUD] Position changed to:', pos);
+    console.log('[HUD] Position set to:', pos);
   }
 
   async function pollHudPosition() {
@@ -575,16 +575,22 @@
       const res = await fetch(`${API_BASE}/hud_position.php?login=${encodeURIComponent(login)}`, { cache: "no-store" });
       const data = await res.json();
       if (data && data.position) {
-        setHudPosition(data.position);
+        const isInitial = currentHudPosition === null;
+        setHudPosition(data.position, isInitial);
       }
-    } catch {}
+    } catch (e) {
+      console.error('[HUD] Poll error:', e);
+      // Set default if not yet set
+      if (currentHudPosition === null) {
+        setHudPosition('tr', true);
+      }
+    }
   }
 
   if (hudEnabled) {
-    // Set initial position class
-    voteHud.classList.add(`pos-${currentHudPosition}`);
-    // Poll for position changes every 2 seconds
+    // Immediately fetch initial position from API
     pollHudPosition();
+    // Poll for position changes every 2 seconds
     setInterval(pollHudPosition, 2000);
   }
 
