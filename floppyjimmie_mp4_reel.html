@@ -447,6 +447,13 @@
 
     player.load();
 
+    // Track if browser thinks it can play through without buffering
+    let canPlayThroughFired = false;
+    player.oncanplaythrough = () => {
+      canPlayThroughFired = true;
+      debugLog("canplaythrough fired", "ok");
+    };
+
     // For first clip, wait for more buffer before playing
     const startPlayback = () => {
       clearTimeout(loadTimeout);
@@ -500,29 +507,30 @@
         // readyState: 0=nothing, 1=metadata, 2=current, 3=future, 4=enough
         const readyState = player.readyState;
         // Start if we have enough buffer OR if we've buffered the entire clip
-        // AND the browser says it has enough data to play (readyState >= 3)
         const hasEnoughBuffer = bufferedEnd >= requiredBuffer;
         const hasFullClip = bufferedEnd >= (clipDuration - 0.5);
-        const browserReady = readyState >= 3; // HAVE_FUTURE_DATA or HAVE_ENOUGH_DATA
+
+        // For first clip, require canplaythrough event (browser believes no buffering needed)
+        // For other clips, just need readyState >= 3
+        const browserReady = isFirstClip ? canPlayThroughFired : (readyState >= 3);
 
         if ((hasEnoughBuffer || hasFullClip) && browserReady) {
           hasStarted = true;
           clearInterval(bufferCheckInterval);
-          debugLog(`Buffered: ${bufferedEnd.toFixed(1)}s (needed ${requiredBuffer}s, ready=${readyState})`, "ok");
-          // On first clip, wait extra time and verify buffer is stable
+          debugLog(`Buffered: ${bufferedEnd.toFixed(1)}s (needed ${requiredBuffer}s, canplay=${canPlayThroughFired})`, "ok");
+          // On first clip, wait extra time for network to stabilize
           if (isFirstClip) {
             debugLog("Stabilizing...");
             setTimeout(() => {
-              // Check buffer again before starting
               const finalBuffer = player.buffered.length > 0 ? player.buffered.end(0) : 0;
               debugLog(`Final buffer: ${finalBuffer.toFixed(1)}s`);
               startPlayback();
-            }, 2000);
+            }, 1500);
           } else {
             startPlayback();
           }
         } else {
-          debugLog(`Buffered: ${bufferedEnd.toFixed(1)}s / ${requiredBuffer}s (ready=${readyState})`);
+          debugLog(`Buffered: ${bufferedEnd.toFixed(1)}s / ${requiredBuffer}s (canplay=${canPlayThroughFired})`);
         }
       }
     };
