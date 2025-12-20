@@ -1,13 +1,14 @@
 /**
  * FloppyJimmie Clip System - Twitch Chat Bot
  *
- * Handles chat commands directly via tmi.js (no Nightbot needed).
+ * Multi-channel bot - commands in each chat control that channel's clips.
+ * Use !cswitch to temporarily control another channel's clips.
  *
  * Environment variables (set in Railway):
  *   TWITCH_BOT_USERNAME - Bot's Twitch username
  *   TWITCH_OAUTH_TOKEN  - OAuth token (from twitchtokengenerator.com)
- *   TWITCH_CHANNEL      - Channel to join (e.g., "floppyjimmie")
- *   API_BASE_URL        - Base URL for PHP endpoints (e.g., "https://clipsystem-production.up.railway.app")
+ *   TWITCH_CHANNEL      - Channels to join (comma-separated, e.g., "floppyjimmie,joshbelmar")
+ *   API_BASE_URL        - Base URL for PHP endpoints
  *   ADMIN_KEY           - Admin key for mod commands
  */
 
@@ -18,7 +19,6 @@ const config = {
   botUsername: process.env.TWITCH_BOT_USERNAME || '',
   oauthToken: process.env.TWITCH_OAUTH_TOKEN || '',
   channel: process.env.TWITCH_CHANNEL || 'floppyjimmie',
-  clipChannel: process.env.CLIP_CHANNEL || '',
   apiBaseUrl: process.env.API_BASE_URL || 'https://clipsystem-production.up.railway.app',
   adminKey: process.env.ADMIN_KEY || ''
 };
@@ -71,6 +71,10 @@ const COOLDOWN_MS = 3000; // 3 second cooldown per user per command
 // Channel overrides - allows mods to control a different channel's clips
 // Key: chat channel (without #), Value: target clip channel
 const channelOverrides = new Map();
+
+// Per-channel likes toggle - tracks which channels have voting disabled
+// Key: clip channel name, Value: true if DISABLED
+const likesDisabled = new Map();
 
 function isOnCooldown(user, command) {
   const key = `${user}:${command}`;
@@ -153,6 +157,7 @@ const commands = {
   // !like [seq] - Upvote a clip (current clip if no seq provided)
   async like(channel, tags, args) {
     const login = getClipChannel(channel);
+    if (likesDisabled.get(login)) return null; // Silently ignore when disabled
     let seq = parseInt(args[0]);
 
     // If no seq provided, get current playing clip
@@ -184,6 +189,7 @@ const commands = {
   // !dislike [seq] - Downvote a clip (current clip if no seq provided)
   async dislike(channel, tags, args) {
     const login = getClipChannel(channel);
+    if (likesDisabled.get(login)) return null; // Silently ignore when disabled
     let seq = parseInt(args[0]);
 
     // If no seq provided, get current playing clip
@@ -305,9 +311,33 @@ const commands = {
   // !chelp - Show available clip commands
   async chelp(channel, tags, args) {
     if (isMod(tags)) {
-      return 'Clip commands: !clip, !cfind, !like/!dislike [#], !pclip <#>, !cskip, !ccat <game>, !cremove <#>, !cadd <#>, !cswitch <channel>';
+      return 'Mod: !pclip <#>, !cskip, !ccat <game>, !cremove/#cadd <#>, !cswitch/!clikeon/!clikeoff [channel] | All: !clip, !cfind, !like/!dislike [#]';
     }
     return 'Clip commands: !clip (current), !cfind (browse), !like [#] (upvote), !dislike [#] (downvote)';
+  },
+
+  // !clikeoff [channel] - Disable voting for a channel (mod only)
+  async clikeoff(channel, tags, args) {
+    if (!isMod(tags)) {
+      return null; // Silently ignore non-mods
+    }
+
+    // If channel specified, use that; otherwise use current clip channel
+    const target = (args[0] || '').toLowerCase().replace(/^@/, '') || getClipChannel(channel);
+    likesDisabled.set(target, true);
+    return `Clip voting disabled for ${target}.`;
+  },
+
+  // !clikeon [channel] - Enable voting for a channel (mod only)
+  async clikeon(channel, tags, args) {
+    if (!isMod(tags)) {
+      return null; // Silently ignore non-mods
+    }
+
+    // If channel specified, use that; otherwise use current clip channel
+    const target = (args[0] || '').toLowerCase().replace(/^@/, '') || getClipChannel(channel);
+    likesDisabled.delete(target);
+    return `Clip voting enabled for ${target}.`;
   },
 
   // !cswitch <channel> - Switch which channel's clips commands affect (mod only)
@@ -378,7 +408,7 @@ client.on('connected', (addr, port) => {
   console.log(`Joining channels: ${channels.join(', ')}`);
   console.log(`Multi-channel mode: commands use clips from the channel they're typed in`);
   console.log(`Bot username: ${config.botUsername}`);
-  console.log('Commands active: !clip, !cfind, !like, !dislike, !pclip, !cskip, !ccat, !cremove, !cadd, !cswitch, !chelp');
+  console.log('Commands: !clip, !cfind, !like, !dislike, !pclip, !cskip, !ccat, !cremove, !cadd, !cswitch, !clikeon, !clikeoff, !chelp');
 });
 
 client.on('join', (channel, username, self) => {
