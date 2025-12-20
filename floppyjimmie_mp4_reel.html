@@ -467,13 +467,26 @@
     if (stallTimeout) clearTimeout(stallTimeout);
     // Only set stall timer if playback has actually started
     if (!playbackStarted) return;
-    // If video hasn't progressed in 10 seconds during playback, skip
+    // If video hasn't progressed in 20 seconds during playback, skip
+    // But only if we're not actively buffering (check if buffer is growing)
     stallTimeout = setTimeout(() => {
-      debugLog("Video stalled, skipping", "warn");
+      // Check if buffer is still growing - if so, give it more time
+      const buffered = player.buffered.length > 0 ? player.buffered.end(0) : 0;
+      const currentTime = player.currentTime || 0;
+      const bufferAhead = buffered - currentTime;
+
+      if (bufferAhead > 0.5) {
+        // We have buffer, video should be playing - might just be a hiccup
+        debugLog(`Stall check: ${bufferAhead.toFixed(1)}s ahead, continuing`, "warn");
+        resetStallTimer(); // Reset and try again
+        return;
+      }
+
+      debugLog("Video stalled (no buffer), skipping", "warn");
       failedClips.add(currentClip?.id);
       isSwitching = false;
       playNext();
-    }, 10000);
+    }, 20000);
   }
 
   async function playClip(c, skipHistory = false) {
