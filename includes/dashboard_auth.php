@@ -200,24 +200,33 @@ class DashboardAuth {
 
     /**
      * Get streamer instance for a login
+     * Creates the streamer row if needed (for channels with clips but no dashboard entry)
      */
     public function getStreamerInstance($login) {
-        if (!$this->pdo) return null;
+        if (!$this->pdo || !$login) return null;
 
         try {
             $stmt = $this->pdo->prepare("SELECT instance FROM streamers WHERE login = ?");
             $stmt->execute([$login]);
             $instance = $stmt->fetchColumn();
 
-            // Generate instance if missing (for existing streamers)
+            // Generate instance if missing
             if (!$instance) {
                 $instance = self::generateInstance();
-                $stmt = $this->pdo->prepare("UPDATE streamers SET instance = ? WHERE login = ?");
-                $stmt->execute([$instance, $login]);
+                // Use upsert to handle both existing rows without instance and new rows
+                $stmt = $this->pdo->prepare("
+                    INSERT INTO streamers (login, streamer_key, instance)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT (login) DO UPDATE SET instance = COALESCE(streamers.instance, EXCLUDED.instance)
+                    RETURNING instance
+                ");
+                $stmt->execute([$login, self::generateKey(), $instance]);
+                $instance = $stmt->fetchColumn() ?: $instance;
             }
 
             return $instance ?: null;
         } catch (PDOException $e) {
+            error_log("getStreamerInstance error: " . $e->getMessage());
             return null;
         }
     }
