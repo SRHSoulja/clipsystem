@@ -41,8 +41,14 @@ const oauthToken = config.oauthToken.startsWith('oauth:')
 // Parse channels (supports comma-separated list for joining multiple chats)
 const channels = config.channel.split(',').map(c => c.trim().toLowerCase()).filter(Boolean);
 
-// The channel whose clips we're playing (CLIP_CHANNEL env var, or first channel)
-const clipChannel = config.clipChannel || channels[0] || 'floppyjimmie';
+// Helper to get the clip channel for a given chat channel
+// Checks for override first, otherwise uses the chat channel name
+function getClipChannel(chatChannel) {
+  // Remove # prefix if present
+  const cleanChannel = chatChannel.replace(/^#/, '').toLowerCase();
+  // Check for override, otherwise use the chat channel
+  return channelOverrides.get(cleanChannel) || cleanChannel;
+}
 
 // Create TMI client
 const client = new tmi.Client({
@@ -61,6 +67,10 @@ const client = new tmi.Client({
 // Rate limiting - prevent spam
 const cooldowns = new Map();
 const COOLDOWN_MS = 3000; // 3 second cooldown per user per command
+
+// Channel overrides - allows mods to control a different channel's clips
+// Key: chat channel (without #), Value: target clip channel
+const channelOverrides = new Map();
 
 function isOnCooldown(user, command) {
   const key = `${user}:${command}`;
@@ -99,8 +109,9 @@ async function fetchWithTimeout(url, timeoutMs = 5000) {
 const commands = {
   // !clip - Show currently playing clip
   async clip(channel, tags, args) {
+    const login = getClipChannel(channel);
     try {
-      const apiUrl = `${config.apiBaseUrl}/now_playing_get.php?login=${clipChannel}`;
+      const apiUrl = `${config.apiBaseUrl}/now_playing_get.php?login=${login}`;
       const res = await fetchWithTimeout(apiUrl);
       const data = await res.json();
 
@@ -128,8 +139,9 @@ const commands = {
       return 'Usage: !pclip <clip#>';
     }
 
+    const login = getClipChannel(channel);
     try {
-      const url = `${config.apiBaseUrl}/pclip.php?login=${clipChannel}&key=${config.adminKey}&seq=${seq}`;
+      const url = `${config.apiBaseUrl}/pclip.php?login=${login}&key=${config.adminKey}&seq=${seq}`;
       const res = await fetchWithTimeout(url);
       return await res.text();
     } catch (err) {
@@ -140,12 +152,13 @@ const commands = {
 
   // !like [seq] - Upvote a clip (current clip if no seq provided)
   async like(channel, tags, args) {
+    const login = getClipChannel(channel);
     let seq = parseInt(args[0]);
 
     // If no seq provided, get current playing clip
     if (!seq || seq <= 0) {
       try {
-        const npRes = await fetchWithTimeout(`${config.apiBaseUrl}/now_playing_get.php?login=${clipChannel}`);
+        const npRes = await fetchWithTimeout(`${config.apiBaseUrl}/now_playing_get.php?login=${login}`);
         const npData = await npRes.json();
         if (npData && npData.seq) {
           seq = npData.seq;
@@ -159,7 +172,7 @@ const commands = {
 
     try {
       const user = tags.username || 'anonymous';
-      const url = `${config.apiBaseUrl}/vote_submit.php?login=${clipChannel}&user=${user}&seq=${seq}&vote=like`;
+      const url = `${config.apiBaseUrl}/vote_submit.php?login=${login}&user=${user}&seq=${seq}&vote=like`;
       const res = await fetchWithTimeout(url);
       return await res.text();
     } catch (err) {
@@ -170,12 +183,13 @@ const commands = {
 
   // !dislike [seq] - Downvote a clip (current clip if no seq provided)
   async dislike(channel, tags, args) {
+    const login = getClipChannel(channel);
     let seq = parseInt(args[0]);
 
     // If no seq provided, get current playing clip
     if (!seq || seq <= 0) {
       try {
-        const npRes = await fetchWithTimeout(`${config.apiBaseUrl}/now_playing_get.php?login=${clipChannel}`);
+        const npRes = await fetchWithTimeout(`${config.apiBaseUrl}/now_playing_get.php?login=${login}`);
         const npData = await npRes.json();
         if (npData && npData.seq) {
           seq = npData.seq;
@@ -189,7 +203,7 @@ const commands = {
 
     try {
       const user = tags.username || 'anonymous';
-      const url = `${config.apiBaseUrl}/vote_submit.php?login=${clipChannel}&user=${user}&seq=${seq}&vote=dislike`;
+      const url = `${config.apiBaseUrl}/vote_submit.php?login=${login}&user=${user}&seq=${seq}&vote=dislike`;
       const res = await fetchWithTimeout(url);
       return await res.text();
     } catch (err) {
@@ -209,8 +223,9 @@ const commands = {
       return 'Usage: !cremove <clip#>';
     }
 
+    const login = getClipChannel(channel);
     try {
-      const url = `${config.apiBaseUrl}/cremove.php?login=${clipChannel}&key=${config.adminKey}&seq=${seq}`;
+      const url = `${config.apiBaseUrl}/cremove.php?login=${login}&key=${config.adminKey}&seq=${seq}`;
       const res = await fetchWithTimeout(url);
       return await res.text();
     } catch (err) {
@@ -230,8 +245,9 @@ const commands = {
       return 'Usage: !cadd <clip#>';
     }
 
+    const login = getClipChannel(channel);
     try {
-      const url = `${config.apiBaseUrl}/cadd.php?login=${clipChannel}&key=${config.adminKey}&seq=${seq}`;
+      const url = `${config.apiBaseUrl}/cadd.php?login=${login}&key=${config.adminKey}&seq=${seq}`;
       const res = await fetchWithTimeout(url);
       return await res.text();
     } catch (err) {
@@ -242,7 +258,8 @@ const commands = {
 
   // !cfind - Link to clip search/browse site
   async cfind(channel, tags, args) {
-    return `Browse & search clips: ${config.apiBaseUrl}/clip_search.php?login=${clipChannel}`;
+    const login = getClipChannel(channel);
+    return `Browse & search clips: ${config.apiBaseUrl}/clip_search.php?login=${login}`;
   },
 
   // !cskip - Skip the current clip (mod only)
@@ -251,8 +268,9 @@ const commands = {
       return null; // Silently ignore non-mods
     }
 
+    const login = getClipChannel(channel);
     try {
-      const url = `${config.apiBaseUrl}/cskip.php?login=${clipChannel}&key=${config.adminKey}`;
+      const url = `${config.apiBaseUrl}/cskip.php?login=${login}&key=${config.adminKey}`;
       const res = await fetchWithTimeout(url);
       return await res.text();
     } catch (err) {
@@ -273,8 +291,9 @@ const commands = {
       return 'Usage: !ccat <game> to filter, !ccat off to exit';
     }
 
+    const login = getClipChannel(channel);
     try {
-      const url = `${config.apiBaseUrl}/ccat.php?login=${clipChannel}&key=${config.adminKey}&category=${encodeURIComponent(category)}`;
+      const url = `${config.apiBaseUrl}/ccat.php?login=${login}&key=${config.adminKey}&category=${encodeURIComponent(category)}`;
       const res = await fetchWithTimeout(url);
       return await res.text();
     } catch (err) {
@@ -286,9 +305,38 @@ const commands = {
   // !chelp - Show available clip commands
   async chelp(channel, tags, args) {
     if (isMod(tags)) {
-      return 'Clip commands: !clip, !cfind, !like/!dislike [#], !pclip <#>, !cskip, !ccat <game>, !cremove <#>, !cadd <#>';
+      return 'Clip commands: !clip, !cfind, !like/!dislike [#], !pclip <#>, !cskip, !ccat <game>, !cremove <#>, !cadd <#>, !cswitch <channel>';
     }
     return 'Clip commands: !clip (current), !cfind (browse), !like [#] (upvote), !dislike [#] (downvote)';
+  },
+
+  // !cswitch <channel> - Switch which channel's clips commands affect (mod only)
+  // Use !cswitch off or !cswitch reset to return to normal
+  async cswitch(channel, tags, args) {
+    if (!isMod(tags)) {
+      return null; // Silently ignore non-mods
+    }
+
+    const chatChannel = channel.replace(/^#/, '').toLowerCase();
+    const target = (args[0] || '').toLowerCase().replace(/^@/, '');
+
+    if (!target) {
+      const current = channelOverrides.get(chatChannel);
+      if (current) {
+        return `Currently controlling: ${current}'s clips. Use !cswitch off to reset.`;
+      }
+      return `Currently controlling: ${chatChannel}'s clips (default). Use !cswitch <channel> to switch.`;
+    }
+
+    // Reset to default
+    if (target === 'off' || target === 'reset' || target === chatChannel) {
+      channelOverrides.delete(chatChannel);
+      return `Switched back to ${chatChannel}'s clips.`;
+    }
+
+    // Set override
+    channelOverrides.set(chatChannel, target);
+    return `Now controlling ${target}'s clips. Use !cswitch off to reset.`;
   }
 };
 
@@ -327,10 +375,10 @@ client.on('message', async (channel, tags, message, self) => {
 // Connection events
 client.on('connected', (addr, port) => {
   console.log(`Connected to Twitch IRC at ${addr}:${port}`);
-  console.log(`Attempting to join channels: ${channels.join(', ')}`);
-  console.log(`Clip channel: ${clipChannel}`);
+  console.log(`Joining channels: ${channels.join(', ')}`);
+  console.log(`Multi-channel mode: commands use clips from the channel they're typed in`);
   console.log(`Bot username: ${config.botUsername}`);
-  console.log('Commands active: !clip, !cfind, !like, !dislike, !pclip, !cskip, !ccat, !cremove, !cadd, !chelp');
+  console.log('Commands active: !clip, !cfind, !like, !dislike, !pclip, !cskip, !ccat, !cremove, !cadd, !cswitch, !chelp');
 });
 
 client.on('join', (channel, username, self) => {
