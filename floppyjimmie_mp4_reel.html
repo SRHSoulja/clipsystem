@@ -427,7 +427,7 @@
     };
 
     if (isFirstClip) {
-      // First clip: wait for 3 seconds of buffer or canplaythrough
+      // First clip: wait for 5 seconds of buffer or canplaythrough
       debugLog("First clip - waiting for buffer...");
       let bufferCheckInterval = null;
 
@@ -435,8 +435,8 @@
         if (player.buffered.length > 0) {
           const bufferedEnd = player.buffered.end(0);
           debugLog(`Buffered: ${bufferedEnd.toFixed(1)}s`);
-          // Wait for at least 3 seconds buffered
-          if (bufferedEnd >= 3) {
+          // Wait for at least 5 seconds buffered
+          if (bufferedEnd >= 5) {
             clearInterval(bufferCheckInterval);
             player.removeEventListener("canplaythrough", onCanPlayThrough);
             startPlayback();
