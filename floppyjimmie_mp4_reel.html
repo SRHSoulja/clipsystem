@@ -402,13 +402,8 @@
     player.src = mp4Url;
     player.load();
 
-    // Use canplaythrough for first clip (more buffering), canplay for subsequent
-    const bufferEvent = isFirstClip ? "canplaythrough" : "canplay";
-    debugLog(`Waiting for ${bufferEvent}...`);
-
-    const onBufferReady = () => {
-      player.removeEventListener("canplay", onBufferReady);
-      player.removeEventListener("canplaythrough", onBufferReady);
+    // For first clip, wait for more buffer before playing
+    const startPlayback = () => {
       clearTimeout(loadTimeout);
       loadTimeout = null;
 
@@ -420,7 +415,7 @@
         setNowPlaying(c);
         scheduleNext(c.duration || 30);
         isSwitching = false;
-        isFirstClip = false; // No longer first clip
+        isFirstClip = false;
         resetStallTimer();
       }).catch(err => {
         debugLog(`Play err: ${err.message}`, "err");
@@ -431,7 +426,49 @@
       });
     };
 
-    player.addEventListener(bufferEvent, onBufferReady, { once: true });
+    if (isFirstClip) {
+      // First clip: wait for 3 seconds of buffer or canplaythrough
+      debugLog("First clip - waiting for buffer...");
+      let bufferCheckInterval = null;
+
+      const checkBuffer = () => {
+        if (player.buffered.length > 0) {
+          const bufferedEnd = player.buffered.end(0);
+          debugLog(`Buffered: ${bufferedEnd.toFixed(1)}s`);
+          // Wait for at least 3 seconds buffered
+          if (bufferedEnd >= 3) {
+            clearInterval(bufferCheckInterval);
+            player.removeEventListener("canplaythrough", onCanPlayThrough);
+            startPlayback();
+          }
+        }
+      };
+
+      const onCanPlayThrough = () => {
+        clearInterval(bufferCheckInterval);
+        player.removeEventListener("canplaythrough", onCanPlayThrough);
+        startPlayback();
+      };
+
+      player.addEventListener("canplaythrough", onCanPlayThrough, { once: true });
+      bufferCheckInterval = setInterval(checkBuffer, 200);
+
+      // Cleanup on timeout
+      const origTimeout = loadTimeout;
+      loadTimeout = setTimeout(() => {
+        clearInterval(bufferCheckInterval);
+        player.removeEventListener("canplaythrough", onCanPlayThrough);
+        debugLog(`Load timeout for ${c.id.substring(0,15)}`, "err");
+        failedClips.add(c.id);
+        player.src = "";
+        isSwitching = false;
+        playNext();
+      }, 12000);
+    } else {
+      // Subsequent clips: use canplay (faster)
+      debugLog("Waiting for canplay...");
+      player.addEventListener("canplay", () => startPlayback(), { once: true });
+    }
 
     // Reset stall timer on progress
     player.ontimeupdate = () => {
