@@ -75,6 +75,26 @@ if (!$pdo) {
     json_error("Database unavailable", 500);
 }
 
+// Ensure channel_settings table has all required columns
+try {
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS channel_settings (
+            login VARCHAR(50) PRIMARY KEY,
+            hud_position VARCHAR(10) DEFAULT 'tr',
+            top_position VARCHAR(10) DEFAULT 'br',
+            blocked_words TEXT DEFAULT '[]',
+            blocked_clippers TEXT DEFAULT '[]',
+            voting_enabled BOOLEAN DEFAULT TRUE,
+            last_refresh TIMESTAMP
+        )
+    ");
+    // Add columns if they don't exist (for existing tables)
+    $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS blocked_words TEXT DEFAULT '[]'");
+    $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS blocked_clippers TEXT DEFAULT '[]'");
+} catch (PDOException $e) {
+    // Ignore - table might already be correct
+}
+
 switch ($action) {
     case 'get_settings':
         if (!$auth->canDo('view')) json_error("Permission denied", 403);
