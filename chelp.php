@@ -107,7 +107,7 @@ header("Content-Type: text/html; charset=utf-8");
 
     <div class="note">
       <div class="note-title">Multi-Channel Mode</div>
-      Commands in each channel control that channel's clips. Type !pclip 5 in #joshbelmar to play Josh's clip #5.
+      Commands in each channel control that channel's clips. Type !clip 5 in #joshbelmar to see Josh's clip #5.
     </div>
 
     <h2>Everyone</h2>
