@@ -63,13 +63,12 @@ if ($authenticated && $_SERVER['REQUEST_METHOD'] === 'POST') {
     }
   }
 
-  // Refresh clips for existing user
+  // Refresh clips for existing user (fetch NEW clips only)
   if (isset($_POST['action']) && $_POST['action'] === 'refresh_user') {
     $login = strtolower(trim(preg_replace('/[^a-zA-Z0-9_]/', '', $_POST['login'] ?? '')));
-    $fresh = isset($_POST['fresh']) ? '1' : '0';
 
     if ($login) {
-      header("Location: clips_backfill.php?login=" . urlencode($login) . "&years=3&fresh=" . $fresh . "&key=" . urlencode($ADMIN_KEY));
+      header("Location: refresh_clips.php?login=" . urlencode($login) . "&key=" . urlencode($ADMIN_KEY));
       exit;
     }
   }
@@ -386,7 +385,7 @@ if ($authenticated) {
               <form method="POST" style="display: inline;">
                 <input type="hidden" name="action" value="refresh_user">
                 <input type="hidden" name="login" value="<?= htmlspecialchars($user['login']) ?>">
-                <button type="submit" class="btn-secondary" style="padding: 6px 12px; font-size: 14px;">Refresh</button>
+                <button type="submit" class="btn-secondary" style="padding: 6px 12px; font-size: 14px;" title="Fetch new clips since last update">Get New Clips</button>
               </form>
             </td>
           </tr>
