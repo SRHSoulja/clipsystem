@@ -350,6 +350,10 @@
   let categoryFilter = null; // { game_id, game_name, clip_ids: Set }
   let lastCategoryNonce = null;
 
+  // Playlist state
+  let activePlaylist = null; // { id, name, clips: [], current_index }
+  let lastPlaylistId = null;
+
   // HUD poll interval (hudEnabled already declared above for position polling)
   const hudPollMs = parseInt(qs.get("hudpoll") || "900", 10);
 
@@ -435,8 +439,47 @@
     }
   }
 
+  // Get next clip from active playlist
+  function getNextPlaylistClip() {
+    if (!activePlaylist || !activePlaylist.clips || !activePlaylist.clips.length) {
+      return null;
+    }
+
+    const idx = activePlaylist.current_index || 0;
+    if (idx >= activePlaylist.clips.length) {
+      // Playlist finished
+      debugLog(`Playlist "${activePlaylist.name}" finished (${activePlaylist.clips.length} clips)`, "ok");
+      activePlaylist = null;
+      lastPlaylistId = null;
+      return null;
+    }
+
+    const playlistClip = activePlaylist.clips[idx];
+    // Find this clip in our clips array by clip_id
+    const clip = clips.find(c => c.id === playlistClip.clip_id);
+    if (clip) {
+      debugLog(`Playlist clip ${idx + 1}/${activePlaylist.clips.length}: ${clip.title?.substring(0, 30) || clip.id}`, "ok");
+      activePlaylist.current_index = idx + 1;
+      return clip;
+    } else {
+      // Clip not in pool, skip to next
+      debugLog(`Playlist clip ${playlistClip.clip_id} not in pool, skipping`, "warn");
+      activePlaylist.current_index = idx + 1;
+      return getNextPlaylistClip();
+    }
+  }
+
   // Weighted selection
   function pickNextClip() {
+    // Check if playlist mode is active
+    if (activePlaylist && activePlaylist.clips && activePlaylist.clips.length > 0) {
+      const playlistClip = getNextPlaylistClip();
+      if (playlistClip) {
+        return playlistClip;
+      }
+      // Playlist finished or empty, fall through to random selection
+    }
+
     const state = loadState();
     state.recent = Array.isArray(state.recent) ? state.recent : [];
     state.playCounts = state.playCounts || {};
@@ -1143,6 +1186,32 @@
       if (data?.top_clips?.active && data.top_clips.nonce !== lastTopNonce) {
         lastTopNonce = data.top_clips.nonce;
         showTopClips(data.top_clips.clips, data.top_clips.count);
+      }
+
+      // Handle Playlist
+      if (data?.playlist) {
+        if (data.playlist.active && data.playlist.id !== lastPlaylistId) {
+          // New playlist activated
+          lastPlaylistId = data.playlist.id;
+          activePlaylist = {
+            id: data.playlist.id,
+            name: data.playlist.name,
+            clips: data.playlist.clips || [],
+            current_index: data.playlist.current_index || 0,
+            total: data.playlist.total || 0
+          };
+          debugLog(`Playlist activated: "${activePlaylist.name}" (${activePlaylist.total} clips)`, "ok");
+        } else if (!data.playlist.active && activePlaylist) {
+          // Playlist stopped
+          debugLog(`Playlist "${activePlaylist.name}" stopped`, "warn");
+          activePlaylist = null;
+          lastPlaylistId = null;
+        }
+      } else if (activePlaylist) {
+        // No playlist in response means it was stopped
+        debugLog(`Playlist "${activePlaylist.name}" stopped`, "warn");
+        activePlaylist = null;
+        lastPlaylistId = null;
       }
 
       // Update vote HUD from consolidated poll

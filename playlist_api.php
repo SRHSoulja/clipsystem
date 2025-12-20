@@ -280,12 +280,13 @@ switch ($action) {
 
       // Set this playlist as active in the database
       // This replaces any previous active playlist for this login
+      // Set current_index to 1 since the first clip (index 0) is force-played immediately
       $stmt = $pdo->prepare("
         INSERT INTO playlist_active (login, playlist_id, current_index, started_at, updated_at)
-        VALUES (?, ?, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        VALUES (?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         ON CONFLICT (login) DO UPDATE SET
           playlist_id = EXCLUDED.playlist_id,
-          current_index = 0,
+          current_index = 1,
           started_at = CURRENT_TIMESTAMP,
           updated_at = CURRENT_TIMESTAMP
       ");

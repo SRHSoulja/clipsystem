@@ -26,7 +26,8 @@ $response = [
     "force_play" => null,
     "category" => ["active" => false],
     "top_clips" => null,
-    "votes" => ["up" => 0, "down" => 0]
+    "votes" => ["up" => 0, "down" => 0],
+    "playlist" => null
 ];
 
 // ---- Check Skip Request (file-based only for speed) ----
@@ -296,6 +297,46 @@ if (!isset($response["top_clips"]) && $pdo) {
         }
     } catch (PDOException $e) {
         error_log("poll top clips error: " . $e->getMessage());
+    }
+}
+
+// ---- Check Active Playlist ----
+// Check if there's an active playlist for this channel
+if (!$pdo) $pdo = get_db_connection();
+if ($pdo) {
+    try {
+        $stmt = $pdo->prepare("
+            SELECT pa.playlist_id, pa.current_index, p.name as playlist_name
+            FROM playlist_active pa
+            JOIN playlists p ON p.id = pa.playlist_id
+            WHERE pa.login = ?
+        ");
+        $stmt->execute([$login]);
+        $activePlaylist = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($activePlaylist) {
+            // Get the clips in this playlist
+            $stmt = $pdo->prepare("
+                SELECT pc.clip_seq as seq, c.clip_id, c.title, c.duration
+                FROM playlist_clips pc
+                JOIN clips c ON c.login = ? AND c.seq = pc.clip_seq
+                WHERE pc.playlist_id = ?
+                ORDER BY pc.position
+            ");
+            $stmt->execute([$login, $activePlaylist['playlist_id']]);
+            $playlistClips = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            $response["playlist"] = [
+                "active" => true,
+                "id" => (int)$activePlaylist['playlist_id'],
+                "name" => $activePlaylist['playlist_name'],
+                "current_index" => (int)$activePlaylist['current_index'],
+                "clips" => $playlistClips,
+                "total" => count($playlistClips)
+            ];
+        }
+    } catch (PDOException $e) {
+        error_log("poll playlist error: " . $e->getMessage());
     }
 }
 
