@@ -123,7 +123,7 @@ switch ($action) {
                 "instance" => $instance
             ]);
         } catch (PDOException $e) {
-            json_error("Database error", 500);
+            json_error("Database error: " . $e->getMessage(), 500);
         }
         break;
 
