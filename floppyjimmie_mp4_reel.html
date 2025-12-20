@@ -594,14 +594,14 @@
     };
 
     // Buffer requirements:
-    // - First clip (scene init): 12s max buffer (60% of clip)
+    // - First clip (scene init): Buffer entire clip (max 20s)
     // - Command-triggered (!pclip, !cskip): 5s buffer
     // - Normal progression: 2s buffer
     const clipDur = c.duration || 30;
     let requiredBuffer = 2;
     if (isFirstClip) {
-      // For first clip, buffer 12s max (or 60% for short clips)
-      requiredBuffer = Math.min(clipDur * 0.6, 12);
+      // For first clip, buffer the entire clip or up to 20s
+      requiredBuffer = Math.min(clipDur, 20);
     } else if (isCommandTriggered) {
       requiredBuffer = 5;
     }
@@ -623,10 +623,10 @@
         const hasEnoughBuffer = bufferedEnd >= requiredBuffer;
         const hasFullClip = bufferedEnd >= (clipDuration - 0.5);
 
-        // For first clip, require canplaythrough OR readyState 4 OR enough buffer
-        // Some browsers don't fire canplaythrough reliably
+        // For first clip, require canplaythrough AND enough buffer
+        // This ensures the browser truly thinks it can play smoothly
         const browserReady = isFirstClip
-          ? (canPlayThroughFired || readyState >= 4 || bufferedEnd >= requiredBuffer)
+          ? (canPlayThroughFired && readyState >= 4)
           : (readyState >= 3);
 
         if ((hasEnoughBuffer || hasFullClip) && browserReady) {
