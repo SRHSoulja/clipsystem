@@ -593,17 +593,16 @@
       });
     };
 
-    // Buffer requirements:
-    // - First clip (scene init): Buffer entire clip (max 20s)
-    // - Command-triggered (!pclip, !cskip): 5s buffer
+    // Buffer requirements - keep it simple
+    // - First clip: 8s buffer (enough to start smoothly)
+    // - Command-triggered: 4s buffer
     // - Normal progression: 2s buffer
     const clipDur = c.duration || 30;
     let requiredBuffer = 2;
     if (isFirstClip) {
-      // For first clip, buffer the entire clip or up to 20s
-      requiredBuffer = Math.min(clipDur, 20);
+      requiredBuffer = 8;
     } else if (isCommandTriggered) {
-      requiredBuffer = 5;
+      requiredBuffer = 4;
     }
     debugLog(`Waiting for ${requiredBuffer}s buffer (first=${isFirstClip}, cmd=${isCommandTriggered})...`);
     let hasStarted = false;
@@ -623,32 +622,28 @@
         const hasEnoughBuffer = bufferedEnd >= requiredBuffer;
         const hasFullClip = bufferedEnd >= (clipDuration - 0.5);
 
-        // For first clip, require canplaythrough AND enough buffer
-        // This ensures the browser truly thinks it can play smoothly
-        const browserReady = isFirstClip
-          ? (canPlayThroughFired && readyState >= 4)
-          : (readyState >= 3);
+        // Just need readyState >= 3 (HAVE_FUTURE_DATA) to start
+        const browserReady = readyState >= 3;
 
         if ((hasEnoughBuffer || hasFullClip) && browserReady) {
           hasStarted = true;
           clearInterval(bufferCheckInterval);
           debugLog(`Buffered: ${bufferedEnd.toFixed(1)}s (needed ${requiredBuffer}s, ready=${readyState})`, "ok");
-          // On first clip, wait extra time for network to stabilize
+          // On first clip, wait 1s for network to stabilize
           if (isFirstClip) {
-            debugLog("Stabilizing (3s)...");
+            debugLog("Stabilizing (1s)...");
             setTimeout(() => {
               const finalBuffer = player.buffered.length > 0 ? player.buffered.end(0) : 0;
               debugLog(`Final buffer: ${finalBuffer.toFixed(1)}s`);
-              // Re-verify buffer is still sufficient before playing (need at least 8s)
-              const minBufferToPlay = Math.min(8, requiredBuffer);
-              if (finalBuffer >= minBufferToPlay) {
+              // Just need 4s minimum to start
+              if (finalBuffer >= 4) {
                 startPlayback();
               } else {
                 debugLog(`Buffer dropped to ${finalBuffer.toFixed(1)}s, re-buffering...`, "warn");
                 hasStarted = false;
                 bufferCheckInterval = setInterval(checkBuffer, 200);
               }
-            }, 3000);
+            }, 1000);
           } else {
             startPlayback();
           }
@@ -667,10 +662,8 @@
 
     bufferCheckInterval = setInterval(checkBuffer, 200);
 
-    // Cleanup on timeout - dynamic based on buffer requirement + overhead
-    // First clip: requiredBuffer + 3s stabilization + 10s network overhead
-    // Others: 15s fixed
-    const loadTimeoutMs = isFirstClip ? (requiredBuffer + 3 + 10) * 1000 : 15000;
+    // Cleanup on timeout - 20s for first clip, 15s for others
+    const loadTimeoutMs = isFirstClip ? 20000 : 15000;
     debugLog(`Load timeout: ${loadTimeoutMs / 1000}s`);
     loadTimeout = setTimeout(() => {
       if (hasStarted) return;
@@ -908,6 +901,40 @@
     } catch {}
   }
 
+  // Shuffle polling - force fresh clip pool
+  let lastShuffleNonce = null;
+
+  async function pollShuffle() {
+    try {
+      const res = await fetch(`${API_BASE}/shuffle_check.php?login=${encodeURIComponent(login)}`, { cache: "no-store" });
+      const data = await res.json();
+      if (data?.shuffle && data.nonce !== lastShuffleNonce) {
+        lastShuffleNonce = data.nonce;
+        debugLog("Shuffle requested, fetching fresh pool...", "warn");
+
+        // Clear category filter if active
+        if (categoryFilter) {
+          categoryFilter = null;
+          lastCategoryNonce = null;
+          originalClips = null;
+        }
+
+        // Fetch fresh clips with cache-bust
+        const shuffleUrl = `${apiUrl}&_=${Date.now()}`;
+        const clipRes = await fetch(shuffleUrl, { cache: "no-store" });
+        const clipData = await clipRes.json();
+        if (Array.isArray(clipData.clips) && clipData.clips.length) {
+          clips = clipData.clips;
+          // Clear recent history to allow any clip
+          const state = loadState();
+          state.recent = [];
+          saveState(state);
+          debugLog(`Shuffled! New pool: ${clips.length} clips`, "ok");
+        }
+      }
+    } catch {}
+  }
+
   // Category filter polling
   let originalClips = null; // Store original clips when entering category mode
 
@@ -1007,15 +1034,16 @@
     setInterval(pollSkip, 1000);
     setInterval(pollPrev, 1000); // Poll for !cprev
     setInterval(pollTopClips, 2000); // Poll for !ctop
+    setInterval(pollShuffle, 2000); // Poll for !cshuffle
     setInterval(pollCategory, 2000); // Poll category every 2s
 
-    // Delay first clip to let page fully initialize and network stabilize
-    debugLog("Waiting 4s for page to stabilize...");
+    // Delay first clip briefly to let page initialize
+    debugLog("Waiting 2s for page to stabilize...");
     setTimeout(() => {
       debugLog("Starting first clip...");
       const first = pickNextClip();
       if (first) playClip(first);
-    }, 4000);
+    }, 2000);
 
     // Refresh clips every 5 minutes for variety from full 14k+ catalog
     setInterval(async () => {

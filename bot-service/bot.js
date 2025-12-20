@@ -358,6 +358,22 @@ const commands = {
     }
   },
 
+  // !cshuffle - Force a fresh shuffle of the clip pool (mod only)
+  async cshuffle(channel, tags, args) {
+    if (!isMod(tags)) {
+      return null; // Silently ignore non-mods
+    }
+
+    try {
+      const url = `${config.apiBaseUrl}/cshuffle.php?login=${clipChannel}&key=${config.adminKey}`;
+      const res = await fetchWithTimeout(url);
+      return await res.text();
+    } catch (err) {
+      console.error('!cshuffle error:', err.message);
+      return 'Could not shuffle clips.';
+    }
+  },
+
   // !ccat <game> - Filter clips by category/game (mod only)
   // Use !ccat off to return to all games
   async ccat(channel, tags, args) {
@@ -426,7 +442,7 @@ const commands = {
   // !chelp - Show available clip commands
   async chelp(channel, tags, args) {
     if (isMod(tags)) {
-      return 'Clip commands: !clip, !like/!dislike/!cvote [#], !cfind <query>, !cskip, !cprev, !ctop [#], !ccat <game>, !pclip <#>, !cremove <#>, !cadd <#>';
+      return 'Clip commands: !clip, !like/!dislike/!cvote [#], !cfind <query>, !cskip, !cprev, !ctop [#], !ccat <game>, !cshuffle, !pclip <#>, !cremove <#>, !cadd <#>';
     }
     if (isSubOrHigher(tags)) {
       return 'Clip commands: !clip (see current), !like/!dislike/!cvote [#], !cfind <query> (search clips)';
