@@ -298,5 +298,18 @@ if (empty($missingGameIds)) {
     echo "Resolved {$resolved} game names\n";
 }
 
+// Update last_refresh timestamp in channel_settings
+try {
+    $stmt = $pdo->prepare("
+        INSERT INTO channel_settings (login, last_refresh)
+        VALUES (?, CURRENT_TIMESTAMP)
+        ON CONFLICT (login) DO UPDATE SET last_refresh = CURRENT_TIMESTAMP
+    ");
+    $stmt->execute([$login]);
+    echo "\nUpdated last_refresh timestamp\n";
+} catch (PDOException $e) {
+    echo "\nNote: Could not update last_refresh: " . $e->getMessage() . "\n";
+}
+
 echo "</pre>\n";
 echo "<p><a href='admin.php'>Back to Admin</a></p>";
