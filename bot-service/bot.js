@@ -323,6 +323,28 @@ const commands = {
     }
   },
 
+  // !ccat <game> - Filter clips by category/game (mod only)
+  // Use !ccat off to return to all games
+  async ccat(channel, tags, args) {
+    if (!isMod(tags)) {
+      return null; // Silently ignore non-mods
+    }
+
+    const category = args.join(' ').trim();
+    if (!category) {
+      return 'Usage: !ccat <game> to filter, !ccat off to exit';
+    }
+
+    try {
+      const url = `${config.apiBaseUrl}/ccat.php?login=${clipChannel}&key=${config.adminKey}&category=${encodeURIComponent(category)}`;
+      const res = await fetchWithTimeout(url);
+      return await res.text();
+    } catch (err) {
+      console.error('!ccat error:', err.message);
+      return 'Could not set category.';
+    }
+  },
+
   // !cfind <query> - Search clips by title (subs and up)
   async cfind(channel, tags, args) {
     if (!isSubOrHigher(tags)) {
@@ -357,7 +379,7 @@ const commands = {
   // !chelp - Show available clip commands
   async chelp(channel, tags, args) {
     if (isMod(tags)) {
-      return 'Clip commands: !clip, !like/!dislike [#], !cfind <query>, !cskip, !pclip <#>, !cremove <#>, !cadd <#>, !clikeoff/!clikeon';
+      return 'Clip commands: !clip, !like/!dislike [#], !cfind <query>, !cskip, !ccat <game>, !pclip <#>, !cremove <#>, !cadd <#>';
     }
     if (isSubOrHigher(tags)) {
       return 'Clip commands: !clip (see current), !like/!dislike [#], !cfind <query> (search clips)';
@@ -433,7 +455,7 @@ client.on('connected', (addr, port) => {
   console.log(`Joined channels: ${channels.join(', ')}`);
   console.log(`Clip channel: ${clipChannel}`);
   console.log(`Bot username: ${config.botUsername}`);
-  console.log('Commands active: !clip, !cskip, !pclip, !cfind, !like, !dislike, !cremove, !cadd, !chelp');
+  console.log('Commands active: !clip, !cskip, !ccat, !pclip, !cfind, !like, !dislike, !cremove, !cadd, !chelp');
 });
 
 client.on('disconnected', (reason) => {
