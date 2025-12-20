@@ -58,7 +58,7 @@ if ($days > 3650) $days = 3650;
 
 $pool  = isset($_GET['pool']) ? intval($_GET['pool']) : 400;
 if ($pool < 50) $pool = 50;
-if ($pool > 2000) $pool = 2000; // allow bigger, but keep response sane
+if ($pool > 15000) $pool = 15000; // allow full catalog export
 
 // Check if advance=1 is passed (player finished a clip and wants to advance playlist)
 $advance = isset($_GET['advance']) && $_GET['advance'] === '1';
@@ -171,15 +171,24 @@ if ($pdo) {
     $blockedCount = (int)$stmt->fetchColumn();
 
     if ($totalAll > 0) {
+      // Check if mp4_only mode requested (for OBS native video playback)
+      $mp4Only = isset($_GET['mp4']) && $_GET['mp4'] === '1';
+
       // Fetch all non-blocked clips from database with game names
-      $stmt = $pdo->prepare("
+      // If mp4_only, filter to clips with valid thumbnail_url (not NULL, not empty, not NOT_FOUND)
+      $sql = "
         SELECT c.clip_id as id, c.seq, c.title, c.duration, c.created_at, c.view_count, c.game_id, c.video_id, c.vod_offset,
-               c.creator_name, g.name as game_name
+               c.creator_name, c.thumbnail_url, g.name as game_name
         FROM clips c
         LEFT JOIN games_cache g ON c.game_id = g.game_id
         WHERE c.login = ? AND c.blocked = FALSE
-        ORDER BY c.created_at DESC
-      ");
+      ";
+      if ($mp4Only) {
+        $sql .= " AND c.thumbnail_url IS NOT NULL AND c.thumbnail_url != '' AND c.thumbnail_url != 'NOT_FOUND'";
+      }
+      $sql .= " ORDER BY c.created_at DESC";
+
+      $stmt = $pdo->prepare($sql);
       $stmt->execute([$login]);
       $all = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
