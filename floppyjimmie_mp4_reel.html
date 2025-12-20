@@ -139,7 +139,7 @@
 
   const login  = (qs.get("login") || "floppyjimmie").toLowerCase();
   const days   = parseInt(qs.get("days") || "0", 10);  // 0 = all time
-  const pool   = parseInt(qs.get("pool") || "500", 10);  // Reasonable pool size (category mode loads all)
+  const pool   = parseInt(qs.get("pool") || "2000", 10);  // Large pool, reshuffled on scene reload
   const forceMuted = qs.get("muted") === "1";
 
   const API_BASE = "https://clipsystem-production.up.railway.app";
