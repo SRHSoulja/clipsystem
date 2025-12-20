@@ -6,6 +6,7 @@
  * Falls back to JSON file if database unavailable.
  */
 require_once __DIR__ . '/includes/helpers.php';
+require_once __DIR__ . '/includes/dashboard_auth.php';
 require_once __DIR__ . '/db_config.php';
 
 set_cors_headers();
@@ -22,6 +23,10 @@ $login = clean_login($_GET["login"] ?? "");
 $seq   = (int)($_GET["seq"] ?? 0);
 
 require_admin_auth();
+
+// Get streamer's instance for command isolation
+$auth = new DashboardAuth();
+$instance = $auth->getStreamerInstance($login) ?: "";
 if ($seq <= 0) { echo "Usage: !pclip <clip#>"; exit; }
 
 // Try PostgreSQL first (fast indexed lookup)
@@ -94,8 +99,6 @@ if (!$clip) {
 $clipId = (string)($clip["id"] ?? $clip["clip_id"] ?? "");
 if ($clipId === "") { echo "Clip #{$seq} missing id."; exit; }
 
-$forcePath = $runtimeDir . "/force_play_" . $login . ".json";
-
 // Build a full clip object for the player (in case clip isn't in current pool)
 $clipObject = [
   "id" => $clipId,
@@ -105,7 +108,7 @@ $clipObject = [
   "creator_name" => $clip["creator_name"] ?? "",
 ];
 
-$payload = [
+$payload = json_encode([
   "login"    => $login,
   "seq"      => $seq,
   "clip_id"  => $clipId,
@@ -115,9 +118,18 @@ $payload = [
   "clip"     => $clipObject,  // Include full clip object for player fallback
   "nonce"    => (string)(time() . "_" . bin2hex(random_bytes(4))),
   "set_at"   => gmdate("c"),
-];
+], JSON_UNESCAPED_SLASHES);
 
-@file_put_contents($forcePath, json_encode($payload, JSON_UNESCAPED_SLASHES), LOCK_EX);
+// Write to BOTH generic and instance-specific paths
+// Always write generic file (for basic sources)
+$genericPath = $runtimeDir . "/force_play_" . $login . ".json";
+@file_put_contents($genericPath, $payload, LOCK_EX);
+
+// Also write instance-specific file if streamer has instance
+if ($instance) {
+  $instancePath = $runtimeDir . "/force_play_" . $login . "_" . $instance . ".json";
+  @file_put_contents($instancePath, $payload, LOCK_EX);
+}
 
 $title = $clip["title"] ?? "(no title)";
 echo "Playing Clip #{$seq}: {$title}";
