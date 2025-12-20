@@ -451,6 +451,7 @@ const commands = {
   },
 
   // !chud <position> - Move the HUD overlay (mod only)
+  // !chud top <position> - Move the top clips overlay (mod only)
   // Positions: tr (top-right), tl (top-left), br (bottom-right), bl (bottom-left)
   async chud(channel, tags, args) {
     if (!isMod(tags)) {
@@ -458,7 +459,6 @@ const commands = {
     }
 
     const login = getClipChannel(channel);
-    const position = (args[0] || '').toLowerCase();
 
     // Map friendly names to position codes
     const positionMap = {
@@ -467,10 +467,36 @@ const commands = {
       'br': 'br', 'bottomright': 'br', 'bottom-right': 'br',
       'bl': 'bl', 'bottomleft': 'bl', 'bottom-left': 'bl'
     };
+    const posNames = { tr: 'top-right', tl: 'top-left', br: 'bottom-right', bl: 'bottom-left' };
 
+    // Check if moving the top clips overlay
+    if (args[0]?.toLowerCase() === 'top') {
+      const position = (args[1] || '').toLowerCase();
+      const pos = positionMap[position];
+      if (!pos) {
+        return 'Usage: !chud top <position> - Positions: tl, tr, bl, br';
+      }
+
+      try {
+        const url = `${config.apiBaseUrl}/hud_position.php?login=${encodeURIComponent(login)}&key=${encodeURIComponent(config.adminKey)}&set=1&type=top&position=${pos}`;
+        const res = await fetchWithTimeout(url);
+        const data = await res.json();
+
+        if (data.ok) {
+          return `Top clips overlay moved to ${posNames[pos]}.`;
+        }
+        return 'Could not move top clips overlay.';
+      } catch (err) {
+        console.error('!chud top error:', err.message);
+        return 'Could not move top clips overlay.';
+      }
+    }
+
+    // Move the main HUD
+    const position = (args[0] || '').toLowerCase();
     const pos = positionMap[position];
     if (!pos) {
-      return 'Usage: !chud <position> - Positions: tl (top-left), tr (top-right), bl (bottom-left), br (bottom-right)';
+      return 'Usage: !chud <position> or !chud top <position> - Positions: tl, tr, bl, br';
     }
 
     try {
@@ -479,7 +505,6 @@ const commands = {
       const data = await res.json();
 
       if (data.ok) {
-        const posNames = { tr: 'top-right', tl: 'top-left', br: 'bottom-right', bl: 'bottom-left' };
         return `HUD moved to ${posNames[pos]}.`;
       }
       return 'Could not move HUD.';

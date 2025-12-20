@@ -117,6 +117,8 @@
       position: absolute;
       right: 24px;
       bottom: 24px;
+      top: auto;
+      left: auto;
       z-index: 12000;
       background: rgba(0,0,0,0.85);
       border: 2px solid rgba(255,215,0,0.6);
@@ -130,13 +132,18 @@
       max-width: 400px;
       opacity: 0;
       transform: translateY(20px);
-      transition: opacity 300ms ease-out, transform 300ms ease-out;
+      transition: opacity 300ms ease-out, transform 300ms ease-out, top 300ms ease, bottom 300ms ease, left 300ms ease, right 300ms ease;
       pointer-events: none;
     }
     #topClipsOverlay.show {
       opacity: 1;
       transform: translateY(0);
     }
+    /* Top Clips Overlay positions */
+    #topClipsOverlay.pos-tr { top: 24px !important; right: 24px !important; bottom: auto !important; left: auto !important; }
+    #topClipsOverlay.pos-tl { top: 24px !important; left: 24px !important; bottom: auto !important; right: auto !important; }
+    #topClipsOverlay.pos-br { bottom: 24px !important; right: 24px !important; top: auto !important; left: auto !important; }
+    #topClipsOverlay.pos-bl { bottom: 24px !important; left: 24px !important; top: auto !important; right: auto !important; }
     #topClipsOverlay .header {
       font-size: 20px;
       font-weight: 800;
@@ -264,6 +271,8 @@
   // HUD Position polling
   const hudEnabled = qs.get("hud") !== "0";
   let currentHudPosition = null;
+  let currentTopPosition = null;
+  const topClipsOverlay = document.getElementById("topClipsOverlay");
 
   function setHudPosition(pos, force = false) {
     const validPositions = ['tr', 'tl', 'br', 'bl'];
@@ -276,17 +285,34 @@
     console.log('[HUD] Position set to:', pos);
   }
 
+  function setTopPosition(pos, force = false) {
+    const validPositions = ['tr', 'tl', 'br', 'bl'];
+    if (!validPositions.includes(pos)) pos = 'br';
+    if (!force && pos === currentTopPosition) return;
+
+    currentTopPosition = pos;
+    topClipsOverlay.classList.remove('pos-tr', 'pos-tl', 'pos-br', 'pos-bl');
+    topClipsOverlay.classList.add(`pos-${pos}`);
+    console.log('[TOP] Position set to:', pos);
+  }
+
   async function pollHudPosition() {
     if (!hudEnabled) return;
     try {
       const res = await fetch(`${API_BASE}/hud_position.php?login=${encodeURIComponent(login)}`, { cache: "no-store" });
       const data = await res.json();
-      if (data && data.position) {
-        setHudPosition(data.position, currentHudPosition === null);
+      if (data) {
+        if (data.hud_position || data.position) {
+          setHudPosition(data.hud_position || data.position, currentHudPosition === null);
+        }
+        if (data.top_position) {
+          setTopPosition(data.top_position, currentTopPosition === null);
+        }
       }
     } catch (e) {
       console.error('[HUD] Poll error:', e);
       if (currentHudPosition === null) setHudPosition('tr', true);
+      if (currentTopPosition === null) setTopPosition('br', true);
     }
   }
 
@@ -839,8 +865,7 @@
     } catch {}
   }
 
-  // Top clips overlay
-  const topClipsOverlay = document.getElementById("topClipsOverlay");
+  // Top clips overlay (topClipsOverlay already declared above for position polling)
   const topClipsList = document.getElementById("topClipsList");
   let topClipsTimeout = null;
   let lastTopNonce = null;

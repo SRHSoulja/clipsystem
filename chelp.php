@@ -190,6 +190,13 @@ header("Content-Type: text/html; charset=utf-8");
     </div>
 
     <div class="command">
+      <span class="command-name">!chud top &lt;position&gt;</span>
+      <span class="mod-only">MOD</span>
+      <div class="command-desc">Move the top clips overlay (!ctop) to a different corner.</div>
+      <div class="command-example">!chud top tl &nbsp;(top-left)<br>!chud top br &nbsp;(bottom-right, default)</div>
+    </div>
+
+    <div class="command">
       <span class="command-name">!cremove &lt;#&gt;</span>
       <span class="mod-only">MOD</span>
       <div class="command-desc">Remove a clip from the rotation pool.</div>

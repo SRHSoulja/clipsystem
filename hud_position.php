@@ -2,10 +2,11 @@
 /**
  * hud_position.php - Get/Set HUD position for a channel
  *
- * GET: Returns current HUD position
+ * GET: Returns current HUD position (and top clips overlay position)
  * POST: Sets HUD position (requires key)
  *
  * Positions: tr (top-right), tl (top-left), br (bottom-right), bl (bottom-left)
+ * Types: hud (default), top (for top clips overlay)
  */
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
@@ -24,10 +25,17 @@ function clean_login($s) {
 }
 
 $login = clean_login($_GET["login"] ?? $_POST["login"] ?? "");
+$type = strtolower($_GET["type"] ?? $_POST["type"] ?? "hud"); // "hud" or "top"
 $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
 
-// Valid positions
+// Valid positions and types
 $validPositions = ['tr', 'tl', 'br', 'bl'];
+$validTypes = ['hud', 'top'];
+if (!in_array($type, $validTypes)) $type = 'hud';
+
+// Column name based on type
+$column = $type === 'top' ? 'top_position' : 'hud_position';
+$defaultPos = $type === 'top' ? 'br' : 'tr'; // Top clips default to bottom-right
 
 // Use database to store position per channel
 $pdo = get_db_connection();
@@ -41,35 +49,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['set'])) {
     exit;
   }
 
-  $position = strtolower($_GET["position"] ?? $_POST["position"] ?? "tr");
+  $position = strtolower($_GET["position"] ?? $_POST["position"] ?? $defaultPos);
   if (!in_array($position, $validPositions)) {
-    $position = 'tr';
+    $position = $defaultPos;
   }
 
   if ($pdo) {
     try {
-      // Use channel_settings table (create if not exists)
+      // Use channel_settings table (create if not exists) - add top_position column
       $pdo->exec("CREATE TABLE IF NOT EXISTS channel_settings (
         login VARCHAR(50) PRIMARY KEY,
         hud_position VARCHAR(10) DEFAULT 'tr',
+        top_position VARCHAR(10) DEFAULT 'br',
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )");
 
+      // Add top_position column if it doesn't exist (for existing tables)
+      try {
+        $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS top_position VARCHAR(10) DEFAULT 'br'");
+      } catch (PDOException $e) {
+        // Column might already exist, ignore
+      }
+
       $stmt = $pdo->prepare("
-        INSERT INTO channel_settings (login, hud_position, updated_at)
+        INSERT INTO channel_settings (login, {$column}, updated_at)
         VALUES (?, ?, NOW())
-        ON CONFLICT (login) DO UPDATE SET hud_position = ?, updated_at = NOW()
+        ON CONFLICT (login) DO UPDATE SET {$column} = ?, updated_at = NOW()
       ");
       $stmt->execute([$login, $position, $position]);
 
       echo json_encode([
         "ok" => true,
         "login" => $login,
+        "type" => $type,
         "position" => $position
       ]);
     } catch (PDOException $e) {
       http_response_code(500);
-      echo json_encode(["error" => "database error"]);
+      echo json_encode(["error" => "database error: " . $e->getMessage()]);
     }
   } else {
     http_response_code(500);
@@ -78,28 +95,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['set'])) {
   exit;
 }
 
-// GET - return current position
+// GET - return current position(s)
 if ($pdo) {
   try {
-    $stmt = $pdo->prepare("SELECT hud_position FROM channel_settings WHERE login = ?");
+    $stmt = $pdo->prepare("SELECT hud_position, top_position FROM channel_settings WHERE login = ?");
     $stmt->execute([$login]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    $position = $row ? $row['hud_position'] : 'tr';
+    $hudPosition = $row && isset($row['hud_position']) ? $row['hud_position'] : 'tr';
+    $topPosition = $row && isset($row['top_position']) ? $row['top_position'] : 'br';
+
     echo json_encode([
       "login" => $login,
-      "position" => $position
+      "position" => $type === 'top' ? $topPosition : $hudPosition,
+      "hud_position" => $hudPosition,
+      "top_position" => $topPosition
     ]);
   } catch (PDOException $e) {
-    // Table might not exist yet, return default
+    // Table might not exist yet, return defaults
     echo json_encode([
       "login" => $login,
-      "position" => "tr"
+      "position" => $defaultPos,
+      "hud_position" => "tr",
+      "top_position" => "br"
     ]);
   }
 } else {
   echo json_encode([
     "login" => $login,
-    "position" => "tr"
+    "position" => $defaultPos,
+    "hud_position" => "tr",
+    "top_position" => "br"
   ]);
 }
