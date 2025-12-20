@@ -181,7 +181,7 @@ header("Content-Type: text/html; charset=utf-8");
     <div class="command">
       <span class="command-name">!cswitch &lt;channel&gt;</span>
       <span class="mod-only">MOD</span>
-      <div class="command-desc">Temporarily control another channel's clips from your chat.</div>
+      <div class="command-desc">Temporarily control another channel's clips from your chat. (TheArsonDragon only)</div>
       <div class="command-example">!cswitch joshbelmar &nbsp;(control josh's clips)<br>!cswitch off &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(return to normal)</div>
     </div>
 

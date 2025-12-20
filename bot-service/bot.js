@@ -417,12 +417,18 @@ const commands = {
 
   // !cswitch <channel> - Switch which channel's clips commands affect (mod only)
   // Use !cswitch off or !cswitch reset to return to normal
+  // RESTRICTED: Only works in thearsondragon's channel
   async cswitch(channel, tags, args) {
     if (!isMod(tags)) {
       return null; // Silently ignore non-mods
     }
 
     const chatChannel = channel.replace(/^#/, '').toLowerCase();
+
+    // Only allow !cswitch in thearsondragon's channel
+    if (chatChannel !== 'thearsondragon') {
+      return null; // Silently ignore in other channels
+    }
     const target = (args[0] || '').toLowerCase().replace(/^@/, '');
 
     if (!target) {
