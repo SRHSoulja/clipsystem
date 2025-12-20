@@ -1261,6 +1261,12 @@
       showTransition();
     }
 
+    // IMMEDIATELY kill audio from the old clip by blanking it
+    // This prevents audio bleed during the transition
+    liveFrame.classList.remove("live");
+    try { liveFrame.src = "about:blank"; } catch {}
+    console.log("[SWITCH] Old clip audio killed immediately");
+
     const token = ++nextToken;
     const switchStartedAt = Date.now();
 
@@ -1276,8 +1282,7 @@
       }
       debugLog("SW#" + switchNum + " loaded" + (wasFailsafe ? " (failsafe)" : ""), "ok");
 
-      // Hide old frame and blank it after new one is ready
-      liveFrame.classList.remove("live");
+      // liveFrame was already hidden and blanked at switch start (for instant audio kill)
       revealIframeThenFadeOut(backFrame, loadStartedAt);
 
       const tmp = liveFrame;
@@ -1285,8 +1290,6 @@
       backFrame = tmp;
 
       try { backFrame.onload = null; } catch {}
-      // Blank the old frame after a short delay (allows OBS to maintain audio routing)
-      setTimeout(() => { try { backFrame.src = "about:blank"; } catch {} }, 500);
 
       markPlayed(clipToPlay);
 
