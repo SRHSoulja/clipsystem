@@ -265,6 +265,25 @@ const commands = {
     }
   },
 
+  // !cvote [seq] - Clear user's vote on a clip (current clip if no seq provided)
+  async cvote(channel, tags, args) {
+    if (!likesEnabled) return null; // Silently ignore when disabled
+
+    const seq = parseInt(args[0]) || 0; // 0 means current clip
+
+    try {
+      const user = tags.username || 'anonymous';
+      const url = `${config.apiBaseUrl}/vote_clear.php?login=${clipChannel}&user=${user}&seq=${seq}`;
+      const res = await fetchWithTimeout(url);
+      const text = await res.text();
+      // Only return response if there was one (silent fail if no vote existed)
+      return text.trim() || null;
+    } catch (err) {
+      console.error('!cvote error:', err.message);
+      return null; // Silent fail
+    }
+  },
+
   // !cremove <seq> - Remove a clip from pool (mod only)
   async cremove(channel, tags, args) {
     if (!isMod(tags)) {
@@ -407,12 +426,12 @@ const commands = {
   // !chelp - Show available clip commands
   async chelp(channel, tags, args) {
     if (isMod(tags)) {
-      return 'Clip commands: !clip, !like/!dislike [#], !cfind <query>, !cskip, !cprev, !ctop [#], !ccat <game>, !pclip <#>, !cremove <#>, !cadd <#>';
+      return 'Clip commands: !clip, !like/!dislike/!cvote [#], !cfind <query>, !cskip, !cprev, !ctop [#], !ccat <game>, !pclip <#>, !cremove <#>, !cadd <#>';
     }
     if (isSubOrHigher(tags)) {
-      return 'Clip commands: !clip (see current), !like/!dislike [#], !cfind <query> (search clips)';
+      return 'Clip commands: !clip (see current), !like/!dislike/!cvote [#], !cfind <query> (search clips)';
     }
-    return 'Clip commands: !clip (see current), !like [#] (upvote), !dislike [#] (downvote)';
+    return 'Clip commands: !clip (see current), !like/!dislike/!cvote [#] (vote/clear vote)';
   },
 
   // !clikeoff - Disable like/dislike commands (mod only)
