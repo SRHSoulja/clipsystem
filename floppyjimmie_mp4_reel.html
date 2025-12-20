@@ -188,6 +188,8 @@
   let failedClips = new Set();
   let isSwitching = false;
   let advanceTimer = null;
+  let clipHistory = []; // Stack of previously played clips for !cprev
+  const MAX_HISTORY = 20;
 
   // Category filter state
   let categoryFilter = null; // { game_id, game_name, clip_ids: Set }
@@ -391,9 +393,14 @@
     }, 10000);
   }
 
-  async function playClip(c) {
+  async function playClip(c, skipHistory = false) {
     if (!c) return;
     isSwitching = true;
+    // Save current clip to history (unless going back or first clip)
+    if (currentClip && !skipHistory) {
+      clipHistory.push(currentClip);
+      if (clipHistory.length > MAX_HISTORY) clipHistory.shift();
+    }
     currentClip = c;
     playbackStarted = false; // Reset - not playing yet
     clearVideoTimeouts();
@@ -662,6 +669,29 @@
     } catch {}
   }
 
+  // Prev polling (go back to previous clip)
+  async function pollPrev() {
+    if (isSwitching) return;
+    try {
+      const res = await fetch(`${API_BASE}/prev_check.php?login=${encodeURIComponent(login)}`, { cache: "no-store" });
+      const data = await res.json();
+      if (data?.prev) {
+        if (clipHistory.length === 0) {
+          debugLog("No previous clip", "warn");
+          return;
+        }
+        const prevClip = clipHistory.pop();
+        debugLog(`Going back to: ${prevClip.title?.substring(0,20) || prevClip.id}`, "warn");
+        clearVideoTimeouts();
+        if (advanceTimer) clearTimeout(advanceTimer);
+        // Mark as command-triggered for extra buffering
+        isCommandTriggered = true;
+        // Play previous clip, skip adding to history (we're going back)
+        playClip(prevClip, true);
+      }
+    } catch {}
+  }
+
   // Category filter polling
   let originalClips = null; // Store original clips when entering category mode
 
@@ -763,6 +793,7 @@
     }
     setInterval(pollForcePlay, 700);
     setInterval(pollSkip, 1000);
+    setInterval(pollPrev, 1000); // Poll for !cprev
     setInterval(pollCategory, 2000); // Poll category every 2s
 
     // Refresh clips periodically

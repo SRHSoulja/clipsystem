@@ -323,6 +323,22 @@ const commands = {
     }
   },
 
+  // !cprev - Go back to previous clip (mod only)
+  async cprev(channel, tags, args) {
+    if (!isMod(tags)) {
+      return null; // Silently ignore non-mods
+    }
+
+    try {
+      const url = `${config.apiBaseUrl}/cprev.php?login=${clipChannel}&key=${config.adminKey}`;
+      const res = await fetchWithTimeout(url);
+      return await res.text();
+    } catch (err) {
+      console.error('!cprev error:', err.message);
+      return 'Could not go to previous clip.';
+    }
+  },
+
   // !ccat <game> - Filter clips by category/game (mod only)
   // Use !ccat off to return to all games
   async ccat(channel, tags, args) {
@@ -374,7 +390,7 @@ const commands = {
   // !chelp - Show available clip commands
   async chelp(channel, tags, args) {
     if (isMod(tags)) {
-      return 'Clip commands: !clip, !like/!dislike [#], !cfind <query>, !cskip, !ccat <game>, !pclip <#>, !cremove <#>, !cadd <#>';
+      return 'Clip commands: !clip, !like/!dislike [#], !cfind <query>, !cskip, !cprev, !ccat <game>, !pclip <#>, !cremove <#>, !cadd <#>';
     }
     if (isSubOrHigher(tags)) {
       return 'Clip commands: !clip (see current), !like/!dislike [#], !cfind <query> (search clips)';
