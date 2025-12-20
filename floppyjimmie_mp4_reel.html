@@ -103,7 +103,7 @@
   </style>
 </head>
 <body>
-  <video id="player" autoplay playsinline></video>
+  <video id="player" autoplay playsinline preload="auto"></video>
 
   <div id="voteHud">
     <div class="clip-info">
@@ -348,6 +348,7 @@
   // Play clip with robust timeout handling
   let loadTimeout = null;
   let stallTimeout = null;
+  let isFirstClip = true; // Track first clip for extra buffering
 
   function clearVideoTimeouts() {
     if (loadTimeout) { clearTimeout(loadTimeout); loadTimeout = null; }
@@ -401,8 +402,13 @@
     player.src = mp4Url;
     player.load();
 
-    player.oncanplay = () => {
-      player.oncanplay = null; // Only fire once
+    // Use canplaythrough for first clip (more buffering), canplay for subsequent
+    const bufferEvent = isFirstClip ? "canplaythrough" : "canplay";
+    debugLog(`Waiting for ${bufferEvent}...`);
+
+    const onBufferReady = () => {
+      player.removeEventListener("canplay", onBufferReady);
+      player.removeEventListener("canplaythrough", onBufferReady);
       clearTimeout(loadTimeout);
       loadTimeout = null;
 
@@ -414,6 +420,7 @@
         setNowPlaying(c);
         scheduleNext(c.duration || 30);
         isSwitching = false;
+        isFirstClip = false; // No longer first clip
         resetStallTimer();
       }).catch(err => {
         debugLog(`Play err: ${err.message}`, "err");
@@ -423,6 +430,8 @@
         playNext();
       });
     };
+
+    player.addEventListener(bufferEvent, onBufferReady, { once: true });
 
     // Reset stall timer on progress
     player.ontimeupdate = () => {
