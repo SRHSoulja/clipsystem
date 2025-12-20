@@ -163,6 +163,13 @@ header("Content-Type: text/html; charset=utf-8");
     </div>
 
     <div class="command">
+      <span class="command-name">!ctop [#]</span>
+      <span class="mod-only">MOD</span>
+      <div class="command-desc">Show top voted clips overlay on screen.</div>
+      <div class="command-example">!ctop &nbsp;&nbsp;&nbsp;&nbsp;(show top 5 clips)<br>!ctop 3 &nbsp;(show top 3 clips)</div>
+    </div>
+
+    <div class="command">
       <span class="command-name">!chud &lt;position&gt;</span>
       <span class="mod-only">MOD</span>
       <div class="command-desc">Move the clip info HUD to a different corner.</div>
