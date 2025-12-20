@@ -188,7 +188,7 @@ foreach ($newClips as $clip) {
             $clip['id'],
             $nextSeq,
             $clip['title'] ?? '',
-            $clip['duration'] ?? 0,
+            (int)round($clip['duration'] ?? 0),
             $clip['created_at'],
             $clip['view_count'] ?? 0,
             $clip['game_id'] ?? null,
