@@ -474,10 +474,19 @@
   // Force play polling - persist nonce to avoid replaying on page reload
   const pclipEnabled = qs.get("pclip") !== "0";
   const pclipNonceKey = `pclip_nonce_${login}`;
-  let lastPclipNonce = sessionStorage.getItem(pclipNonceKey) || null;
+  let lastPclipNonce = localStorage.getItem(pclipNonceKey) || null;
+
+  // Clear force play on server after we start playing it
+  async function clearForcePlay() {
+    try {
+      await fetch(`${API_BASE}/force_play_clear.php?login=${encodeURIComponent(login)}`, { cache: "no-store" });
+      debugLog("Force play cleared", "ok");
+    } catch {}
+  }
 
   async function pollForcePlay() {
     if (!pclipEnabled) return;
+
     try {
       const res = await fetch(`${API_BASE}/force_play_get.php?login=${encodeURIComponent(login)}`, { cache: "no-store" });
       const data = await res.json();
@@ -487,15 +496,16 @@
       if (data.set_at) {
         const age = Date.now() - new Date(data.set_at).getTime();
         if (age > 30000) {
-          // Mark as seen so we don't keep checking
+          // Mark as seen and clear from server
           lastPclipNonce = data.nonce;
-          sessionStorage.setItem(pclipNonceKey, data.nonce);
+          localStorage.setItem(pclipNonceKey, data.nonce);
+          clearForcePlay();
           return;
         }
       }
 
       lastPclipNonce = data.nonce;
-      sessionStorage.setItem(pclipNonceKey, data.nonce);
+      localStorage.setItem(pclipNonceKey, data.nonce);
 
       let c = clips.find(x => x.id === data.clip_id);
       if (!c && data.clip) c = data.clip;
@@ -504,6 +514,10 @@
       debugLog(`Force play: ${c.id.substring(0,15)}`, "warn");
       clearVideoTimeouts();
       if (advanceTimer) clearTimeout(advanceTimer);
+
+      // Clear the force play from server immediately so it doesn't replay
+      clearForcePlay();
+
       playClip(c);
     } catch {}
   }
