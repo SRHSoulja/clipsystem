@@ -479,14 +479,14 @@
     };
 
     // Buffer requirements:
-    // - First clip (scene init): 15s buffer (generous for initial load after refresh)
+    // - First clip (scene init): 20s buffer (generous for initial load after refresh)
     // - Command-triggered (!pclip, !cskip): 5s buffer
     // - Normal progression: 2s buffer
     const clipDur = c.duration || 30;
     let requiredBuffer = 2;
     if (isFirstClip) {
-      // For first clip, buffer 15s or full clip if shorter (need extra for stabilization)
-      requiredBuffer = Math.min(clipDur - 1, 15);
+      // For first clip, buffer 20s or full clip if shorter (need extra headroom)
+      requiredBuffer = Math.min(clipDur - 1, 20);
     } else if (isCommandTriggered) {
       requiredBuffer = 5;
     }
@@ -517,19 +517,20 @@
           debugLog(`Buffered: ${bufferedEnd.toFixed(1)}s (needed ${requiredBuffer}s, canplay=${canPlayThroughFired})`, "ok");
           // On first clip, wait extra time for network to stabilize
           if (isFirstClip) {
-            debugLog("Stabilizing...");
+            debugLog("Stabilizing (2.5s)...");
             setTimeout(() => {
               const finalBuffer = player.buffered.length > 0 ? player.buffered.end(0) : 0;
               debugLog(`Final buffer: ${finalBuffer.toFixed(1)}s`);
-              // Re-verify buffer is still sufficient before playing
-              if (finalBuffer >= requiredBuffer) {
+              // Re-verify buffer is still sufficient before playing (need at least 10s)
+              const minBufferToPlay = Math.min(10, requiredBuffer);
+              if (finalBuffer >= minBufferToPlay) {
                 startPlayback();
               } else {
                 debugLog(`Buffer dropped to ${finalBuffer.toFixed(1)}s, re-buffering...`, "warn");
                 hasStarted = false;
                 bufferCheckInterval = setInterval(checkBuffer, 200);
               }
-            }, 1500);
+            }, 2500);
           } else {
             startPlayback();
           }
