@@ -113,6 +113,11 @@ switch ($action) {
             $stmt->execute([$login]);
             $stats = $stmt->fetch(PDO::FETCH_ASSOC);
 
+            // Default stats if no clips found
+            if (!$stats || $stats['total'] === null) {
+                $stats = ['total' => 0, 'active' => 0, 'blocked' => 0];
+            }
+
             // Get streamer's instance for player URL
             $instance = $auth->getStreamerInstance($login);
 
@@ -120,7 +125,8 @@ switch ($action) {
                 "settings" => $settings,
                 "stats" => $stats,
                 "role" => $auth->getRoleName(),
-                "instance" => $instance
+                "instance" => $instance,
+                "debug_login" => $login  // Temporary debug
             ]);
         } catch (PDOException $e) {
             json_error("Database error: " . $e->getMessage(), 500);
