@@ -104,10 +104,11 @@ if (!$broadcasterId) {
 }
 echo "Broadcaster ID: {$broadcasterId}\n\n";
 
-// Fetch clips from Twitch API (starting from the day AFTER the latest clip)
-// Add 1 second to avoid getting the same clip again
-$startDate = date('c', strtotime($latestDate) + 1);
-echo "Fetching clips created after: {$startDate}\n\n";
+// Fetch clips from Twitch API (starting from 1 day BEFORE the latest clip)
+// This ensures we catch any clips that failed to insert previously
+$startDate = date('c', strtotime($latestDate) - 86400);
+echo "Fetching clips created after: {$startDate}\n";
+echo "(Going back 1 day to catch any previously missed clips)\n\n";
 
 $newClips = [];
 $cursor = null;
