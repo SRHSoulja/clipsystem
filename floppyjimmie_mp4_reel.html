@@ -1045,8 +1045,8 @@
     } catch {}
 
     // Use consolidated polling - single endpoint replaces 7 separate polls
-    // This reduces network overhead by ~85%
-    setInterval(pollAll, 800); // Poll every 800ms
+    // 2s interval is sufficient for mod commands while reducing server load
+    setInterval(pollAll, 2000); // Poll every 2 seconds
 
     // Preload next clip at 70% through current clip
     setInterval(() => {
