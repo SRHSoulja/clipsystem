@@ -176,6 +176,13 @@ header("Content-Type: text/html; charset=utf-8");
     </div>
 
     <div class="command">
+      <span class="command-name">!cvote [#]</span>
+      <span class="mod-only">MOD</span>
+      <div class="command-desc">Clear votes for a clip. Clears current clip if no number provided.</div>
+      <div class="command-example">!cvote &nbsp;&nbsp;&nbsp;&nbsp;(clear votes for current clip)<br>!cvote 42 &nbsp;(clear votes for clip #42)</div>
+    </div>
+
+    <div class="command">
       <span class="command-name">!chud &lt;position&gt;</span>
       <span class="mod-only">MOD</span>
       <div class="command-desc">Move the clip info HUD to a different corner.</div>

@@ -419,10 +419,33 @@ const commands = {
     }
   },
 
+  // !cvote [seq] - Clear votes for a clip (mod only)
+  // If no seq provided, clears votes for currently playing clip
+  async cvote(channel, tags, args) {
+    if (!isMod(tags)) {
+      return null; // Silently ignore non-mods
+    }
+
+    const login = getClipChannel(channel);
+    const seq = parseInt(args[0]) || 0;
+
+    try {
+      let url = `${config.apiBaseUrl}/cvote.php?login=${encodeURIComponent(login)}&key=${encodeURIComponent(config.adminKey)}`;
+      if (seq > 0) {
+        url += `&seq=${seq}`;
+      }
+      const res = await fetchWithTimeout(url);
+      return await res.text();
+    } catch (err) {
+      console.error('!cvote error:', err.message);
+      return 'Could not clear votes.';
+    }
+  },
+
   // !chelp - Show available clip commands
   async chelp(channel, tags, args) {
     if (isMod(tags)) {
-      return 'Mod: !pclip <#>, !cskip, !cprev, !ccat <game>, !ctop [#], !chud <pos>, !cremove/!cadd <#> | All: !clip, !cfind, !like/!dislike [#]';
+      return 'Mod: !pclip <#>, !cskip, !cprev, !ccat <game>, !ctop [#], !cvote [#], !chud <pos>, !cremove/!cadd <#> | All: !clip, !cfind, !like/!dislike [#]';
     }
     return 'Clip commands: !clip (current), !cfind (browse), !like [#] (upvote), !dislike [#] (downvote)';
   },
@@ -570,7 +593,7 @@ client.on('connected', (addr, port) => {
   console.log(`Joining channels: ${channels.join(', ')}`);
   console.log(`Multi-channel mode: commands use clips from the channel they're typed in`);
   console.log(`Bot username: ${config.botUsername}`);
-  console.log('Commands: !clip, !cfind, !like, !dislike, !pclip, !cskip, !cprev, !ccat, !ctop, !chud, !cremove, !cadd, !cswitch, !clikeon, !clikeoff, !chelp');
+  console.log('Commands: !clip, !cfind, !like, !dislike, !pclip, !cskip, !cprev, !ccat, !ctop, !cvote, !chud, !cremove, !cadd, !cswitch, !clikeon, !clikeoff, !chelp');
 });
 
 client.on('join', (channel, username, self) => {
