@@ -99,20 +99,23 @@ if ($authenticated && $_SERVER['REQUEST_METHOD'] === 'POST') {
   if (isset($_POST['action']) && $_POST['action'] === 'resolve_games') {
     $login = isset($_POST['login']) ? strtolower(trim(preg_replace('/[^a-zA-Z0-9_]/', '', $_POST['login']))) : '';
 
-    // Call games_api.php resolve action
-    $resolveUrl = "games_api.php?action=resolve&key=" . urlencode($ADMIN_KEY);
+    // Call games_api.php resolve action via HTTP
+    $baseUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'];
+    $resolveUrl = $baseUrl . dirname($_SERVER['SCRIPT_NAME']) . "/games_api.php?action=resolve&key=" . urlencode($ADMIN_KEY);
     if ($login) {
       $resolveUrl .= "&login=" . urlencode($login);
     }
 
-    $response = @file_get_contents($resolveUrl);
+    $ctx = stream_context_create(['http' => ['timeout' => 60]]);
+    $response = @file_get_contents($resolveUrl, false, $ctx);
     $result = $response ? json_decode($response, true) : null;
 
     if ($result && isset($result['resolved'])) {
       $message = $result['message'];
       $messageType = $result['resolved'] > 0 ? 'success' : 'info';
     } else {
-      $message = "Failed to resolve game names";
+      $errorDetail = $result['error'] ?? 'Unknown error';
+      $message = "Failed to resolve game names: " . $errorDetail;
       $messageType = 'error';
     }
   }
