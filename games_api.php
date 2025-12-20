@@ -203,6 +203,69 @@ switch ($action) {
     json_response(["games" => $games]);
     break;
 
+  case 'resolve':
+    // Resolve all missing game names for a login (or all logins if not specified)
+    $login = isset($_GET['login']) ? strtolower(trim(preg_replace('/[^a-z0-9_]/', '', $_GET['login']))) : '';
+
+    // Auth check - require ADMIN_KEY
+    $key = $_GET['key'] ?? '';
+    $adminKey = getenv('ADMIN_KEY') ?: '';
+    if (!$adminKey || $key !== $adminKey) {
+      json_error("Unauthorized", 401);
+    }
+
+    // Find all game_ids in clips that aren't in games_cache
+    if ($login) {
+      $stmt = $pdo->prepare("
+        SELECT DISTINCT c.game_id
+        FROM clips c
+        LEFT JOIN games_cache g ON c.game_id = g.game_id
+        WHERE c.login = ? AND c.game_id IS NOT NULL AND c.game_id != '' AND g.game_id IS NULL
+      ");
+      $stmt->execute([$login]);
+    } else {
+      $stmt = $pdo->query("
+        SELECT DISTINCT c.game_id
+        FROM clips c
+        LEFT JOIN games_cache g ON c.game_id = g.game_id
+        WHERE c.game_id IS NOT NULL AND c.game_id != '' AND g.game_id IS NULL
+      ");
+    }
+    $missingIds = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+    if (empty($missingIds)) {
+      json_response(["message" => "All game names already cached", "resolved" => 0]);
+    }
+
+    // Fetch from Twitch
+    $fetched = fetchGamesFromTwitch($missingIds);
+    $resolved = 0;
+
+    if (!empty($fetched)) {
+      $insertStmt = $pdo->prepare("
+        INSERT INTO games_cache (game_id, name, box_art_url)
+        VALUES (?, ?, ?)
+        ON CONFLICT (game_id) DO UPDATE SET name = EXCLUDED.name, box_art_url = EXCLUDED.box_art_url, fetched_at = CURRENT_TIMESTAMP
+      ");
+
+      foreach ($fetched as $game) {
+        try {
+          $insertStmt->execute([$game['id'], $game['name'], $game['box_art_url']]);
+          $resolved++;
+        } catch (PDOException $e) {
+          // Ignore
+        }
+      }
+    }
+
+    json_response([
+      "message" => "Resolved $resolved of " . count($missingIds) . " missing game names",
+      "resolved" => $resolved,
+      "total_missing" => count($missingIds),
+      "games" => $fetched
+    ]);
+    break;
+
   default:
     json_error("Unknown action");
 }

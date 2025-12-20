@@ -94,6 +94,28 @@ if ($authenticated && $_SERVER['REQUEST_METHOD'] === 'POST') {
       }
     }
   }
+
+  // Resolve missing game names
+  if (isset($_POST['action']) && $_POST['action'] === 'resolve_games') {
+    $login = isset($_POST['login']) ? strtolower(trim(preg_replace('/[^a-zA-Z0-9_]/', '', $_POST['login']))) : '';
+
+    // Call games_api.php resolve action
+    $resolveUrl = "games_api.php?action=resolve&key=" . urlencode($ADMIN_KEY);
+    if ($login) {
+      $resolveUrl .= "&login=" . urlencode($login);
+    }
+
+    $response = @file_get_contents($resolveUrl);
+    $result = $response ? json_decode($response, true) : null;
+
+    if ($result && isset($result['resolved'])) {
+      $message = $result['message'];
+      $messageType = $result['resolved'] > 0 ? 'success' : 'info';
+    } else {
+      $message = "Failed to resolve game names";
+      $messageType = 'error';
+    }
+  }
 }
 
 // Get list of existing users from database
@@ -429,6 +451,29 @@ if ($authenticated) {
         </tbody>
       </table>
     <?php endif; ?>
+
+    <!-- Resolve Game Names -->
+    <div class="card" style="margin-top: 25px;">
+      <h3>Resolve Game Names</h3>
+      <p style="color: #adadb8; margin-top: 0;">Fetch game names from Twitch API for any clips showing "Game 12345" instead of actual game names.</p>
+      <form method="POST">
+        <input type="hidden" name="action" value="resolve_games">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="resolve_login">Username (optional - leave blank for all)</label>
+            <select name="login" id="resolve_login">
+              <option value="">All Users</option>
+              <?php foreach ($users as $user): ?>
+              <option value="<?= htmlspecialchars($user['login']) ?>"><?= htmlspecialchars($user['login']) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div class="form-group" style="flex: 0 0 auto;">
+            <button type="submit" style="background: #00b894;">Resolve Game Names</button>
+          </div>
+        </div>
+      </form>
+    </div>
 
     <!-- Admin Commands -->
     <h2>Admin-Only Commands</h2>
