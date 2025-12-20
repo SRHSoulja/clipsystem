@@ -21,11 +21,36 @@ $runtimeDir = get_runtime_dir();
 
 $login = clean_login($_GET["login"] ?? "");
 $seq   = (int)($_GET["seq"] ?? 0);
+$key   = (string)($_GET["key"] ?? "");
 
-require_admin_auth();
+// Auth: accept ADMIN_KEY, streamer_key, or mod_password
+$ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
+$isAuthorized = false;
+$auth = new DashboardAuth();
+
+if ($key === $ADMIN_KEY && $ADMIN_KEY !== '') {
+  $isAuthorized = true;
+} else {
+  // Try as streamer key first
+  $result = $auth->authenticateWithKey($key, $login);
+  if ($result && $result['login'] === $login) {
+    $isAuthorized = true;
+  } else {
+    // Try as mod password
+    $result = $auth->authenticateWithPassword($login, $key);
+    if ($result && $result['login'] === $login) {
+      $isAuthorized = true;
+    }
+  }
+}
+
+if (!$isAuthorized) {
+  http_response_code(403);
+  echo "Forbidden";
+  exit;
+}
 
 // Get streamer's instance for command isolation
-$auth = new DashboardAuth();
 $instance = $auth->getStreamerInstance($login) ?: "";
 if ($seq <= 0) { echo "Usage: !pclip <clip#>"; exit; }
 
