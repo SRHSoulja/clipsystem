@@ -311,10 +311,19 @@ const commands = {
     }
   },
 
-  // !cfind - Link to clip search/browse site
+  // !cfind <query> - Search clips by title/clipper/game
   async cfind(channel, tags, args) {
     const login = getClipChannel(channel);
-    return `Browse & search clips: ${config.apiBaseUrl}/clip_search.php?login=${login}`;
+    const query = args.join(' ').trim();
+
+    try {
+      const url = `${config.apiBaseUrl}/cfind.php?login=${encodeURIComponent(login)}&key=${encodeURIComponent(config.adminKey)}&q=${encodeURIComponent(query)}`;
+      const res = await fetchWithTimeout(url);
+      return await res.text();
+    } catch (err) {
+      console.error('!cfind error:', err.message);
+      return `Browse clips: ${config.apiBaseUrl}/clip_search.php?login=${login}`;
+    }
   },
 
   // !cskip - Skip the current clip (mod only)
