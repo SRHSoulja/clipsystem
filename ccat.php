@@ -57,32 +57,21 @@ if (!$pdo) {
 }
 
 try {
-  // First try exact match in games_cache (case-insensitive)
-  $stmt = $pdo->prepare("SELECT DISTINCT game_id, name FROM games_cache WHERE LOWER(name) = LOWER(?) LIMIT 1");
-  $stmt->execute([$category]);
-  $row = $stmt->fetch();
+  // Get all games this channel has clips for that match the search term
+  $stmt = $pdo->prepare("
+    SELECT DISTINCT c.game_id, COALESCE(g.name, c.game_id) as name, COUNT(*) as clip_count
+    FROM clips c
+    LEFT JOIN games_cache g ON c.game_id = g.game_id
+    WHERE c.login = ? AND c.blocked = false AND c.game_id IS NOT NULL AND c.game_id != ''
+      AND LOWER(COALESCE(g.name, c.game_id)) LIKE LOWER(?)
+    GROUP BY c.game_id, g.name
+    ORDER BY clip_count DESC
+  ");
+  $stmt->execute([$login, "%" . $category . "%"]);
+  $matchedGames = $stmt->fetchAll();
 
-  if ($row) {
-    $matchedGame = $row;
-  } else {
-    // Try fuzzy match with LIKE in games_cache
-    $stmt = $pdo->prepare("SELECT DISTINCT game_id, name FROM games_cache WHERE LOWER(name) LIKE LOWER(?) ORDER BY name LIMIT 5");
-    $stmt->execute(["%" . $category . "%"]);
-    $matches = $stmt->fetchAll();
-
-    if (count($matches) === 1) {
-      $matchedGame = $matches[0];
-    } elseif (count($matches) > 1) {
-      // Multiple matches - show options
-      $names = array_column($matches, 'name');
-      echo "Multiple matches: " . implode(", ", $names) . " - be more specific";
-      exit;
-    }
-  }
-
-  // If still no match, get list of available games for this channel from clips table
-  if (!$matchedGame) {
-    // First check what games this channel actually has clips for
+  // If no matches, get list of available games
+  if (empty($matchedGames)) {
     $stmt = $pdo->prepare("
       SELECT DISTINCT c.game_id, COALESCE(g.name, c.game_id) as name, COUNT(*) as clip_count
       FROM clips c
@@ -94,14 +83,6 @@ try {
     ");
     $stmt->execute([$login]);
     $availableGames = $stmt->fetchAll();
-
-    // Try to match by partial name in available games
-    foreach ($availableGames as $game) {
-      if (stripos($game['name'], $category) !== false) {
-        $matchedGame = $game;
-        break;
-      }
-    }
   }
 } catch (PDOException $e) {
   error_log("ccat db error: " . $e->getMessage());
@@ -109,7 +90,7 @@ try {
   exit;
 }
 
-if (!$matchedGame) {
+if (empty($matchedGames)) {
   if (!empty($availableGames)) {
     $names = array_column($availableGames, 'name');
     echo "Game not found. Available: " . implode(", ", array_slice($names, 0, 10));
@@ -120,34 +101,38 @@ if (!$matchedGame) {
   exit;
 }
 
-// Count how many clips are available for this game
-$clipCount = 0;
-if ($pdo) {
-  try {
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM clips WHERE login = ? AND game_id = ? AND blocked = false");
-    $stmt->execute([$login, $matchedGame['game_id']]);
-    $clipCount = (int)$stmt->fetchColumn();
-  } catch (PDOException $e) {
-    error_log("pcategory count error: " . $e->getMessage());
-  }
-}
+// Calculate total clips across all matched games
+$totalClips = array_sum(array_column($matchedGames, 'clip_count'));
+$gameIds = array_column($matchedGames, 'game_id');
+$gameNames = array_column($matchedGames, 'name');
 
-if ($clipCount === 0) {
-  echo "No clips found for {$matchedGame['name']}";
+if ($totalClips === 0) {
+  echo "No clips found matching '$category'";
   exit;
 }
 
-// Save the category filter
+// Save the category filter (supports multiple game IDs)
 $filterPath = $runtimeDir . "/category_filter_" . $login . ".json";
+
+// Build display name
+if (count($matchedGames) === 1) {
+  $displayName = $matchedGames[0]['name'];
+} else {
+  // Show search term + count of games
+  $displayName = ucfirst($category) . " (" . count($matchedGames) . " games)";
+}
+
 $payload = [
   "login" => $login,
-  "game_id" => $matchedGame['game_id'],
-  "game_name" => $matchedGame['name'],
-  "clip_count" => $clipCount,
+  "game_ids" => $gameIds,  // Array of game IDs
+  "game_id" => $gameIds[0],  // Keep single ID for backwards compat
+  "game_name" => $displayName,
+  "game_names" => $gameNames,  // All matched game names
+  "clip_count" => $totalClips,
   "nonce" => (string)(time() . "_" . bin2hex(random_bytes(4))),
   "set_at" => gmdate("c"),
 ];
 
 @file_put_contents($filterPath, json_encode($payload, JSON_UNESCAPED_SLASHES), LOCK_EX);
 
-echo "Category set to {$matchedGame['name']} ({$clipCount} clips)";
+echo "Category set to {$displayName} ({$totalClips} clips)";

@@ -38,28 +38,35 @@ if (!$raw) {
 }
 
 $data = json_decode($raw, true);
-if (!is_array($data) || !isset($data["game_id"])) {
+if (!is_array($data) || (!isset($data["game_id"]) && !isset($data["game_ids"]))) {
   echo json_encode(["active" => false]);
   exit;
 }
 
-// Get the full clip data matching this category
+// Support both single game_id and multiple game_ids
+$gameIds = isset($data["game_ids"]) ? $data["game_ids"] : [$data["game_id"]];
+
+// Get the full clip data matching this category (supports multiple game IDs)
 $clipIds = [];
 $categoryClips = [];
 $pdo = get_db_connection();
 
-if ($pdo) {
+if ($pdo && !empty($gameIds)) {
   try {
+    // Build placeholders for IN clause
+    $placeholders = implode(',', array_fill(0, count($gameIds), '?'));
+    $params = array_merge([$login], $gameIds);
+
     $stmt = $pdo->prepare("
       SELECT c.clip_id as id, c.seq, c.title, c.duration, c.created_at, c.view_count,
              c.game_id, c.video_id, c.vod_offset, c.creator_name, c.thumbnail_url,
              g.name as game_name
       FROM clips c
       LEFT JOIN games_cache g ON c.game_id = g.game_id
-      WHERE c.login = ? AND c.game_id = ? AND c.blocked = false
+      WHERE c.login = ? AND c.game_id IN ({$placeholders}) AND c.blocked = false
       ORDER BY c.created_at DESC
     ");
-    $stmt->execute([$login, $data["game_id"]]);
+    $stmt->execute($params);
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
       $clipIds[] = $row['id'];
       $categoryClips[] = $row;
