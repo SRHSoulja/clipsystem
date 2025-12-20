@@ -113,10 +113,14 @@ switch ($action) {
             $stmt->execute([$login]);
             $stats = $stmt->fetch(PDO::FETCH_ASSOC);
 
+            // Get streamer's instance for player URL
+            $instance = $auth->getStreamerInstance($login);
+
             json_response([
                 "settings" => $settings,
                 "stats" => $stats,
-                "role" => $auth->getRoleName()
+                "role" => $auth->getRoleName(),
+                "instance" => $instance
             ]);
         } catch (PDOException $e) {
             json_error("Database error", 500);

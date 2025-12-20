@@ -4,8 +4,10 @@
  *
  * Mods can use !ccat <game_name> to filter clips to a specific game.
  * Use !ccat off to disable the filter.
+ * Commands auto-route to the streamer's instance for isolation.
  */
 require_once __DIR__ . '/includes/helpers.php';
+require_once __DIR__ . '/includes/dashboard_auth.php';
 require_once __DIR__ . '/db_config.php';
 
 set_cors_headers();
@@ -18,6 +20,10 @@ $category = trim($_GET["category"] ?? "");
 
 require_admin_auth();
 
+// Get streamer's instance for command isolation
+$auth = new DashboardAuth();
+$instance = $auth->getStreamerInstance($login) ?: "";
+
 if ($category === "") {
   echo "Usage: !ccat <game> to filter, !ccat off to exit";
   exit;
@@ -29,9 +35,17 @@ $runtimeDir = get_runtime_dir();
 // Handle "off" to clear category filter - also handle common variations
 $catLower = strtolower($category);
 if ($catLower === "off" || $catLower === "clear" || $catLower === "all" || $catLower === "exit" || $catLower === "reset" || $catLower === "none") {
-  $filterPath = $runtimeDir . "/category_filter_" . $login . ".json";
+  $fileSuffix = $instance ? "_{$instance}" : "";
+  $filterPath = $runtimeDir . "/category_filter_" . $login . $fileSuffix . ".json";
   if (file_exists($filterPath)) {
     @unlink($filterPath);
+  }
+  // Also clear generic file if instance exists
+  if ($instance) {
+    $genericPath = $runtimeDir . "/category_filter_" . $login . ".json";
+    if (file_exists($genericPath)) {
+      @unlink($genericPath);
+    }
   }
   echo "Category filter cleared - playing all games";
   exit;
@@ -104,7 +118,8 @@ if ($totalClips === 0) {
 }
 
 // Save the category filter (supports multiple game IDs)
-$filterPath = $runtimeDir . "/category_filter_" . $login . ".json";
+$fileSuffix = $instance ? "_{$instance}" : "";
+$filterPath = $runtimeDir . "/category_filter_" . $login . $fileSuffix . ".json";
 
 // Build display name
 if (count($matchedGames) === 1) {

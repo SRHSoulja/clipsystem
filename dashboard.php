@@ -453,6 +453,7 @@ $login = clean_login($_GET['login'] ?? '');
         let authKey = INITIAL_KEY;
         let authLogin = INITIAL_LOGIN;
         let authRole = '';
+        let authInstance = '';
         let settings = {};
 
         // Auto-login if key provided
@@ -548,8 +549,14 @@ $login = clean_login($_GET['login'] ?? '');
                 document.getElementById('modPasswordCard').style.display = 'none';
             }
 
-            // Set player URL
-            const playerUrl = `https://gmgnrepeat.com/flop/clipplayer_mp4_reel.html?login=${encodeURIComponent(authLogin)}`;
+            // Player URL will be set after loading settings (when we have the instance)
+        }
+
+        function updatePlayerUrl() {
+            let playerUrl = `https://gmgnrepeat.com/flop/clipplayer_mp4_reel.html?login=${encodeURIComponent(authLogin)}`;
+            if (authInstance) {
+                playerUrl += `&instance=${encodeURIComponent(authInstance)}`;
+            }
             document.getElementById('playerUrl').textContent = playerUrl;
         }
 
@@ -564,6 +571,10 @@ $login = clean_login($_GET['login'] ?? '');
                 }
 
                 settings = data.settings;
+                authInstance = data.instance || '';
+
+                // Update player URL with instance
+                updatePlayerUrl();
 
                 // HUD positions
                 setPositionPicker('hudPositionPicker', settings.hud_position || 'tr');

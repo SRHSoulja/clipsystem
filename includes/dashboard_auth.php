@@ -39,10 +39,13 @@ class DashboardAuth {
                     login VARCHAR(50) PRIMARY KEY,
                     streamer_key VARCHAR(64) UNIQUE NOT NULL,
                     mod_password VARCHAR(64),
+                    instance VARCHAR(32),
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ");
             $this->pdo->exec("CREATE INDEX IF NOT EXISTS idx_streamers_key ON streamers(streamer_key)");
+            // Add instance column if it doesn't exist (for existing tables)
+            $this->pdo->exec("ALTER TABLE streamers ADD COLUMN IF NOT EXISTS instance VARCHAR(32)");
         } catch (PDOException $e) {
             // Table might already exist, ignore
         }
@@ -149,21 +152,31 @@ class DashboardAuth {
     }
 
     /**
+     * Generate a new instance ID (shorter, for URLs)
+     */
+    public static function generateInstance() {
+        return bin2hex(random_bytes(8)); // 16 char hex string
+    }
+
+    /**
      * Create or update a streamer entry
      */
     public function createStreamer($login) {
         if (!$this->pdo) return false;
 
         $key = self::generateKey();
+        $instance = self::generateInstance();
 
         try {
             $stmt = $this->pdo->prepare("
-                INSERT INTO streamers (login, streamer_key)
-                VALUES (?, ?)
-                ON CONFLICT (login) DO UPDATE SET streamer_key = EXCLUDED.streamer_key
+                INSERT INTO streamers (login, streamer_key, instance)
+                VALUES (?, ?, ?)
+                ON CONFLICT (login) DO UPDATE SET
+                    streamer_key = EXCLUDED.streamer_key,
+                    instance = COALESCE(streamers.instance, EXCLUDED.instance)
                 RETURNING streamer_key
             ");
-            $stmt->execute([$login, $key]);
+            $stmt->execute([$login, $key, $instance]);
             return $stmt->fetchColumn();
         } catch (PDOException $e) {
             return false;
@@ -180,6 +193,30 @@ class DashboardAuth {
             $stmt = $this->pdo->prepare("SELECT streamer_key FROM streamers WHERE login = ?");
             $stmt->execute([$login]);
             return $stmt->fetchColumn() ?: null;
+        } catch (PDOException $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Get streamer instance for a login
+     */
+    public function getStreamerInstance($login) {
+        if (!$this->pdo) return null;
+
+        try {
+            $stmt = $this->pdo->prepare("SELECT instance FROM streamers WHERE login = ?");
+            $stmt->execute([$login]);
+            $instance = $stmt->fetchColumn();
+
+            // Generate instance if missing (for existing streamers)
+            if (!$instance) {
+                $instance = self::generateInstance();
+                $stmt = $this->pdo->prepare("UPDATE streamers SET instance = ? WHERE login = ?");
+                $stmt->execute([$instance, $login]);
+            }
+
+            return $instance ?: null;
         } catch (PDOException $e) {
             return null;
         }

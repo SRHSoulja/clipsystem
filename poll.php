@@ -50,8 +50,7 @@ if ($pdo) {
 
 // File-based fallback for skip
 if (!$response["skip"]) {
-    // If instance provided, check instance-specific file first, then generic
-    // If no instance, only check generic file
+    // Check instance-specific file if instance provided, then generic fallback
     $skipPaths = [];
     if ($instance) {
         $skipPaths[] = $runtimeDir . "/skip_request_" . $login . "_" . $instance . ".json";
@@ -63,11 +62,6 @@ if (!$response["skip"]) {
             $raw = @file_get_contents($skipPath);
             $data = $raw ? json_decode($raw, true) : null;
             if ($data && isset($data["nonce"])) {
-                // If command has instance, must match (or player has no instance)
-                $cmdInstance = $data["instance"] ?? "";
-                if ($cmdInstance && $instance && $cmdInstance !== $instance) {
-                    continue; // Skip - instance mismatch
-                }
                 $setAt = isset($data["set_at"]) ? strtotime($data["set_at"]) : 0;
                 if ($setAt && (time() - $setAt) <= 5) {
                     @unlink($skipPath);
@@ -100,6 +94,7 @@ if ($pdo) {
 
 // File-based fallback for prev
 if (!$response["prev"]) {
+    // Check instance-specific file if instance provided, then generic fallback
     $prevPaths = [];
     if ($instance) {
         $prevPaths[] = $runtimeDir . "/prev_request_" . $login . "_" . $instance . ".json";
@@ -111,10 +106,6 @@ if (!$response["prev"]) {
             $raw = @file_get_contents($prevPath);
             $data = $raw ? json_decode($raw, true) : null;
             if ($data && isset($data["nonce"])) {
-                $cmdInstance = $data["instance"] ?? "";
-                if ($cmdInstance && $instance && $cmdInstance !== $instance) {
-                    continue;
-                }
                 $setAt = isset($data["set_at"]) ? strtotime($data["set_at"]) : 0;
                 if ($setAt && (time() - $setAt) <= 5) {
                     @unlink($prevPath);
@@ -129,36 +120,65 @@ if (!$response["prev"]) {
 }
 
 // ---- Check Shuffle Request ----
-$shufflePath = $runtimeDir . "/shuffle_request_" . $login . ".json";
-if (file_exists($shufflePath)) {
-    $raw = @file_get_contents($shufflePath);
-    $data = $raw ? json_decode($raw, true) : null;
-    if ($data && isset($data["nonce"])) {
-        $setAt = isset($data["set_at"]) ? strtotime($data["set_at"]) : 0;
-        if ($setAt && (time() - $setAt) <= 30) {
-            @unlink($shufflePath);
-            $response["shuffle"] = [
-                "nonce" => $data["nonce"]
-            ];
-        } else {
-            @unlink($shufflePath);
+$shufflePaths = [];
+if ($instance) {
+    $shufflePaths[] = $runtimeDir . "/shuffle_request_" . $login . "_" . $instance . ".json";
+}
+$shufflePaths[] = $runtimeDir . "/shuffle_request_" . $login . ".json";
+
+foreach ($shufflePaths as $shufflePath) {
+    if (file_exists($shufflePath)) {
+        $raw = @file_get_contents($shufflePath);
+        $data = $raw ? json_decode($raw, true) : null;
+        if ($data && isset($data["nonce"])) {
+            $setAt = isset($data["set_at"]) ? strtotime($data["set_at"]) : 0;
+            if ($setAt && (time() - $setAt) <= 30) {
+                @unlink($shufflePath);
+                $response["shuffle"] = [
+                    "nonce" => $data["nonce"]
+                ];
+                break;
+            } else {
+                @unlink($shufflePath);
+            }
         }
     }
 }
 
 // ---- Check Force Play Request ----
-$forcePath = $runtimeDir . "/force_play_" . $login . ".json";
-if (file_exists($forcePath)) {
-    $raw = @file_get_contents($forcePath);
-    $data = $raw ? json_decode($raw, true) : null;
-    if ($data && isset($data["nonce"])) {
-        $response["force_play"] = $data;
+$forcePaths = [];
+if ($instance) {
+    $forcePaths[] = $runtimeDir . "/force_play_" . $login . "_" . $instance . ".json";
+}
+$forcePaths[] = $runtimeDir . "/force_play_" . $login . ".json";
+
+foreach ($forcePaths as $forcePath) {
+    if (file_exists($forcePath)) {
+        $raw = @file_get_contents($forcePath);
+        $data = $raw ? json_decode($raw, true) : null;
+        if ($data && isset($data["nonce"])) {
+            $response["force_play"] = $data;
+            break;
+        }
     }
 }
 
 // ---- Check Category Filter ----
-$filterPath = $runtimeDir . "/category_filter_" . $login . ".json";
-if (file_exists($filterPath)) {
+$filterPaths = [];
+if ($instance) {
+    $filterPaths[] = $runtimeDir . "/category_filter_" . $login . "_" . $instance . ".json";
+}
+$filterPaths[] = $runtimeDir . "/category_filter_" . $login . ".json";
+
+$filterPath = null;
+foreach ($filterPaths as $path) {
+    if (file_exists($path)) {
+        $filterPath = $path;
+        break;
+    }
+}
+
+if ($filterPath) {
     $raw = @file_get_contents($filterPath);
     $data = $raw ? json_decode($raw, true) : null;
     if ($data && (isset($data["game_id"]) || isset($data["game_ids"]))) {

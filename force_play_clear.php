@@ -18,14 +18,30 @@ header("Content-Type: application/json; charset=utf-8");
 $runtimeDir = get_runtime_dir();
 
 $login = clean_login($_GET["login"] ?? "");
-$forcePath = $runtimeDir . "/force_play_" . $login . ".json";
-$queuePath = $runtimeDir . "/playlist_queue_" . $login . ".json";
+$instance = isset($_GET["instance"]) ? preg_replace('/[^a-zA-Z0-9_-]/', '', $_GET["instance"]) : "";
+
+$fileSuffix = $instance ? "_{$instance}" : "";
+$forcePath = $runtimeDir . "/force_play_" . $login . $fileSuffix . ".json";
+$queuePath = $runtimeDir . "/playlist_queue_" . $login . $fileSuffix . ".json";
 
 // Read current force_play to get playlist info
 $currentForce = null;
 if (file_exists($forcePath)) {
   $raw = @file_get_contents($forcePath);
   $currentForce = $raw ? json_decode($raw, true) : null;
+}
+
+// Also check generic paths if instance-specific not found
+if (!$currentForce && $instance) {
+  $genericForcePath = $runtimeDir . "/force_play_" . $login . ".json";
+  if (file_exists($genericForcePath)) {
+    $raw = @file_get_contents($genericForcePath);
+    $currentForce = $raw ? json_decode($raw, true) : null;
+    if ($currentForce) {
+      $forcePath = $genericForcePath; // Use generic path for cleanup
+      $queuePath = $runtimeDir . "/playlist_queue_" . $login . ".json";
+    }
+  }
 }
 
 // Check if we're in a playlist

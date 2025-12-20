@@ -238,5 +238,65 @@ $stmt->execute([$login]);
 $newTotal = $stmt->fetchColumn();
 echo "Total clips now: {$newTotal}\n";
 
+// === Resolve missing game names ===
+echo "\n=== Resolving Game Names ===\n";
+
+// Get all unique game_ids for this user that aren't in games_cache
+$stmt = $pdo->prepare("
+    SELECT DISTINCT c.game_id
+    FROM clips c
+    LEFT JOIN games_cache g ON c.game_id = g.game_id
+    WHERE c.login = ? AND c.game_id IS NOT NULL AND c.game_id != '' AND g.game_id IS NULL
+");
+$stmt->execute([$login]);
+$missingGameIds = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+if (empty($missingGameIds)) {
+    echo "All game names are already cached!\n";
+} else {
+    echo "Found " . count($missingGameIds) . " games without names, fetching from Twitch...\n";
+
+    // Fetch games in batches of 100 (Twitch limit)
+    $resolved = 0;
+    foreach (array_chunk($missingGameIds, 100) as $chunk) {
+        $query = implode('&', array_map(fn($id) => "id=" . urlencode($id), $chunk));
+        $url = "https://api.twitch.tv/helix/games?" . $query;
+
+        $gamesRes = @file_get_contents($url, false, stream_context_create([
+            'http' => [
+                'header' => "Client-ID: {$clientId}\r\nAuthorization: Bearer {$accessToken}",
+                'timeout' => 10
+            ]
+        ]));
+
+        if ($gamesRes) {
+            $gamesData = json_decode($gamesRes, true);
+            if (isset($gamesData['data'])) {
+                $insertGameStmt = $pdo->prepare("
+                    INSERT INTO games_cache (game_id, name, box_art_url)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT (game_id) DO UPDATE SET name = EXCLUDED.name, box_art_url = EXCLUDED.box_art_url
+                ");
+
+                foreach ($gamesData['data'] as $game) {
+                    try {
+                        $insertGameStmt->execute([
+                            $game['id'],
+                            $game['name'],
+                            $game['box_art_url'] ?? ''
+                        ]);
+                        echo "  Cached: {$game['name']} ({$game['id']})\n";
+                        $resolved++;
+                    } catch (PDOException $e) {
+                        // Ignore duplicates
+                    }
+                }
+            }
+        }
+        usleep(100000); // Small delay
+    }
+    echo "Resolved {$resolved} game names\n";
+}
+
 echo "</pre>\n";
 echo "<p><a href='admin.php'>Back to Admin</a></p>";

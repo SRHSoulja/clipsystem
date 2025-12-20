@@ -4,8 +4,10 @@
  *
  * Sets a "prev requested" flag that the player will read and act on.
  * Uses PostgreSQL command_requests table for reliability.
+ * Commands auto-route to the streamer's instance for isolation.
  */
 require_once __DIR__ . '/includes/helpers.php';
+require_once __DIR__ . '/includes/dashboard_auth.php';
 require_once __DIR__ . '/db_config.php';
 
 set_cors_headers();
@@ -13,8 +15,11 @@ handle_options_request();
 header("Content-Type: text/plain; charset=utf-8");
 
 $login = clean_login($_GET["login"] ?? "");
-$instance = isset($_GET["instance"]) ? preg_replace('/[^a-zA-Z0-9_-]/', '', $_GET["instance"]) : "";
 require_admin_auth();
+
+// Get streamer's instance for command isolation
+$auth = new DashboardAuth();
+$instance = $auth->getStreamerInstance($login) ?: "";
 
 $pdo = get_db_connection();
 if (!$pdo) {
@@ -37,13 +42,12 @@ try {
   ");
   $stmt->execute([$login, $nonce]);
 
-  // Also write file-based request (with instance if provided)
+  // Write file-based request to streamer's instance
   $runtimeDir = get_runtime_dir();
   $fileSuffix = $instance ? "_{$instance}" : "";
   $prevPath = $runtimeDir . "/prev_request_" . $login . $fileSuffix . ".json";
   @file_put_contents($prevPath, json_encode([
     "nonce" => $nonce,
-    "instance" => $instance,
     "set_at" => date('c')
   ]));
 

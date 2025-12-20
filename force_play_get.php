@@ -18,9 +18,24 @@ $staticDir = __DIR__ . "/cache";
 $runtimeDir = get_runtime_dir();
 
 $login = clean_login($_GET["login"] ?? "");
-$path = $runtimeDir . "/force_play_" . $login . ".json";
+$instance = isset($_GET["instance"]) ? preg_replace('/[^a-zA-Z0-9_-]/', '', $_GET["instance"]) : "";
 
-if (!file_exists($path)) { echo "{}"; exit; }
+// Check instance-specific file first, then generic fallback
+$path = null;
+if ($instance) {
+    $instancePath = $runtimeDir . "/force_play_" . $login . "_" . $instance . ".json";
+    if (file_exists($instancePath)) {
+        $path = $instancePath;
+    }
+}
+if (!$path) {
+    $genericPath = $runtimeDir . "/force_play_" . $login . ".json";
+    if (file_exists($genericPath)) {
+        $path = $genericPath;
+    }
+}
+
+if (!$path) { echo "{}"; exit; }
 
 $raw = @file_get_contents($path);
 if (!$raw) { echo "{}"; exit; }
