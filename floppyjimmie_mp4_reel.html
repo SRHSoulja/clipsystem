@@ -386,21 +386,26 @@
     if (bufferCheckInterval) { clearInterval(bufferCheckInterval); bufferCheckInterval = null; }
   }
 
+  let playbackStarted = false; // Track if video has actually started playing
+
   function resetStallTimer() {
     if (stallTimeout) clearTimeout(stallTimeout);
-    // If video hasn't progressed in 8 seconds, skip
+    // Only set stall timer if playback has actually started
+    if (!playbackStarted) return;
+    // If video hasn't progressed in 10 seconds during playback, skip
     stallTimeout = setTimeout(() => {
       debugLog("Video stalled, skipping", "warn");
       failedClips.add(currentClip?.id);
       isSwitching = false;
       playNext();
-    }, 8000);
+    }, 10000);
   }
 
   async function playClip(c) {
     if (!c) return;
     isSwitching = true;
     currentClip = c;
+    playbackStarted = false; // Reset - not playing yet
     clearVideoTimeouts();
     debugLog(`Loading: ${c.id.substring(0,20)}...`);
 
@@ -458,6 +463,7 @@
         isSwitching = false;
         isFirstClip = false;
         isCommandTriggered = false; // Reset command flag after playback starts
+        playbackStarted = true; // NOW we're actually playing
         resetStallTimer();
       }).catch(err => {
         debugLog(`Play err: ${err.message}`, "err");
@@ -469,14 +475,14 @@
     };
 
     // Buffer requirements:
-    // - First clip (scene init): buffer entire clip or 20s minimum
+    // - First clip (scene init): 8s buffer (realistic for Twitch CDN)
     // - Command-triggered (!pclip, !cskip): 5s buffer
     // - Normal progression: 2s buffer
     const clipDur = c.duration || 30;
     let requiredBuffer = 2;
     if (isFirstClip) {
-      // For first clip, buffer the whole thing if short, or at least 20s
-      requiredBuffer = Math.min(clipDur - 1, 20);
+      // For first clip, buffer 8s or full clip if shorter
+      requiredBuffer = Math.min(clipDur - 1, 8);
     } else if (isCommandTriggered) {
       requiredBuffer = 5;
     }

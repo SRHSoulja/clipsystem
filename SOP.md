@@ -227,7 +227,7 @@ seq_import.php?login=floppyjimmie&key=YOUR_ADMIN_KEY
 | `muted` | 0 | Force muted playback (1=on) |
 
 **Buffering Behavior:**
-- First clip (scene init): Buffer 20s or full clip
+- First clip (scene init): Buffer 8s or full clip
 - Command-triggered (!pclip, !cskip): 5s buffer
 - Normal progression: 2s buffer
 
