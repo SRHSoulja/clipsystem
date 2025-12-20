@@ -24,6 +24,28 @@ class DashboardAuth {
     public function __construct() {
         $this->pdo = get_db_connection();
         $this->adminKey = getenv('ADMIN_KEY') ?: '';
+        $this->ensureTableExists();
+    }
+
+    /**
+     * Create streamers table if it doesn't exist
+     */
+    private function ensureTableExists() {
+        if (!$this->pdo) return;
+
+        try {
+            $this->pdo->exec("
+                CREATE TABLE IF NOT EXISTS streamers (
+                    login VARCHAR(50) PRIMARY KEY,
+                    streamer_key VARCHAR(64) UNIQUE NOT NULL,
+                    mod_password VARCHAR(64),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ");
+            $this->pdo->exec("CREATE INDEX IF NOT EXISTS idx_streamers_key ON streamers(streamer_key)");
+        } catch (PDOException $e) {
+            // Table might already exist, ignore
+        }
     }
 
     /**
