@@ -472,14 +472,14 @@
     };
 
     // Buffer requirements:
-    // - First clip (scene init): 8s buffer (realistic for Twitch CDN)
+    // - First clip (scene init): 15s buffer (generous for initial load after refresh)
     // - Command-triggered (!pclip, !cskip): 5s buffer
     // - Normal progression: 2s buffer
     const clipDur = c.duration || 30;
     let requiredBuffer = 2;
     if (isFirstClip) {
-      // For first clip, buffer 8s or full clip if shorter
-      requiredBuffer = Math.min(clipDur - 1, 8);
+      // For first clip, buffer 15s or full clip if shorter (need extra for stabilization)
+      requiredBuffer = Math.min(clipDur - 1, 15);
     } else if (isCommandTriggered) {
       requiredBuffer = 5;
     }
@@ -514,7 +514,14 @@
             setTimeout(() => {
               const finalBuffer = player.buffered.length > 0 ? player.buffered.end(0) : 0;
               debugLog(`Final buffer: ${finalBuffer.toFixed(1)}s`);
-              startPlayback();
+              // Re-verify buffer is still sufficient before playing
+              if (finalBuffer >= requiredBuffer) {
+                startPlayback();
+              } else {
+                debugLog(`Buffer dropped to ${finalBuffer.toFixed(1)}s, re-buffering...`, "warn");
+                hasStarted = false;
+                bufferCheckInterval = setInterval(checkBuffer, 200);
+              }
             }, 1500);
           } else {
             startPlayback();
