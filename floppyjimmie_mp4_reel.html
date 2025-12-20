@@ -1059,26 +1059,22 @@
       }
     }, 2000);
 
-    // Preload first clip's MP4 URL while page initializes
+    // Preload and start first clip - await the MP4 URL before playing
     debugLog("Preloading first clip...");
     const first = pickNextClip();
     if (first) {
-      // Start fetching MP4 URL immediately (non-blocking)
-      getMp4Url(first.id).then(mp4Url => {
+      try {
+        const mp4Url = await getMp4Url(first.id);
         if (mp4Url) {
           preloadedClip = first;
           preloadedMp4Url = mp4Url;
-          debugLog("First clip preloaded", "ok");
+          debugLog("First clip ready", "ok");
         }
-      }).catch(() => {});
-    }
-
-    // Delay first clip briefly to let preload complete
-    debugLog("Waiting 2s for preload...");
-    setTimeout(() => {
+      } catch {}
+      // Play immediately - URL is already fetched
       debugLog("Starting first clip...");
-      if (first) playClip(first);
-    }, 2000);
+      playClip(first);
+    }
 
     // Refresh clips every 5 minutes for variety from full 14k+ catalog
     setInterval(async () => {
