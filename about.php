@@ -93,35 +93,70 @@ header("Content-Type: text/html; charset=utf-8");
     <h2>Features</h2>
 
     <div class="feature-box">
-      <h3>Automatic Clip Playback</h3>
-      <p>Plays through your Twitch clips in a shuffled order. Each clip plays once before reshuffling, ensuring variety without repetition.</p>
+      <h3>Smart Weighted Selection</h3>
+      <p>The system uses an intelligent weighting algorithm to keep clips fresh and varied:</p>
+      <ul style="color: #adadb8; margin-top: 10px;">
+        <li><strong>Age-based weighting:</strong> Newer clips are prioritized to keep content fresh. Recent clips (last 30 days) get 50% weight, mid-age clips (30-180 days) get 30%, and older classics get 20%.</li>
+        <li><strong>Category rotation:</strong> Automatically cycles through different game categories to provide variety.</li>
+        <li><strong>No duplicates:</strong> Tracks recently played clips to avoid showing the same clip twice in a short period.</li>
+        <li><strong>View count consideration:</strong> Popular clips with higher view counts get a slight boost.</li>
+      </ul>
     </div>
 
     <div class="feature-box">
-      <h3>Chat Integration</h3>
-      <p>Viewers can see what's playing with <code>!clip</code>, search clips with <code>!cfind</code>, and vote on clips with <code>!like</code> and <code>!dislike</code>.</p>
+      <h3>Full Mod Control</h3>
+      <p>Mods have complete control over the clip experience:</p>
+      <ul style="color: #adadb8; margin-top: 10px;">
+        <li><strong>!pclip #</strong> - Instantly play any specific clip by number</li>
+        <li><strong>!cskip</strong> - Skip the current clip immediately</li>
+        <li><strong>!cprev</strong> - Go back to the previously played clip</li>
+        <li><strong>!ccat game</strong> - Filter to only show clips from a specific game</li>
+        <li><strong>!cremove / !cadd</strong> - Remove or restore clips from the rotation</li>
+        <li><strong>!ctop</strong> - Display the top-voted clips on screen</li>
+        <li><strong>!cvote</strong> - Clear votes for a clip</li>
+        <li><strong>!chud</strong> - Move the HUD overlay to any corner</li>
+      </ul>
     </div>
 
     <div class="feature-box">
-      <h3>Mod Controls</h3>
-      <p>Mods can skip clips, play specific clips by number, filter by game category, and remove/restore clips from the rotation.</p>
+      <h3>Chat Voting System</h3>
+      <p>Viewers can interact with clips through voting:</p>
+      <ul style="color: #adadb8; margin-top: 10px;">
+        <li><strong>!like / !dislike</strong> - Vote on the current clip or any clip by number</li>
+        <li><strong>!clip</strong> - See info about the currently playing clip</li>
+        <li><strong>!cfind</strong> - Search clips by title, clipper, or game</li>
+      </ul>
+      <p style="margin-top: 10px;">Voting can be enabled/disabled per-channel by admins.</p>
     </div>
 
     <div class="feature-box">
       <h3>Clip Browser</h3>
-      <p>A searchable web interface to browse all clips. Filter by title, clipper, or game category. Click any clip to watch on Twitch.</p>
+      <p>A searchable web interface to browse all clips. Filter by title, clipper, game category, or clip number. See vote counts and click any clip to watch on Twitch.</p>
     </div>
 
     <div class="feature-box">
       <h3>Multi-Channel Support</h3>
-      <p>Each channel has its own clip pool. Commands typed in a channel affect that channel's clips. Mods can use <code>!cswitch</code> to control another channel's clips.</p>
+      <p>Each channel has its own independent clip pool and settings:</p>
+      <ul style="color: #adadb8; margin-top: 10px;">
+        <li>Commands typed in a channel affect only that channel's clips</li>
+        <li>Each channel has its own HUD position settings</li>
+        <li>Admins can use <code>!cswitch</code> to control another channel's clips</li>
+        <li>Separate vote tracking per channel</li>
+      </ul>
+    </div>
+
+    <div class="feature-box">
+      <h3>Moveable HUD Overlays</h3>
+      <p>Both the clip info HUD and top clips overlay can be positioned in any corner of the screen using <code>!chud</code> and <code>!chud top</code> commands. Settings persist per-channel.</p>
     </div>
 
     <h2>How It Works</h2>
 
-    <p>Add the clip player as a Browser Source in OBS. The player automatically fetches clips from your Twitch channel, converts them to MP4 for smooth playback, and cycles through them continuously.</p>
+    <p>Add the clip player as a Browser Source in OBS. The player automatically fetches clips from your Twitch channel, converts them to MP4 for smooth playback, and cycles through them using the weighted selection algorithm.</p>
 
-    <p>The bot joins your Twitch chat to handle commands. Clip data is stored in a database with permanent clip numbers that never change, even if clips are added or removed.</p>
+    <p>The bot joins your Twitch chat to handle commands. Clip data is stored in a database with permanent clip numbers (seq) that never change, even if clips are added or removed. This means clip #42 will always be the same clip.</p>
+
+    <p>New clips can be fetched at any time through the admin panel without affecting existing clip numbers or disrupting playback.</p>
 
     <h2>Getting Started</h2>
 
