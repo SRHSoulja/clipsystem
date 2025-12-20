@@ -463,30 +463,48 @@
 
   let playbackStarted = false; // Track if video has actually started playing
 
+  let stallRecoveryAttempts = 0;
+
   function resetStallTimer() {
     if (stallTimeout) clearTimeout(stallTimeout);
     // Only set stall timer if playback has actually started
     if (!playbackStarted) return;
-    // If video hasn't progressed in 20 seconds during playback, skip
-    // But only if we're not actively buffering (check if buffer is growing)
+    // Check every 8 seconds if video is progressing
     stallTimeout = setTimeout(() => {
-      // Check if buffer is still growing - if so, give it more time
       const buffered = player.buffered.length > 0 ? player.buffered.end(0) : 0;
       const currentTime = player.currentTime || 0;
       const bufferAhead = buffered - currentTime;
 
       if (bufferAhead > 0.5) {
-        // We have buffer, video should be playing - might just be a hiccup
+        // We have buffer - video should be playing
+        // Check if video is actually paused/frozen
+        if (player.paused || player.readyState < 3) {
+          stallRecoveryAttempts++;
+          debugLog(`Stall recovery attempt ${stallRecoveryAttempts}: paused=${player.paused}, ready=${player.readyState}`, "warn");
+
+          if (stallRecoveryAttempts >= 3) {
+            // Too many recovery attempts, skip this clip
+            debugLog("Too many stall recoveries, skipping", "err");
+            failedClips.add(currentClip?.id);
+            isSwitching = false;
+            playNext();
+            return;
+          }
+
+          // Force play
+          player.play().catch(() => {});
+        }
         debugLog(`Stall check: ${bufferAhead.toFixed(1)}s ahead, continuing`, "warn");
-        resetStallTimer(); // Reset and try again
+        resetStallTimer();
         return;
       }
 
+      // No buffer ahead - truly stalled
       debugLog("Video stalled (no buffer), skipping", "warn");
       failedClips.add(currentClip?.id);
       isSwitching = false;
       playNext();
-    }, 20000);
+    }, 8000);
   }
 
   async function playClip(c, skipHistory = false) {
@@ -499,6 +517,7 @@
     }
     currentClip = c;
     playbackStarted = false; // Reset - not playing yet
+    stallRecoveryAttempts = 0; // Reset recovery counter
     clearVideoTimeouts();
     debugLog(`Loading: ${c.id.substring(0,20)}...`);
 
