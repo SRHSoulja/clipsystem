@@ -49,12 +49,17 @@ $isAuthorized = false;
 if ($key === $ADMIN_KEY && $ADMIN_KEY !== '') {
   $isAuthorized = true;
 } else {
-  // Try streamer key or mod password
   $auth = new DashboardAuth();
-  $result = $auth->authenticate($key, $login);
+  // Try as streamer key first
+  $result = $auth->authenticateWithKey($key, $login);
   if ($result && $result['login'] === $login) {
-    // Mods and streamers can manage playlists
     $isAuthorized = true;
+  } else {
+    // Try as mod password
+    $result = $auth->authenticateWithPassword($login, $key);
+    if ($result && $result['login'] === $login) {
+      $isAuthorized = true;
+    }
   }
 }
 
