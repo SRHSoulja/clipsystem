@@ -1,0 +1,711 @@
+<?php
+/**
+ * dashboard.php - Streamer Dashboard
+ *
+ * Self-service dashboard for streamers to manage their clip reel.
+ * Access: dashboard.php?key=STREAMER_KEY or dashboard.php?login=username (+ mod password)
+ */
+header("Content-Type: text/html; charset=utf-8");
+header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+
+require_once __DIR__ . '/db_config.php';
+
+function clean_login($s) {
+    $s = strtolower(trim((string)$s));
+    $s = preg_replace("/[^a-z0-9_]/", "", $s);
+    return $s ?: "";
+}
+
+$key = $_GET['key'] ?? '';
+$login = clean_login($_GET['login'] ?? '');
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Streamer Dashboard - Clip Reel System</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0e0e10;
+            color: #efeff1;
+            min-height: 100vh;
+        }
+
+        /* Login Screen */
+        .login-screen {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .login-box {
+            background: #18181b;
+            border-radius: 8px;
+            padding: 32px;
+            max-width: 400px;
+            width: 100%;
+        }
+        .login-box h1 {
+            margin-bottom: 24px;
+            color: #9147ff;
+        }
+        .login-box input {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 16px;
+            border: 1px solid #3a3a3d;
+            border-radius: 4px;
+            background: #0e0e10;
+            color: #efeff1;
+            font-size: 16px;
+        }
+        .login-box button {
+            width: 100%;
+            padding: 12px;
+            background: #9147ff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        .login-box button:hover { background: #772ce8; }
+        .error { color: #eb0400; margin-bottom: 16px; display: none; }
+
+        /* Dashboard */
+        .dashboard { display: none; }
+        .dashboard.active { display: block; }
+
+        .header {
+            background: #18181b;
+            padding: 16px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #3a3a3d;
+        }
+        .header h1 { font-size: 20px; color: #9147ff; }
+        .header .user-info {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .header .role-badge {
+            background: #9147ff;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            text-transform: uppercase;
+        }
+        .header .role-badge.mod { background: #00ad03; }
+        .header .role-badge.admin { background: #eb0400; }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            background: #18181b;
+            border-bottom: 1px solid #3a3a3d;
+            padding: 0 24px;
+        }
+        .tab {
+            padding: 16px 24px;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            color: #adadb8;
+        }
+        .tab:hover { color: #efeff1; }
+        .tab.active {
+            color: #9147ff;
+            border-bottom-color: #9147ff;
+        }
+
+        /* Tab Content */
+        .tab-content {
+            display: none;
+            padding: 24px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .tab-content.active { display: block; }
+
+        /* Cards */
+        .card {
+            background: #18181b;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .card h3 {
+            margin-bottom: 16px;
+            color: #efeff1;
+            font-size: 16px;
+        }
+
+        /* Form Elements */
+        .form-group {
+            margin-bottom: 16px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #adadb8;
+            font-size: 14px;
+        }
+        input[type="text"], input[type="password"], select, textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #3a3a3d;
+            border-radius: 4px;
+            background: #0e0e10;
+            color: #efeff1;
+            font-size: 14px;
+        }
+        textarea { min-height: 80px; resize: vertical; }
+
+        /* Buttons */
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            cursor: pointer;
+            display: inline-block;
+        }
+        .btn-primary { background: #9147ff; color: white; }
+        .btn-primary:hover { background: #772ce8; }
+        .btn-secondary { background: #3a3a3d; color: #efeff1; }
+        .btn-secondary:hover { background: #464649; }
+        .btn-danger { background: #eb0400; color: white; }
+
+        /* Position Picker */
+        .position-picker {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            width: 200px;
+        }
+        .position-btn {
+            padding: 20px;
+            background: #26262c;
+            border: 2px solid transparent;
+            border-radius: 4px;
+            color: #adadb8;
+            cursor: pointer;
+            text-align: center;
+            font-size: 12px;
+        }
+        .position-btn:hover { background: #3a3a3d; }
+        .position-btn.active {
+            border-color: #9147ff;
+            background: #9147ff33;
+            color: #efeff1;
+        }
+
+        /* Stats */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 16px;
+        }
+        .stat-box {
+            background: #26262c;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #9147ff;
+        }
+        .stat-label {
+            color: #adadb8;
+            font-size: 14px;
+            margin-top: 4px;
+        }
+
+        /* Tags */
+        .tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .tag {
+            background: #3a3a3d;
+            padding: 4px 12px;
+            border-radius: 16px;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .tag .remove {
+            cursor: pointer;
+            color: #eb0400;
+            font-weight: bold;
+        }
+
+        /* Toggle Switch */
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 26px;
+        }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: #3a3a3d;
+            border-radius: 26px;
+            transition: 0.3s;
+        }
+        .toggle-slider:before {
+            content: "";
+            position: absolute;
+            height: 20px;
+            width: 20px;
+            left: 3px;
+            bottom: 3px;
+            background: white;
+            border-radius: 50%;
+            transition: 0.3s;
+        }
+        .toggle-switch input:checked + .toggle-slider { background: #9147ff; }
+        .toggle-switch input:checked + .toggle-slider:before { transform: translateX(24px); }
+
+        /* URL Box */
+        .url-box {
+            background: #0e0e10;
+            padding: 12px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 13px;
+            word-break: break-all;
+            cursor: pointer;
+        }
+        .url-box:hover { background: #1a1a1d; }
+
+        /* Success/Error Messages */
+        .message {
+            padding: 12px 16px;
+            border-radius: 4px;
+            margin-bottom: 16px;
+        }
+        .message.success { background: rgba(0, 173, 3, 0.2); border: 1px solid #00ad03; }
+        .message.error { background: rgba(235, 4, 0, 0.2); border: 1px solid #eb0400; }
+    </style>
+</head>
+<body>
+    <div class="login-screen" id="loginScreen">
+        <div class="login-box">
+            <h1>Streamer Dashboard</h1>
+            <div class="error" id="loginError"></div>
+            <?php if ($login): ?>
+                <p style="color: #adadb8; margin-bottom: 16px;">Channel: <strong><?= htmlspecialchars($login) ?></strong></p>
+                <input type="password" id="modPassword" placeholder="Mod Password" autofocus>
+                <button onclick="loginWithPassword()">Enter</button>
+            <?php else: ?>
+                <p style="color: #adadb8; margin-bottom: 16px;">Enter your dashboard key or use ?login=username for mod access.</p>
+                <input type="text" id="dashboardKey" placeholder="Dashboard Key" autofocus>
+                <button onclick="loginWithKey()">Enter</button>
+            <?php endif; ?>
+        </div>
+    </div>
+
+    <div class="dashboard" id="dashboard">
+        <div class="header">
+            <h1>Streamer Dashboard</h1>
+            <div class="user-info">
+                <span id="channelName"></span>
+                <span class="role-badge" id="roleBadge">MOD</span>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <div class="tab active" data-tab="settings">Settings</div>
+            <div class="tab" data-tab="clips">Clip Management</div>
+            <div class="tab" data-tab="playlists">Playlists</div>
+            <div class="tab" data-tab="stats">Stats</div>
+        </div>
+
+        <div class="tab-content active" id="tab-settings">
+            <div id="settingsMessage"></div>
+
+            <div class="card">
+                <h3>HUD Position</h3>
+                <p style="color: #adadb8; margin-bottom: 12px;">Position of the clip info overlay on screen.</p>
+                <div class="position-picker" id="hudPositionPicker">
+                    <button class="position-btn" data-pos="tl">Top Left</button>
+                    <button class="position-btn" data-pos="tr">Top Right</button>
+                    <button class="position-btn" data-pos="bl">Bottom Left</button>
+                    <button class="position-btn" data-pos="br">Bottom Right</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Top Clips Overlay Position</h3>
+                <p style="color: #adadb8; margin-bottom: 12px;">Position of the !ctop overlay.</p>
+                <div class="position-picker" id="topPositionPicker">
+                    <button class="position-btn" data-pos="tl">Top Left</button>
+                    <button class="position-btn" data-pos="tr">Top Right</button>
+                    <button class="position-btn" data-pos="bl">Bottom Left</button>
+                    <button class="position-btn" data-pos="br">Bottom Right</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Chat Voting</h3>
+                <div style="display: flex; align-items: center; gap: 16px;">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="votingEnabled" onchange="saveVoting()">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span>Enable !like and !dislike commands</span>
+                </div>
+            </div>
+
+            <div class="card" id="refreshCard">
+                <h3>Refresh Clips</h3>
+                <p style="color: #adadb8; margin-bottom: 12px;">Fetch new clips from Twitch.</p>
+                <p style="color: #666; font-size: 13px; margin-bottom: 12px;">Last refresh: <span id="lastRefresh">Never</span></p>
+                <button class="btn btn-primary" onclick="refreshClips()">Get New Clips</button>
+            </div>
+
+            <div class="card" id="modPasswordCard">
+                <h3>Mod Password</h3>
+                <p style="color: #adadb8; margin-bottom: 12px;">Set a password for mods to access this dashboard with limited permissions.</p>
+                <div class="form-group">
+                    <input type="password" id="newModPassword" placeholder="New mod password (leave empty to remove)">
+                </div>
+                <button class="btn btn-secondary" onclick="saveModPassword()">Update Password</button>
+            </div>
+
+            <div class="card">
+                <h3>Player URL</h3>
+                <p style="color: #adadb8; margin-bottom: 12px;">Use this URL as a Browser Source in OBS.</p>
+                <div class="url-box" id="playerUrl" onclick="copyPlayerUrl()">Loading...</div>
+                <p style="color: #666; font-size: 12px; margin-top: 8px;">Click to copy</p>
+            </div>
+        </div>
+
+        <div class="tab-content" id="tab-clips">
+            <div class="card">
+                <h3>Content Filtering</h3>
+
+                <div class="form-group" id="blockedWordsGroup">
+                    <label>Blocked Words</label>
+                    <p style="color: #666; font-size: 12px; margin-bottom: 8px;">Clips with these words in the title will be hidden.</p>
+                    <input type="text" id="newBlockedWord" placeholder="Add word and press Enter" onkeypress="if(event.key==='Enter')addBlockedWord()">
+                    <div class="tags" id="blockedWordsTags"></div>
+                </div>
+
+                <div class="form-group" id="blockedClippersGroup">
+                    <label>Blocked Clippers</label>
+                    <p style="color: #666; font-size: 12px; margin-bottom: 8px;">All clips from these users will be hidden.</p>
+                    <input type="text" id="newBlockedClipper" placeholder="Add clipper and press Enter" onkeypress="if(event.key==='Enter')addBlockedClipper()">
+                    <div class="tags" id="blockedClippersTags"></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Individual Clip Management</h3>
+                <p style="color: #adadb8; margin-bottom: 12px;">Use the <a href="clip_search.php" style="color: #9147ff;">Clip Browser</a> to search and manage individual clips.</p>
+            </div>
+        </div>
+
+        <div class="tab-content" id="tab-playlists">
+            <div class="card">
+                <h3>Playlists</h3>
+                <p style="color: #adadb8;">Use the <a href="mod_dashboard.php" style="color: #9147ff;">Mod Dashboard</a> to create and manage playlists.</p>
+            </div>
+        </div>
+
+        <div class="tab-content" id="tab-stats">
+            <div class="stats-grid" id="statsGrid">
+                <div class="stat-box">
+                    <div class="stat-value" id="statTotal">-</div>
+                    <div class="stat-label">Total Clips</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value" id="statActive">-</div>
+                    <div class="stat-label">Active Clips</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value" id="statBlocked">-</div>
+                    <div class="stat-label">Blocked Clips</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '';
+        const INITIAL_KEY = <?= json_encode($key) ?>;
+        const INITIAL_LOGIN = <?= json_encode($login) ?>;
+
+        let authKey = INITIAL_KEY;
+        let authLogin = INITIAL_LOGIN;
+        let authRole = '';
+        let settings = {};
+
+        // Auto-login if key provided
+        if (INITIAL_KEY) {
+            checkAuth(INITIAL_KEY, '');
+        }
+
+        // Tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+            });
+        });
+
+        // Position picker
+        document.querySelectorAll('.position-picker').forEach(picker => {
+            picker.querySelectorAll('.position-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    picker.querySelectorAll('.position-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    const field = picker.id === 'hudPositionPicker' ? 'hud_position' : 'top_position';
+                    saveSetting(field, btn.dataset.pos);
+                });
+            });
+        });
+
+        async function checkAuth(key, password) {
+            try {
+                let url = `${API_BASE}/dashboard_api.php?action=check_login`;
+                if (key) url += `&key=${encodeURIComponent(key)}`;
+                if (authLogin) url += `&login=${encodeURIComponent(authLogin)}`;
+                if (password) url += `&password=${encodeURIComponent(password)}`;
+
+                const res = await fetch(url);
+                const data = await res.json();
+
+                if (data.authenticated) {
+                    authKey = key;
+                    authLogin = data.login;
+                    authRole = data.role;
+                    showDashboard();
+                    loadSettings();
+                } else {
+                    showError('Invalid credentials');
+                }
+            } catch (e) {
+                showError('Connection error');
+            }
+        }
+
+        function loginWithKey() {
+            const key = document.getElementById('dashboardKey').value.trim();
+            if (key) checkAuth(key, '');
+        }
+
+        function loginWithPassword() {
+            const password = document.getElementById('modPassword').value;
+            if (password) checkAuth('', password);
+        }
+
+        document.querySelectorAll('#dashboardKey, #modPassword').forEach(el => {
+            if (el) el.addEventListener('keypress', e => {
+                if (e.key === 'Enter') {
+                    if (el.id === 'dashboardKey') loginWithKey();
+                    else loginWithPassword();
+                }
+            });
+        });
+
+        function showError(msg) {
+            const el = document.getElementById('loginError');
+            el.textContent = msg;
+            el.style.display = 'block';
+        }
+
+        function showDashboard() {
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('dashboard').classList.add('active');
+            document.getElementById('channelName').textContent = authLogin;
+
+            const badge = document.getElementById('roleBadge');
+            badge.textContent = authRole.toUpperCase();
+            badge.className = 'role-badge ' + authRole;
+
+            // Hide elements based on role
+            if (authRole === 'mod') {
+                document.getElementById('blockedWordsGroup').style.display = 'none';
+                document.getElementById('blockedClippersGroup').style.display = 'none';
+                document.getElementById('refreshCard').style.display = 'none';
+                document.getElementById('modPasswordCard').style.display = 'none';
+            }
+
+            // Set player URL
+            const playerUrl = `https://gmgnrepeat.com/flop/clipplayer_mp4_reel.html?login=${encodeURIComponent(authLogin)}`;
+            document.getElementById('playerUrl').textContent = playerUrl;
+        }
+
+        async function loadSettings() {
+            try {
+                const res = await fetch(`${API_BASE}/dashboard_api.php?action=get_settings&key=${encodeURIComponent(authKey)}&login=${encodeURIComponent(authLogin)}`);
+                const data = await res.json();
+
+                if (data.error) {
+                    console.error('Error loading settings:', data.error);
+                    return;
+                }
+
+                settings = data.settings;
+
+                // HUD positions
+                setPositionPicker('hudPositionPicker', settings.hud_position || 'tr');
+                setPositionPicker('topPositionPicker', settings.top_position || 'br');
+
+                // Voting
+                document.getElementById('votingEnabled').checked = settings.voting_enabled;
+
+                // Last refresh
+                if (settings.last_refresh) {
+                    document.getElementById('lastRefresh').textContent = new Date(settings.last_refresh).toLocaleString();
+                }
+
+                // Blocked words
+                renderTags('blockedWordsTags', settings.blocked_words || [], removeBlockedWord);
+
+                // Blocked clippers
+                renderTags('blockedClippersTags', settings.blocked_clippers || [], removeBlockedClipper);
+
+                // Stats
+                if (data.stats) {
+                    document.getElementById('statTotal').textContent = Number(data.stats.total).toLocaleString();
+                    document.getElementById('statActive').textContent = Number(data.stats.active).toLocaleString();
+                    document.getElementById('statBlocked').textContent = Number(data.stats.blocked).toLocaleString();
+                }
+            } catch (e) {
+                console.error('Error loading settings:', e);
+            }
+        }
+
+        function setPositionPicker(pickerId, pos) {
+            const picker = document.getElementById(pickerId);
+            picker.querySelectorAll('.position-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.pos === pos);
+            });
+        }
+
+        function renderTags(containerId, items, removeCallback) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = items.map(item => `
+                <span class="tag">
+                    ${escapeHtml(item)}
+                    <span class="remove" onclick="${removeCallback.name}('${escapeHtml(item)}')">&times;</span>
+                </span>
+            `).join('');
+        }
+
+        async function saveSetting(field, value) {
+            try {
+                const res = await fetch(`${API_BASE}/dashboard_api.php?action=save_settings&key=${encodeURIComponent(authKey)}&login=${encodeURIComponent(authLogin)}&field=${field}&value=${encodeURIComponent(value)}`);
+                const data = await res.json();
+                if (!data.success) {
+                    console.error('Save failed:', data.error);
+                }
+            } catch (e) {
+                console.error('Save error:', e);
+            }
+        }
+
+        function saveVoting() {
+            saveSetting('voting_enabled', document.getElementById('votingEnabled').checked);
+        }
+
+        function addBlockedWord() {
+            const input = document.getElementById('newBlockedWord');
+            const word = input.value.trim().toLowerCase();
+            if (!word) return;
+
+            const words = settings.blocked_words || [];
+            if (!words.includes(word)) {
+                words.push(word);
+                settings.blocked_words = words;
+                saveSetting('blocked_words', JSON.stringify(words));
+                renderTags('blockedWordsTags', words, removeBlockedWord);
+            }
+            input.value = '';
+        }
+
+        function removeBlockedWord(word) {
+            const words = (settings.blocked_words || []).filter(w => w !== word);
+            settings.blocked_words = words;
+            saveSetting('blocked_words', JSON.stringify(words));
+            renderTags('blockedWordsTags', words, removeBlockedWord);
+        }
+
+        function addBlockedClipper() {
+            const input = document.getElementById('newBlockedClipper');
+            const clipper = input.value.trim();
+            if (!clipper) return;
+
+            const clippers = settings.blocked_clippers || [];
+            if (!clippers.includes(clipper)) {
+                clippers.push(clipper);
+                settings.blocked_clippers = clippers;
+                saveSetting('blocked_clippers', JSON.stringify(clippers));
+                renderTags('blockedClippersTags', clippers, removeBlockedClipper);
+            }
+            input.value = '';
+        }
+
+        function removeBlockedClipper(clipper) {
+            const clippers = (settings.blocked_clippers || []).filter(c => c !== clipper);
+            settings.blocked_clippers = clippers;
+            saveSetting('blocked_clippers', JSON.stringify(clippers));
+            renderTags('blockedClippersTags', clippers, removeBlockedClipper);
+        }
+
+        async function saveModPassword() {
+            const password = document.getElementById('newModPassword').value;
+            try {
+                const res = await fetch(`${API_BASE}/dashboard_api.php?action=set_mod_password&key=${encodeURIComponent(authKey)}&login=${encodeURIComponent(authLogin)}&new_password=${encodeURIComponent(password)}`);
+                const data = await res.json();
+
+                const msgEl = document.getElementById('settingsMessage');
+                if (data.success) {
+                    msgEl.innerHTML = '<div class="message success">' + data.message + '</div>';
+                    document.getElementById('newModPassword').value = '';
+                } else {
+                    msgEl.innerHTML = '<div class="message error">' + (data.error || 'Failed') + '</div>';
+                }
+                setTimeout(() => msgEl.innerHTML = '', 5000);
+            } catch (e) {
+                console.error('Error:', e);
+            }
+        }
+
+        function refreshClips() {
+            window.open(`refresh_clips.php?login=${encodeURIComponent(authLogin)}&key=${encodeURIComponent(authKey)}`, '_blank');
+        }
+
+        function copyPlayerUrl() {
+            const url = document.getElementById('playerUrl').textContent;
+            navigator.clipboard.writeText(url).then(() => {
+                alert('URL copied to clipboard!');
+            });
+        }
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>

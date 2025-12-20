@@ -71,6 +71,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['set'])) {
         // Column might already exist, ignore
       }
 
+      // Add filtering columns if they don't exist
+      try {
+        $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS blocked_words TEXT DEFAULT '[]'");
+        $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS blocked_clippers TEXT DEFAULT '[]'");
+        $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS voting_enabled BOOLEAN DEFAULT TRUE");
+        $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS last_refresh TIMESTAMP");
+      } catch (PDOException $e) {
+        // Columns might already exist, ignore
+      }
+
       $stmt = $pdo->prepare("
         INSERT INTO channel_settings (login, {$column}, updated_at)
         VALUES (?, ?, NOW())

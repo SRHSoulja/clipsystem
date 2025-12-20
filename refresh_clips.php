@@ -16,14 +16,28 @@ set_time_limit(300);
 
 require_once __DIR__ . '/db_config.php';
 
-// Auth
+// Auth - accept either ADMIN_KEY or streamer's own key
 $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
 $key = $_GET['key'] ?? '';
-if ($key !== $ADMIN_KEY || $ADMIN_KEY === '') {
+$login = strtolower(trim(preg_replace('/[^a-z0-9_]/', '', $_GET['login'] ?? '')));
+
+$isAuthorized = false;
+if ($key === $ADMIN_KEY && $ADMIN_KEY !== '') {
+    $isAuthorized = true;
+} else {
+    // Check if it's the streamer's own key
+    require_once __DIR__ . '/includes/dashboard_auth.php';
+    $auth = new DashboardAuth();
+    $result = $auth->authenticateWithKey($key, $login);
+    if ($result && $result['login'] === $login) {
+        $isAuthorized = true;
+    }
+}
+
+if (!$isAuthorized) {
     die("Forbidden - invalid key");
 }
 
-$login = strtolower(trim(preg_replace('/[^a-z0-9_]/', '', $_GET['login'] ?? '')));
 if (!$login) {
     die("Missing login parameter");
 }

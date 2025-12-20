@@ -9,6 +9,7 @@ session_start();
 header("Content-Type: text/html; charset=utf-8");
 
 require_once __DIR__ . '/db_config.php';
+require_once __DIR__ . '/includes/dashboard_auth.php';
 
 $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
 
@@ -70,6 +71,27 @@ if ($authenticated && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($login) {
       header("Location: refresh_clips.php?login=" . urlencode($login) . "&key=" . urlencode($ADMIN_KEY));
       exit;
+    }
+  }
+
+  // Generate dashboard link for a user
+  if (isset($_POST['action']) && $_POST['action'] === 'generate_dashboard') {
+    $login = strtolower(trim(preg_replace('/[^a-zA-Z0-9_]/', '', $_POST['login'] ?? '')));
+
+    if ($login) {
+      $auth = new DashboardAuth();
+      $key = $auth->createStreamer($login);
+
+      if ($key) {
+        $dashboardUrl = "https://gmgnrepeat.com/flop/dashboard.php?key=" . urlencode($key);
+        $message = "Dashboard link generated for {$login}!";
+        $messageType = 'success';
+        $generatedDashboardUrl = $dashboardUrl;
+        $generatedLogin = $login;
+      } else {
+        $message = "Failed to generate dashboard link";
+        $messageType = 'error';
+      }
     }
   }
 }
@@ -332,6 +354,15 @@ if ($authenticated) {
             </div>
           </div>
         <?php endif; ?>
+        <?php if (isset($generatedDashboardUrl)): ?>
+          <div style="margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 4px;">
+            <strong>Dashboard URL for <?= htmlspecialchars($generatedLogin) ?>:</strong><br>
+            <input type="text" value="<?= htmlspecialchars($generatedDashboardUrl) ?>" readonly onclick="this.select()" style="width: 100%; margin-top: 5px; cursor: pointer;">
+            <div style="margin-top: 8px; font-size: 13px; color: #adadb8;">
+              Share this link with the streamer. They can bookmark it for easy access.
+            </div>
+          </div>
+        <?php endif; ?>
       </div>
     <?php endif; ?>
 
@@ -386,6 +417,11 @@ if ($authenticated) {
                 <input type="hidden" name="action" value="refresh_user">
                 <input type="hidden" name="login" value="<?= htmlspecialchars($user['login']) ?>">
                 <button type="submit" class="btn-secondary" style="padding: 6px 12px; font-size: 14px;" title="Fetch new clips since last update">Get New Clips</button>
+              </form>
+              <form method="POST" style="display: inline; margin-left: 8px;">
+                <input type="hidden" name="action" value="generate_dashboard">
+                <input type="hidden" name="login" value="<?= htmlspecialchars($user['login']) ?>">
+                <button type="submit" class="btn-secondary" style="padding: 6px 12px; font-size: 14px; background: #9147ff;" title="Generate dashboard access link">Dashboard</button>
               </form>
             </td>
           </tr>

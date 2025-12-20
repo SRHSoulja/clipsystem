@@ -1145,6 +1145,14 @@
   async function init() {
     debugLog("Init starting...");
 
+    // Clear any previous playback state on browser refresh
+    try {
+      await fetch(`${API_BASE}/clear_playback_state.php?login=${encodeURIComponent(login)}`, { cache: "no-store" });
+      debugLog("Playback state cleared");
+    } catch (e) {
+      debugLog("Could not clear state: " + e.message, "warn");
+    }
+
     // Fetch clips
     try {
       const res = await fetch(apiUrl, { cache: "no-store" });

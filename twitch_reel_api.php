@@ -47,6 +47,7 @@ function parse_iso_time($iso) {
 load_env(__DIR__ . '/.env');
 
 require_once __DIR__ . '/db_config.php';
+require_once __DIR__ . '/includes/clip_filter.php';
 
 // ---- query params ----
 $login = isset($_GET['login']) ? strtolower(trim($_GET['login'])) : 'floppyjimmie';
@@ -179,6 +180,10 @@ if ($pdo) {
       // Check if mp4_only mode requested (for OBS native video playback)
       $mp4Only = isset($_GET['mp4']) && $_GET['mp4'] === '1';
 
+      // Get content filters for this channel
+      $clipFilter = new ClipFilter($pdo, $login);
+      $filterData = $clipFilter->getWhereClause();
+
       // Fetch all non-blocked clips from database with game names
       // If mp4_only, filter to clips with valid thumbnail_url (not NULL, not empty, not NOT_FOUND)
       $sql = "
@@ -191,10 +196,13 @@ if ($pdo) {
       if ($mp4Only) {
         $sql .= " AND c.thumbnail_url IS NOT NULL AND c.thumbnail_url != '' AND c.thumbnail_url != 'NOT_FOUND'";
       }
+      // Add content filter clauses (blocked words, blocked clippers)
+      $sql .= $filterData['sql'];
       $sql .= " ORDER BY c.created_at DESC";
 
       $stmt = $pdo->prepare($sql);
-      $stmt->execute([$login]);
+      $params = array_merge([$login], $filterData['params']);
+      $stmt->execute($params);
       $all = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
       // Convert created_at to ISO format string if needed
