@@ -528,7 +528,8 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
     <div class="login-box">
       <h1>Mod Dashboard</h1>
       <div class="error" id="loginError" style="display:none;"></div>
-      <input type="password" id="keyInput" placeholder="Admin Key" autofocus>
+      <input type="text" id="channelInput" placeholder="Channel Name" value="<?php echo htmlspecialchars($login !== 'default' ? $login : ''); ?>" autofocus>
+      <input type="password" id="keyInput" placeholder="Streamer Key or Mod Password">
       <button onclick="login()">Enter</button>
     </div>
   </div>
@@ -620,7 +621,7 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
   </div>
 
   <script>
-    const LOGIN = <?php echo json_encode($login); ?>;
+    let LOGIN = '';  // Set on login
     const API_BASE = '';
     let adminKey = '';
     let allClips = [];
@@ -643,26 +644,45 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
       closeBtn.style.display = sidebar.classList.contains('open') ? 'block' : 'none';
     }
 
-    // Login
+    // Login - handle Enter on both inputs
+    document.getElementById('channelInput').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') document.getElementById('keyInput').focus();
+    });
     document.getElementById('keyInput').addEventListener('keypress', (e) => {
       if (e.key === 'Enter') login();
     });
 
     async function login() {
+      const channelInput = document.getElementById('channelInput').value.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
       adminKey = document.getElementById('keyInput').value.trim();
-      if (!adminKey) return;
+
+      if (!channelInput) {
+        document.getElementById('loginError').textContent = 'Please enter a channel name';
+        document.getElementById('loginError').style.display = 'block';
+        return;
+      }
+      if (!adminKey) {
+        document.getElementById('loginError').textContent = 'Please enter a key or password';
+        document.getElementById('loginError').style.display = 'block';
+        return;
+      }
 
       try {
-        // Test the key by fetching clips
-        const res = await fetch(`${API_BASE}/playlist_api.php?action=list&login=${LOGIN}&key=${encodeURIComponent(adminKey)}`);
+        // Test the key by fetching playlists for the entered channel
+        const res = await fetch(`${API_BASE}/playlist_api.php?action=list&login=${encodeURIComponent(channelInput)}&key=${encodeURIComponent(adminKey)}`);
         const data = await res.json();
 
         if (data.error) {
-          document.getElementById('loginError').textContent = data.error;
+          document.getElementById('loginError').textContent = data.error === 'forbidden'
+            ? 'Invalid key/password for this channel'
+            : data.error;
           document.getElementById('loginError').style.display = 'block';
           return;
         }
 
+        // Success - set LOGIN and update UI
+        LOGIN = channelInput;
+        document.querySelector('.header .user').textContent = LOGIN;
         document.getElementById('loginScreen').style.display = 'none';
         document.getElementById('dashboard').classList.add('active');
         loadDashboard();
