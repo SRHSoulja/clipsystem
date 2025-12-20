@@ -5,36 +5,23 @@
  * Looks up the clip by seq from PostgreSQL (fast indexed lookup).
  * Falls back to JSON file if database unavailable.
  */
-header("Access-Control-Allow-Origin: *");
-header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
-header("Access-Control-Allow-Headers: Content-Type");
-header("Content-Type: text/plain; charset=utf-8");
-header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
-
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { exit(0); }
-
+require_once __DIR__ . '/includes/helpers.php';
 require_once __DIR__ . '/db_config.php';
+
+set_cors_headers();
+handle_options_request();
+set_nocache_headers();
+header("Content-Type: text/plain; charset=utf-8");
 
 // Static data (clips_index) is in ./cache (read-only on Railway)
 $staticDir = __DIR__ . "/cache";
 // Runtime data (force_play) goes to /tmp on Railway
-$runtimeDir = is_writable("/tmp") ? "/tmp/clipsystem_cache" : __DIR__ . "/cache";
-if (!is_dir($runtimeDir)) @mkdir($runtimeDir, 0777, true);
-
-function clean_login($s){
-  $s = strtolower(trim((string)$s));
-  $s = preg_replace("/[^a-z0-9_]/", "", $s);
-  return $s ?: "default";
-}
+$runtimeDir = get_runtime_dir();
 
 $login = clean_login($_GET["login"] ?? "");
 $seq   = (int)($_GET["seq"] ?? 0);
-$key   = (string)($_GET["key"] ?? "");
 
-// Load from environment (set ADMIN_KEY in Railway)
-$ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
-
-if ($key !== $ADMIN_KEY) { http_response_code(403); echo "forbidden"; exit; }
+require_admin_auth();
 if ($seq <= 0) { echo "Usage: !pclip <clip#>"; exit; }
 
 // Try PostgreSQL first (fast indexed lookup)
@@ -108,6 +95,16 @@ $clipId = (string)($clip["id"] ?? $clip["clip_id"] ?? "");
 if ($clipId === "") { echo "Clip #{$seq} missing id."; exit; }
 
 $forcePath = $runtimeDir . "/force_play_" . $login . ".json";
+
+// Build a full clip object for the player (in case clip isn't in current pool)
+$clipObject = [
+  "id" => $clipId,
+  "seq" => $seq,
+  "title" => $clip["title"] ?? "",
+  "duration" => $clip["duration"] ?? 30,
+  "creator_name" => $clip["creator_name"] ?? "",
+];
+
 $payload = [
   "login"    => $login,
   "seq"      => $seq,
@@ -115,6 +112,7 @@ $payload = [
   "title"    => $clip["title"] ?? "",
   "duration" => $clip["duration"] ?? 30,
   "creator_name" => $clip["creator_name"] ?? "",
+  "clip"     => $clipObject,  // Include full clip object for player fallback
   "nonce"    => (string)(time() . "_" . bin2hex(random_bytes(4))),
   "set_at"   => gmdate("c"),
 ];

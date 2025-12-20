@@ -7,23 +7,15 @@
  * 2. If yes, advance to next clip and set new force_play
  * 3. If no more clips or no playlist, just clear force_play
  */
-header("Access-Control-Allow-Origin: *");
-header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
-header("Access-Control-Allow-Headers: Content-Type");
+require_once __DIR__ . '/includes/helpers.php';
+
+set_cors_headers();
+handle_options_request();
+set_nocache_headers();
 header("Content-Type: application/json; charset=utf-8");
-header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
 
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { exit(0); }
-
-// Use /tmp for runtime data on Railway, fall back to ./cache locally
-$runtimeDir = is_writable("/tmp") ? "/tmp/clipsystem_cache" : __DIR__ . "/cache";
-if (!is_dir($runtimeDir)) @mkdir($runtimeDir, 0777, true);
-
-function clean_login($s){
-  $s = strtolower(trim((string)$s));
-  $s = preg_replace("/[^a-z0-9_]/", "", $s);
-  return $s ?: "default";
-}
+// Runtime data directory
+$runtimeDir = get_runtime_dir();
 
 $login = clean_login($_GET["login"] ?? "");
 $forcePath = $runtimeDir . "/force_play_" . $login . ".json";
