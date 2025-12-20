@@ -72,9 +72,10 @@ const COOLDOWN_MS = 3000; // 3 second cooldown per user per command
 // Key: chat channel (without #), Value: target clip channel
 const channelOverrides = new Map();
 
-// Per-channel likes toggle - tracks which channels have voting disabled
-// Key: clip channel name, Value: true if DISABLED
-const likesDisabled = new Map();
+// Per-channel likes toggle - tracks which channels have voting ENABLED
+// By default, voting is OFF until a mod enables it with !clikeon
+// Key: clip channel name, Value: true if ENABLED
+const likesEnabled = new Map();
 
 function isOnCooldown(user, command) {
   const key = `${user}:${command}`;
@@ -157,7 +158,7 @@ const commands = {
   // !like [seq] - Upvote a clip (current clip if no seq provided)
   async like(channel, tags, args) {
     const login = getClipChannel(channel);
-    if (likesDisabled.get(login)) return null; // Silently ignore when disabled
+    if (!likesEnabled.get(login)) return null; // Silently ignore when disabled (default)
     let seq = parseInt(args[0]);
 
     // If no seq provided, get current playing clip
@@ -189,7 +190,7 @@ const commands = {
   // !dislike [seq] - Downvote a clip (current clip if no seq provided)
   async dislike(channel, tags, args) {
     const login = getClipChannel(channel);
-    if (likesDisabled.get(login)) return null; // Silently ignore when disabled
+    if (!likesEnabled.get(login)) return null; // Silently ignore when disabled (default)
     let seq = parseInt(args[0]);
 
     // If no seq provided, get current playing clip
@@ -324,7 +325,7 @@ const commands = {
 
     // If channel specified, use that; otherwise use current clip channel
     const target = (args[0] || '').toLowerCase().replace(/^@/, '') || getClipChannel(channel);
-    likesDisabled.set(target, true);
+    likesEnabled.delete(target);
     return `Clip voting disabled for ${target}.`;
   },
 
@@ -336,7 +337,7 @@ const commands = {
 
     // If channel specified, use that; otherwise use current clip channel
     const target = (args[0] || '').toLowerCase().replace(/^@/, '') || getClipChannel(channel);
-    likesDisabled.delete(target);
+    likesEnabled.set(target, true);
     return `Clip voting enabled for ${target}.`;
   },
 
