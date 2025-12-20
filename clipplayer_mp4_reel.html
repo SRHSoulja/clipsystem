@@ -996,6 +996,7 @@
       // Handle Skip
       if (data?.skip && !isSwitching) {
         debugLog("Skip requested", "warn");
+        isSwitching = true; // Set immediately to prevent race conditions
         clearVideoTimeouts();
         if (advanceTimer) clearTimeout(advanceTimer);
         isCommandTriggered = true;
@@ -1011,6 +1012,7 @@
         } else {
           const prevClip = clipHistory.pop();
           debugLog(`Going back to: ${prevClip.title?.substring(0,20) || prevClip.id}`, "warn");
+          isSwitching = true; // Set immediately to prevent race conditions
           clearVideoTimeouts();
           if (advanceTimer) clearTimeout(advanceTimer);
           isCommandTriggered = true;
