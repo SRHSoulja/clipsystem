@@ -242,6 +242,7 @@
   const days   = parseInt(qs.get("days") || "0", 10);  // 0 = all time
   const pool   = parseInt(qs.get("pool") || "300", 10);  // ~2 hours of clips, refreshed every 10 min
   const forceMuted = qs.get("muted") === "1";
+  const instance = qs.get("instance") || "";  // Optional instance ID for multi-player isolation
 
   const API_BASE = "https://clipsystem-production.up.railway.app";
   const apiUrl = `${API_BASE}/twitch_reel_api.php?login=${encodeURIComponent(login)}&days=${days}&pool=${pool}`;
@@ -974,7 +975,9 @@
   // Consolidated polling - single endpoint for all commands (reduces 7 calls to 1)
   async function pollAll() {
     try {
-      const res = await fetch(`${API_BASE}/poll.php?login=${encodeURIComponent(login)}`, { cache: "no-store" });
+      let pollUrl = `${API_BASE}/poll.php?login=${encodeURIComponent(login)}`;
+      if (instance) pollUrl += `&instance=${encodeURIComponent(instance)}`;
+      const res = await fetch(pollUrl, { cache: "no-store" });
       const data = await res.json();
 
       // Handle Skip

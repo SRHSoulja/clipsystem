@@ -14,6 +14,7 @@ set_nocache_headers();
 header("Content-Type: application/json; charset=utf-8");
 
 $login = clean_login($_GET["login"] ?? "");
+$instance = isset($_GET["instance"]) ? preg_replace('/[^a-zA-Z0-9_-]/', '', $_GET["instance"]) : "";
 
 // Runtime data directory
 $runtimeDir = get_runtime_dir();
@@ -49,17 +50,32 @@ if ($pdo) {
 
 // File-based fallback for skip
 if (!$response["skip"]) {
-    $skipPath = $runtimeDir . "/skip_request_" . $login . ".json";
-    if (file_exists($skipPath)) {
-        $raw = @file_get_contents($skipPath);
-        $data = $raw ? json_decode($raw, true) : null;
-        if ($data && isset($data["nonce"])) {
-            $setAt = isset($data["set_at"]) ? strtotime($data["set_at"]) : 0;
-            if ($setAt && (time() - $setAt) <= 5) {
-                @unlink($skipPath);
-                $response["skip"] = true;
-            } else {
-                @unlink($skipPath);
+    // If instance provided, check instance-specific file first, then generic
+    // If no instance, only check generic file
+    $skipPaths = [];
+    if ($instance) {
+        $skipPaths[] = $runtimeDir . "/skip_request_" . $login . "_" . $instance . ".json";
+    }
+    $skipPaths[] = $runtimeDir . "/skip_request_" . $login . ".json";
+
+    foreach ($skipPaths as $skipPath) {
+        if (file_exists($skipPath)) {
+            $raw = @file_get_contents($skipPath);
+            $data = $raw ? json_decode($raw, true) : null;
+            if ($data && isset($data["nonce"])) {
+                // If command has instance, must match (or player has no instance)
+                $cmdInstance = $data["instance"] ?? "";
+                if ($cmdInstance && $instance && $cmdInstance !== $instance) {
+                    continue; // Skip - instance mismatch
+                }
+                $setAt = isset($data["set_at"]) ? strtotime($data["set_at"]) : 0;
+                if ($setAt && (time() - $setAt) <= 5) {
+                    @unlink($skipPath);
+                    $response["skip"] = true;
+                    break;
+                } else {
+                    @unlink($skipPath);
+                }
             }
         }
     }
@@ -84,17 +100,29 @@ if ($pdo) {
 
 // File-based fallback for prev
 if (!$response["prev"]) {
-    $prevPath = $runtimeDir . "/prev_request_" . $login . ".json";
-    if (file_exists($prevPath)) {
-        $raw = @file_get_contents($prevPath);
-        $data = $raw ? json_decode($raw, true) : null;
-        if ($data && isset($data["nonce"])) {
-            $setAt = isset($data["set_at"]) ? strtotime($data["set_at"]) : 0;
-            if ($setAt && (time() - $setAt) <= 5) {
-                @unlink($prevPath);
-                $response["prev"] = true;
-            } else {
-                @unlink($prevPath);
+    $prevPaths = [];
+    if ($instance) {
+        $prevPaths[] = $runtimeDir . "/prev_request_" . $login . "_" . $instance . ".json";
+    }
+    $prevPaths[] = $runtimeDir . "/prev_request_" . $login . ".json";
+
+    foreach ($prevPaths as $prevPath) {
+        if (file_exists($prevPath)) {
+            $raw = @file_get_contents($prevPath);
+            $data = $raw ? json_decode($raw, true) : null;
+            if ($data && isset($data["nonce"])) {
+                $cmdInstance = $data["instance"] ?? "";
+                if ($cmdInstance && $instance && $cmdInstance !== $instance) {
+                    continue;
+                }
+                $setAt = isset($data["set_at"]) ? strtotime($data["set_at"]) : 0;
+                if ($setAt && (time() - $setAt) <= 5) {
+                    @unlink($prevPath);
+                    $response["prev"] = true;
+                    break;
+                } else {
+                    @unlink($prevPath);
+                }
             }
         }
     }

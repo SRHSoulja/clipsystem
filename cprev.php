@@ -13,6 +13,7 @@ handle_options_request();
 header("Content-Type: text/plain; charset=utf-8");
 
 $login = clean_login($_GET["login"] ?? "");
+$instance = isset($_GET["instance"]) ? preg_replace('/[^a-zA-Z0-9_-]/', '', $_GET["instance"]) : "";
 require_admin_auth();
 
 $pdo = get_db_connection();
@@ -35,6 +36,16 @@ try {
       consumed = FALSE
   ");
   $stmt->execute([$login, $nonce]);
+
+  // Also write file-based request (with instance if provided)
+  $runtimeDir = get_runtime_dir();
+  $fileSuffix = $instance ? "_{$instance}" : "";
+  $prevPath = $runtimeDir . "/prev_request_" . $login . $fileSuffix . ".json";
+  @file_put_contents($prevPath, json_encode([
+    "nonce" => $nonce,
+    "instance" => $instance,
+    "set_at" => date('c')
+  ]));
 
   echo "Going back to previous clip...";
 } catch (PDOException $e) {
