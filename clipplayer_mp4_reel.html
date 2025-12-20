@@ -676,6 +676,11 @@
         isCommandTriggered = false; // Reset command flag after playback starts
         playbackStarted = true; // NOW we're actually playing
         resetStallTimer();
+        // Start preloading next clip immediately when playback begins
+        if (!preloadedClip) {
+          debugLog("Triggering immediate preload...");
+          preloadNextClip();
+        }
       }).catch(err => {
         debugLog(`Play err: ${err.message}`, "err");
         clearVideoTimeouts();
@@ -831,7 +836,15 @@
 
   function playNext() {
     if (isSwitching) return;
-    const next = pickNextClip();
+    // Use preloaded clip if available, otherwise pick randomly
+    let next = null;
+    if (preloadedClip && preloadedMp4Url) {
+      next = preloadedClip;
+      debugLog(`Using preloaded clip: ${next.id.substring(0,15)}`, "ok");
+    } else {
+      next = pickNextClip();
+      debugLog(`No preload, picking random: ${next?.id?.substring(0,15) || 'null'}`);
+    }
     if (next) playClip(next);
   }
 
@@ -986,8 +999,7 @@
         clearVideoTimeouts();
         if (advanceTimer) clearTimeout(advanceTimer);
         isCommandTriggered = true;
-        preloadedClip = null; // Clear preload on skip
-        preloadedMp4Url = null;
+        // Don't clear preload - let playNext() use it if it matches
         playNext();
         return; // Don't process other commands if skipping
       }
@@ -1002,8 +1014,7 @@
           clearVideoTimeouts();
           if (advanceTimer) clearTimeout(advanceTimer);
           isCommandTriggered = true;
-          preloadedClip = null;
-          preloadedMp4Url = null;
+          // Don't clear preload - it might still be useful for next natural advance
           playClip(prevClip, true);
           return;
         }
@@ -1032,8 +1043,7 @@
                 if (advanceTimer) clearTimeout(advanceTimer);
                 clearForcePlay();
                 isCommandTriggered = true;
-                preloadedClip = null;
-                preloadedMp4Url = null;
+                // Don't clear preload - it might still be useful for next natural advance
                 playClip(c);
                 return;
               }
@@ -1249,16 +1259,14 @@
     // 2s interval is sufficient for mod commands while reducing server load
     setInterval(pollAll, 2000);
 
-    // Preload next clip at 70% through current clip
+    // Preload next clip - check frequently and start as soon as playback begins
+    // No delay - start preloading immediately when a clip starts playing
     setInterval(() => {
-      if (currentClip && !preloadedClip && !isSwitching) {
-        const currentTime = player.currentTime || 0;
-        const duration = currentClip.duration || 30;
-        if (currentTime > duration * 0.7) {
-          preloadNextClip();
-        }
+      if (currentClip && !preloadedClip && !isSwitching && playbackStarted) {
+        debugLog("Starting preload...");
+        preloadNextClip();
       }
-    }, 2000);
+    }, 1000); // Check every 1s for faster preload start
 
     // Refresh clips every 5 minutes for variety from full 14k+ catalog
     setInterval(async () => {

@@ -47,6 +47,11 @@ if ($catLower === "off" || $catLower === "clear" || $catLower === "all" || $catL
       @unlink($genericPath);
     }
   }
+  // Clean up category clips cache files
+  $cachePattern = $runtimeDir . "/category_clips_" . $login . "_*.json";
+  foreach (glob($cachePattern) as $cacheFile) {
+    @unlink($cacheFile);
+  }
   echo "Category filter cleared - playing all games";
   exit;
 }

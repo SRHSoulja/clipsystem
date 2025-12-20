@@ -29,95 +29,57 @@ $response = [
     "votes" => ["up" => 0, "down" => 0]
 ];
 
-$pdo = get_db_connection();
-
-// ---- Check Skip Request ----
-if ($pdo) {
-    try {
-        $stmt = $pdo->prepare("
-            DELETE FROM command_requests
-            WHERE login = ? AND command_type = 'skip' AND created_at > NOW() - INTERVAL '5 seconds'
-            RETURNING nonce
-        ");
-        $stmt->execute([$login]);
-        if ($stmt->fetch()) {
-            $response["skip"] = true;
-        }
-    } catch (PDOException $e) {
-        // Fall back to file-based check
-    }
+// ---- Check Skip Request (file-based only for speed) ----
+// Check instance-specific file first, then generic fallback
+$skipPaths = [];
+if ($instance) {
+    $skipPaths[] = $runtimeDir . "/skip_request_" . $login . "_" . $instance . ".json";
 }
+$skipPaths[] = $runtimeDir . "/skip_request_" . $login . ".json";
 
-// File-based fallback for skip
-if (!$response["skip"]) {
-    // Check instance-specific file if instance provided, then generic fallback
-    $skipPaths = [];
-    if ($instance) {
-        $skipPaths[] = $runtimeDir . "/skip_request_" . $login . "_" . $instance . ".json";
-    }
-    $skipPaths[] = $runtimeDir . "/skip_request_" . $login . ".json";
-
-    foreach ($skipPaths as $skipPath) {
-        if (file_exists($skipPath)) {
-            $raw = @file_get_contents($skipPath);
-            $data = $raw ? json_decode($raw, true) : null;
-            if ($data && isset($data["nonce"])) {
-                $setAt = isset($data["set_at"]) ? strtotime($data["set_at"]) : 0;
-                if ($setAt && (time() - $setAt) <= 5) {
-                    @unlink($skipPath);
-                    $response["skip"] = true;
-                    break;
-                } else {
-                    @unlink($skipPath);
-                }
+foreach ($skipPaths as $skipPath) {
+    if (file_exists($skipPath)) {
+        $raw = @file_get_contents($skipPath);
+        $data = $raw ? json_decode($raw, true) : null;
+        if ($data && isset($data["nonce"])) {
+            $setAt = isset($data["set_at"]) ? strtotime($data["set_at"]) : 0;
+            if ($setAt && (time() - $setAt) <= 5) {
+                @unlink($skipPath);
+                $response["skip"] = true;
+                break;
+            } else {
+                @unlink($skipPath);
             }
         }
     }
 }
 
-// ---- Check Prev Request ----
-if ($pdo) {
-    try {
-        $stmt = $pdo->prepare("
-            DELETE FROM command_requests
-            WHERE login = ? AND command_type = 'prev' AND created_at > NOW() - INTERVAL '5 seconds'
-            RETURNING nonce
-        ");
-        $stmt->execute([$login]);
-        if ($stmt->fetch()) {
-            $response["prev"] = true;
-        }
-    } catch (PDOException $e) {
-        // Fall back to file-based check
-    }
+// ---- Check Prev Request (file-based only for speed) ----
+$prevPaths = [];
+if ($instance) {
+    $prevPaths[] = $runtimeDir . "/prev_request_" . $login . "_" . $instance . ".json";
 }
+$prevPaths[] = $runtimeDir . "/prev_request_" . $login . ".json";
 
-// File-based fallback for prev
-if (!$response["prev"]) {
-    // Check instance-specific file if instance provided, then generic fallback
-    $prevPaths = [];
-    if ($instance) {
-        $prevPaths[] = $runtimeDir . "/prev_request_" . $login . "_" . $instance . ".json";
-    }
-    $prevPaths[] = $runtimeDir . "/prev_request_" . $login . ".json";
-
-    foreach ($prevPaths as $prevPath) {
-        if (file_exists($prevPath)) {
-            $raw = @file_get_contents($prevPath);
-            $data = $raw ? json_decode($raw, true) : null;
-            if ($data && isset($data["nonce"])) {
-                $setAt = isset($data["set_at"]) ? strtotime($data["set_at"]) : 0;
-                if ($setAt && (time() - $setAt) <= 5) {
-                    @unlink($prevPath);
-                    $response["prev"] = true;
-                    break;
-                } else {
-                    @unlink($prevPath);
-                }
+foreach ($prevPaths as $prevPath) {
+    if (file_exists($prevPath)) {
+        $raw = @file_get_contents($prevPath);
+        $data = $raw ? json_decode($raw, true) : null;
+        if ($data && isset($data["nonce"])) {
+            $setAt = isset($data["set_at"]) ? strtotime($data["set_at"]) : 0;
+            if ($setAt && (time() - $setAt) <= 5) {
+                @unlink($prevPath);
+                $response["prev"] = true;
+                break;
+            } else {
+                @unlink($prevPath);
             }
         }
     }
 }
+
+// Only connect to DB if needed (for category, top clips, votes)
+$pdo = null;
 
 // ---- Check Shuffle Request ----
 $shufflePaths = [];
@@ -182,39 +144,63 @@ if ($filterPath) {
     $raw = @file_get_contents($filterPath);
     $data = $raw ? json_decode($raw, true) : null;
     if ($data && (isset($data["game_id"]) || isset($data["game_ids"]))) {
-        // Get clip data for category
-        $gameIds = isset($data["game_ids"]) ? $data["game_ids"] : [$data["game_id"]];
+        // Check if we have cached clips for this category (avoid DB query every poll)
+        $cacheFile = $runtimeDir . "/category_clips_" . $login . "_" . md5($data["nonce"] ?? "") . ".json";
         $clipIds = [];
         $categoryClips = [];
 
-        if ($pdo && !empty($gameIds)) {
-            try {
-                $placeholders = implode(',', array_fill(0, count($gameIds), '?'));
-                $params = array_merge([$login], $gameIds);
+        if (file_exists($cacheFile)) {
+            // Use cached clips
+            $cacheRaw = @file_get_contents($cacheFile);
+            $cacheData = $cacheRaw ? json_decode($cacheRaw, true) : null;
+            if ($cacheData) {
+                $clipIds = $cacheData["clip_ids"] ?? [];
+                $categoryClips = $cacheData["clips"] ?? [];
+            }
+        }
 
-                $stmt = $pdo->prepare("
-                    SELECT c.clip_id as id, c.seq, c.title, c.duration, c.created_at, c.view_count,
-                           c.game_id, c.video_id, c.vod_offset, c.creator_name, c.thumbnail_url,
-                           g.name as game_name
-                    FROM clips c
-                    LEFT JOIN games_cache g ON c.game_id = g.game_id
-                    WHERE c.login = ? AND c.game_id IN ({$placeholders}) AND c.blocked = false
-                    ORDER BY c.created_at DESC
-                ");
-                $stmt->execute($params);
-                while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-                    $clipIds[] = $row['id'];
-                    $categoryClips[] = $row;
+        // Only query DB if no cache (first poll after category change)
+        if (empty($categoryClips)) {
+            // Lazy-load DB connection only when needed
+            if (!$pdo) $pdo = get_db_connection();
+            $gameIds = isset($data["game_ids"]) ? $data["game_ids"] : [$data["game_id"]];
+
+            if (!empty($gameIds)) {
+                try {
+                    $placeholders = implode(',', array_fill(0, count($gameIds), '?'));
+                    $params = array_merge([$login], $gameIds);
+
+                    $stmt = $pdo->prepare("
+                        SELECT c.clip_id as id, c.seq, c.title, c.duration, c.created_at, c.view_count,
+                               c.game_id, c.video_id, c.vod_offset, c.creator_name, c.thumbnail_url,
+                               g.name as game_name
+                        FROM clips c
+                        LEFT JOIN games_cache g ON c.game_id = g.game_id
+                        WHERE c.login = ? AND c.game_id IN ({$placeholders}) AND c.blocked = false
+                        ORDER BY c.created_at DESC
+                    ");
+                    $stmt->execute($params);
+                    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                        $clipIds[] = $row['id'];
+                        $categoryClips[] = $row;
+                    }
+
+                    // Cache the results for subsequent polls
+                    @file_put_contents($cacheFile, json_encode([
+                        "clip_ids" => $clipIds,
+                        "clips" => $categoryClips,
+                        "cached_at" => time()
+                    ], JSON_UNESCAPED_SLASHES), LOCK_EX);
+                } catch (PDOException $e) {
+                    error_log("poll category db error: " . $e->getMessage());
                 }
-            } catch (PDOException $e) {
-                error_log("poll category db error: " . $e->getMessage());
             }
         }
 
         $response["category"] = [
             "active" => true,
             "game_id" => $data["game_id"] ?? null,
-            "game_ids" => $gameIds,
+            "game_ids" => isset($data["game_ids"]) ? $data["game_ids"] : [$data["game_id"]],
             "game_name" => $data["game_name"] ?? "",
             "nonce" => $data["nonce"] ?? "",
             "set_at" => $data["set_at"] ?? "",
@@ -226,7 +212,50 @@ if ($filterPath) {
 }
 
 // ---- Check Top Clips Request ----
-if ($pdo) {
+// Check file first to avoid DB connection
+$topReqPath = $runtimeDir . "/ctop_request_" . $login . ".json";
+if (file_exists($topReqPath)) {
+    $topReqRaw = @file_get_contents($topReqPath);
+    $topReqData = $topReqRaw ? json_decode($topReqRaw, true) : null;
+    if ($topReqData && isset($topReqData["nonce"])) {
+        $setAt = isset($topReqData["requested_at"]) ? strtotime($topReqData["requested_at"]) : 0;
+        if ($setAt && (time() - $setAt) <= 20) {
+            // Lazy-load DB for top clips query
+            if (!$pdo) $pdo = get_db_connection();
+            if ($pdo) {
+                $count = (int)($topReqData['count'] ?? 5);
+                try {
+                    $stmt = $pdo->prepare("
+                        SELECT v.seq, v.title, v.up_votes, v.down_votes,
+                               (v.up_votes - v.down_votes) as net_score
+                        FROM votes v
+                        WHERE v.login = ? AND (v.up_votes - v.down_votes) > 0
+                        ORDER BY net_score DESC, v.up_votes DESC
+                        LIMIT ?
+                    ");
+                    $stmt->execute([$login, $count]);
+                    $topClips = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+                    if (!empty($topClips)) {
+                        $response["top_clips"] = [
+                            "active" => true,
+                            "nonce" => $topReqData['nonce'],
+                            "count" => $count,
+                            "clips" => $topClips
+                        ];
+                    }
+                } catch (PDOException $e) {
+                    error_log("poll top clips error: " . $e->getMessage());
+                }
+            }
+        } else {
+            @unlink($topReqPath);
+        }
+    }
+}
+
+// Legacy DB-based top clips check (remove after migration)
+if (!isset($response["top_clips"]) && $pdo) {
     try {
         $stmt = $pdo->prepare("
             SELECT count, nonce, requested_at
@@ -266,14 +295,16 @@ if ($pdo) {
 }
 
 // ---- Get Current Vote Counts ----
-if ($pdo) {
-    try {
-        // Get current clip from now_playing
-        $npPath = $runtimeDir . "/now_playing_" . $login . ".json";
-        if (file_exists($npPath)) {
-            $npRaw = @file_get_contents($npPath);
-            $npData = $npRaw ? json_decode($npRaw, true) : null;
-            if ($npData && isset($npData["clip_id"])) {
+// Only query votes if now_playing file exists (skip DB connection otherwise)
+$npPath = $runtimeDir . "/now_playing_" . $login . ".json";
+if (file_exists($npPath)) {
+    $npRaw = @file_get_contents($npPath);
+    $npData = $npRaw ? json_decode($npRaw, true) : null;
+    if ($npData && isset($npData["clip_id"])) {
+        // Lazy-load DB connection
+        if (!$pdo) $pdo = get_db_connection();
+        if ($pdo) {
+            try {
                 $stmt = $pdo->prepare("
                     SELECT up_votes, down_votes
                     FROM votes
@@ -287,10 +318,10 @@ if ($pdo) {
                         "down" => (int)$votes["down_votes"]
                     ];
                 }
+            } catch (PDOException $e) {
+                error_log("poll votes error: " . $e->getMessage());
             }
         }
-    } catch (PDOException $e) {
-        error_log("poll votes error: " . $e->getMessage());
     }
 }
 
