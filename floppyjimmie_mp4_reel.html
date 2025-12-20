@@ -635,8 +635,11 @@
 
     bufferCheckInterval = setInterval(checkBuffer, 200);
 
-    // Cleanup on timeout - give first clip more time (25s), others 15s
-    const loadTimeoutMs = isFirstClip ? 25000 : 15000;
+    // Cleanup on timeout - dynamic based on buffer requirement + overhead
+    // First clip: requiredBuffer + 3s stabilization + 10s network overhead
+    // Others: 15s fixed
+    const loadTimeoutMs = isFirstClip ? (requiredBuffer + 3 + 10) * 1000 : 15000;
+    debugLog(`Load timeout: ${loadTimeoutMs / 1000}s`);
     loadTimeout = setTimeout(() => {
       if (hasStarted) return;
       clearInterval(bufferCheckInterval);
