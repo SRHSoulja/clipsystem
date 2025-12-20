@@ -29,6 +29,19 @@ header("Content-Type: text/html; charset=utf-8");
       border-bottom: 2px solid #9147ff;
       padding-bottom: 10px;
     }
+    .nav-links {
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid #333;
+    }
+    .nav-links a {
+      margin-right: 20px;
+      color: #adadb8;
+      text-decoration: none;
+    }
+    .nav-links a:hover {
+      color: #9147ff;
+    }
     h2 {
       color: #bf94ff;
       margin-top: 30px;
@@ -85,6 +98,11 @@ header("Content-Type: text/html; charset=utf-8");
 </head>
 <body>
   <div class="container">
+    <div class="nav-links">
+      <a href="clip_search.php?login=floppyjimmie">Clip Search</a>
+      <a href="about.php">About</a>
+    </div>
+
     <h1>Clip Bot Commands</h1>
 
     <div class="note">

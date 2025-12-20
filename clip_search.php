@@ -260,13 +260,34 @@ if ($pdo) {
       gap: 15px;
     }
     h1 {
-      color: #9147ff;
       margin: 0;
       font-size: 24px;
+    }
+    h1 a {
+      color: #9147ff;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    h1 a:hover {
+      color: #bf94ff;
     }
     .subtitle {
       color: #adadb8;
       font-size: 14px;
+    }
+    .nav-links {
+      display: flex;
+      gap: 15px;
+      margin-top: 6px;
+    }
+    .nav-links a {
+      color: #adadb8;
+      text-decoration: none;
+      font-size: 13px;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover {
+      color: #9147ff;
     }
     .header-right {
       display: flex;
@@ -622,8 +643,12 @@ if ($pdo) {
   <div class="container">
     <header>
       <div>
-        <h1>Clip Search</h1>
+        <h1><a href="?login=<?= htmlspecialchars($login) ?>">Clip Search</a></h1>
         <p class="subtitle"><?= htmlspecialchars($login) ?>'s Clips</p>
+        <div class="nav-links">
+          <a href="chelp.php">Bot Commands</a>
+          <a href="about.php">About</a>
+        </div>
       </div>
       <div class="header-right">
         <div class="total-count">
