@@ -113,13 +113,15 @@ header("Content-Type: text/html; charset=utf-8");
     <h2>Everyone</h2>
 
     <div class="command">
-      <span class="command-name">!clip</span>
-      <div class="command-desc">Shows the currently playing clip with title and Twitch link.</div>
+      <span class="command-name">!clip [#]</span>
+      <div class="command-desc">Shows the currently playing clip, or look up a specific clip by number.</div>
+      <div class="command-example">!clip &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(show current clip)<br>!clip 42 &nbsp;(look up clip #42)</div>
     </div>
 
     <div class="command">
-      <span class="command-name">!cfind</span>
-      <div class="command-desc">Get a link to the clip search/browse page for this channel.</div>
+      <span class="command-name">!cfind &lt;query&gt;</span>
+      <div class="command-desc">Search clips by title, clipper, or game category.</div>
+      <div class="command-example">!cfind nerf &nbsp;&nbsp;&nbsp;&nbsp;(search for "nerf")<br>!cfind &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(get link to browse page)</div>
     </div>
 
     <div class="command">
