@@ -176,7 +176,7 @@
     if (!debugEnabled) return;
     const time = new Date().toLocaleTimeString("en-US", { hour12: false });
     debugLines.push({ time, msg, type });
-    if (debugLines.length > 12) debugLines.shift();
+    if (debugLines.length > 25) debugLines.shift();
     debugOverlay.classList.add("show");
     debugOverlay.innerHTML = debugLines.map(l => `<div class="${l.type}">${l.time} ${l.msg}</div>`).join("");
   }
@@ -496,6 +496,7 @@
     // Clear any existing buffer check
     if (bufferCheckInterval) { clearInterval(bufferCheckInterval); bufferCheckInterval = null; }
 
+    let lastLoggedBuffer = 0;
     const checkBuffer = () => {
       if (hasStarted) return;
       if (player.buffered.length > 0) {
@@ -507,22 +508,24 @@
         const hasEnoughBuffer = bufferedEnd >= requiredBuffer;
         const hasFullClip = bufferedEnd >= (clipDuration - 0.5);
 
-        // For first clip, require canplaythrough event (browser believes no buffering needed)
-        // For other clips, just need readyState >= 3
-        const browserReady = isFirstClip ? canPlayThroughFired : (readyState >= 3);
+        // For first clip, require canplaythrough OR readyState 4 OR enough buffer
+        // Some browsers don't fire canplaythrough reliably
+        const browserReady = isFirstClip
+          ? (canPlayThroughFired || readyState >= 4 || bufferedEnd >= requiredBuffer)
+          : (readyState >= 3);
 
         if ((hasEnoughBuffer || hasFullClip) && browserReady) {
           hasStarted = true;
           clearInterval(bufferCheckInterval);
-          debugLog(`Buffered: ${bufferedEnd.toFixed(1)}s (needed ${requiredBuffer}s, canplay=${canPlayThroughFired})`, "ok");
+          debugLog(`Buffered: ${bufferedEnd.toFixed(1)}s (needed ${requiredBuffer}s, ready=${readyState})`, "ok");
           // On first clip, wait extra time for network to stabilize
           if (isFirstClip) {
-            debugLog("Stabilizing (2.5s)...");
+            debugLog("Stabilizing (2s)...");
             setTimeout(() => {
               const finalBuffer = player.buffered.length > 0 ? player.buffered.end(0) : 0;
               debugLog(`Final buffer: ${finalBuffer.toFixed(1)}s`);
-              // Re-verify buffer is still sufficient before playing (need at least 10s)
-              const minBufferToPlay = Math.min(10, requiredBuffer);
+              // Re-verify buffer is still sufficient before playing (need at least 8s)
+              const minBufferToPlay = Math.min(8, requiredBuffer);
               if (finalBuffer >= minBufferToPlay) {
                 startPlayback();
               } else {
@@ -530,13 +533,20 @@
                 hasStarted = false;
                 bufferCheckInterval = setInterval(checkBuffer, 200);
               }
-            }, 2500);
+            }, 2000);
           } else {
             startPlayback();
           }
         } else {
-          debugLog(`Buffered: ${bufferedEnd.toFixed(1)}s / ${requiredBuffer}s (canplay=${canPlayThroughFired})`);
+          // Only log every 2s of buffer progress to reduce spam
+          if (bufferedEnd - lastLoggedBuffer >= 2) {
+            debugLog(`Buffering: ${bufferedEnd.toFixed(1)}s / ${requiredBuffer}s (ready=${readyState})`);
+            lastLoggedBuffer = bufferedEnd;
+          }
         }
+      } else {
+        // No buffer yet, log current state
+        debugLog(`Waiting for buffer... (ready=${player.readyState})`);
       }
     };
 
@@ -783,11 +793,7 @@
       }
     } catch {}
 
-    // Start playback
-    const first = pickNextClip();
-    if (first) playClip(first);
-
-    // Polling
+    // Start polling first, let page stabilize before playing
     if (hudEnabled) {
       pollVotes();
       setInterval(pollVotes, hudPollMs);
@@ -796,6 +802,14 @@
     setInterval(pollSkip, 1000);
     setInterval(pollPrev, 1000); // Poll for !cprev
     setInterval(pollCategory, 2000); // Poll category every 2s
+
+    // Delay first clip to let page fully initialize and network stabilize
+    debugLog("Waiting 3s for page to stabilize...");
+    setTimeout(() => {
+      debugLog("Starting first clip...");
+      const first = pickNextClip();
+      if (first) playClip(first);
+    }, 3000);
 
     // Refresh clips periodically
     setInterval(async () => {
