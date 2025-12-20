@@ -160,10 +160,27 @@ async function fetchWithTimeout(url, timeoutMs = 5000) {
 
 // Command handlers
 const commands = {
-  // !clip - Show currently playing clip
+  // !clip [seq] - Show clip info (current if no seq, or specific clip by number)
   async clip(channel, tags, args) {
     const login = getClipChannel(channel);
+    const seq = parseInt(args[0]);
+
     try {
+      // If seq provided, look up that specific clip
+      if (seq && seq > 0) {
+        const apiUrl = `${config.apiBaseUrl}/clip_info.php?login=${login}&seq=${seq}`;
+        const res = await fetchWithTimeout(apiUrl);
+        const data = await res.json();
+
+        if (data.error) {
+          return `Clip #${seq} not found.`;
+        }
+
+        const title = data.title ? ` - ${data.title}` : '';
+        return `Clip #${data.seq}${title}: ${data.url}`;
+      }
+
+      // No seq - show currently playing clip
       const apiUrl = `${config.apiBaseUrl}/now_playing_get.php?login=${login}`;
       const res = await fetchWithTimeout(apiUrl);
       const data = await res.json();
@@ -177,7 +194,7 @@ const commands = {
       return `Clip #${data.seq}: ${title} - ${clipUrl}`;
     } catch (err) {
       console.error('!clip error:', err.message);
-      return 'Could not fetch current clip.';
+      return 'Could not fetch clip info.';
     }
   },
 
