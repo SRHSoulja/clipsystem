@@ -127,9 +127,24 @@ $search  = trim((string)($_GET["q"] ?? ""));
 $gameId  = trim((string)($_GET["game_id"] ?? ""));
 $action  = $_GET["action"] ?? "list";
 
-// Verify admin key for protected actions
+// Auth: accept ADMIN_KEY, streamer_key, or mod_password
+require_once __DIR__ . '/includes/dashboard_auth.php';
+
 $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
-if ($key !== $ADMIN_KEY) {
+$isAuthorized = false;
+
+if ($key === $ADMIN_KEY && $ADMIN_KEY !== '') {
+  $isAuthorized = true;
+} else {
+  // Try streamer key or mod password
+  $auth = new DashboardAuth();
+  $result = $auth->authenticate($key, $login);
+  if ($result && $result['login'] === $login) {
+    $isAuthorized = true;
+  }
+}
+
+if (!$isAuthorized) {
   json_error("Forbidden", 403);
 }
 

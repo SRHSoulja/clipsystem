@@ -20,6 +20,7 @@ header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { exit(0); }
 
 require_once __DIR__ . '/db_config.php';
+require_once __DIR__ . '/includes/dashboard_auth.php';
 
 function clean_login($s){
   $s = strtolower(trim((string)$s));
@@ -41,9 +42,23 @@ $login  = clean_login($_GET["login"] ?? "");
 $key    = (string)($_GET["key"] ?? "");
 $action = (string)($_GET["action"] ?? "");
 
+// Auth: accept ADMIN_KEY, streamer_key, or mod_password
 $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
+$isAuthorized = false;
 
-if ($key !== $ADMIN_KEY) {
+if ($key === $ADMIN_KEY && $ADMIN_KEY !== '') {
+  $isAuthorized = true;
+} else {
+  // Try streamer key or mod password
+  $auth = new DashboardAuth();
+  $result = $auth->authenticate($key, $login);
+  if ($result && $result['login'] === $login) {
+    // Mods and streamers can manage playlists
+    $isAuthorized = true;
+  }
+}
+
+if (!$isAuthorized) {
   json_error("forbidden", 403);
 }
 
