@@ -524,6 +524,7 @@
     // Use preloaded URL if available for this clip
     let mp4Url = null;
     let hasPreloadedBuffer = false;
+    debugLog(`Checking preload: clip=${c.id.substring(0,15)}, preloadedClip=${preloadedClip?.id?.substring(0,15) || 'null'}`);
     if (preloadedClip && preloadedClip.id === c.id && preloadedMp4Url) {
       mp4Url = preloadedMp4Url;
       // Check if preload video has buffer we can use
@@ -532,11 +533,12 @@
         const buffered = preloadVideo.buffered.end(0);
         debugLog(`Using preloaded buffer (${buffered.toFixed(1)}s)`, "ok");
       } else {
-        debugLog("Using preloaded URL", "ok");
+        debugLog("Using preloaded URL (no buffer)", "warn");
       }
       preloadedClip = null;
       preloadedMp4Url = null;
     } else {
+      debugLog(`Preload miss - fetching fresh URL`);
       mp4Url = await getMp4Url(c.id);
       cleanupPreloadVideo(); // Clean up any stale preload
     }
@@ -1100,31 +1102,15 @@
       }
     } catch {}
 
-    // Use consolidated polling - single endpoint replaces 7 separate polls
-    // 2s interval is sufficient for mod commands while reducing server load
-    setInterval(pollAll, 2000); // Poll every 2 seconds
-
-    // Preload next clip at 70% through current clip
-    setInterval(() => {
-      if (currentClip && !preloadedClip && !isSwitching) {
-        const currentTime = player.currentTime || 0;
-        const duration = currentClip.duration || 30;
-        if (currentTime > duration * 0.7) {
-          preloadNextClip();
-        }
-      }
-    }, 2000);
-
-    // Preload and start first clip - pre-buffer video data before playing
+    // Preload and start first clip BEFORE starting polling
+    // This ensures no poll interference during initial load
     debugLog("Preloading first clip...");
     const first = pickNextClip();
     if (first) {
+      debugLog(`Selected first clip: ${first.id.substring(0,20)}...`);
       try {
         const mp4Url = await getMp4Url(first.id);
         if (mp4Url) {
-          preloadedClip = first;
-          preloadedMp4Url = mp4Url;
-
           // Pre-buffer the first clip's video data
           cleanupPreloadVideo();
           preloadVideo = document.createElement('video');
@@ -1140,35 +1126,59 @@
             const checkBuffer = () => {
               if (preloadVideo && preloadVideo.buffered.length > 0) {
                 const buffered = preloadVideo.buffered.end(0);
-                debugLog(`First clip buffered: ${buffered.toFixed(1)}s`);
                 if (buffered >= 8) {
+                  debugLog(`First clip buffered: ${buffered.toFixed(1)}s`, "ok");
                   resolve();
                   return;
                 }
               }
             };
             preloadVideo.addEventListener('progress', checkBuffer);
-            preloadVideo.addEventListener('canplaythrough', () => resolve());
+            preloadVideo.addEventListener('canplaythrough', () => {
+              debugLog("canplaythrough fired for preload");
+              resolve();
+            });
             // Check periodically
             const interval = setInterval(() => {
               if (preloadVideo && preloadVideo.buffered.length > 0) {
                 const buffered = preloadVideo.buffered.end(0);
+                debugLog(`Preload buffer: ${buffered.toFixed(1)}s`);
                 if (buffered >= 8) {
                   clearInterval(interval);
                   resolve();
                 }
               }
-            }, 200);
-            setTimeout(() => { clearInterval(interval); resolve(); }, 10000); // Max 10s wait
+            }, 500);
+            setTimeout(() => { clearInterval(interval); debugLog("Preload timeout", "warn"); resolve(); }, 10000);
           });
 
-          debugLog("First clip ready", "ok");
+          // Set preload state AFTER buffering complete, right before playClip
+          preloadedClip = first;
+          preloadedMp4Url = mp4Url;
+          debugLog(`First clip ready, preloadedClip.id=${first.id.substring(0,15)}`, "ok");
         }
-      } catch {}
+      } catch (e) {
+        debugLog(`Preload error: ${e.message}`, "err");
+      }
       // Play - video data is pre-buffered
-      debugLog("Starting first clip...");
+      debugLog(`Starting playClip for ${first.id.substring(0,15)}...`);
       playClip(first);
     }
+
+    // Start polling AFTER first clip begins (prevents interference)
+    // 2s interval is sufficient for mod commands while reducing server load
+    setInterval(pollAll, 2000);
+
+    // Preload next clip at 70% through current clip
+    setInterval(() => {
+      if (currentClip && !preloadedClip && !isSwitching) {
+        const currentTime = player.currentTime || 0;
+        const duration = currentClip.duration || 30;
+        if (currentTime > duration * 0.7) {
+          preloadNextClip();
+        }
+      }
+    }, 2000);
 
     // Refresh clips every 5 minutes for variety from full 14k+ catalog
     setInterval(async () => {
