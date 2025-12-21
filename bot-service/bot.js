@@ -185,8 +185,8 @@ async function fetchWithTimeout(url, timeoutMs = 5000) {
 
 // Command handlers
 const commands = {
-  // !clip [seq] - Show clip info (current if no seq, or specific clip by number)
-  async clip(channel, tags, args) {
+  // !cclip [seq] - Show clip info (current if no seq, or specific clip by number)
+  async cclip(channel, tags, args) {
     const login = getClipChannel(channel);
     const seq = parseInt(args[0]);
 
@@ -218,7 +218,7 @@ const commands = {
       const clipUrl = data.url || `https://clips.twitch.tv/${data.clip_id}`;
       return `Clip #${data.seq}: ${title} - ${clipUrl}`;
     } catch (err) {
-      console.error('!clip error:', err.message);
+      console.error('!cclip error:', err.message);
       return 'Could not fetch clip info.';
     }
   },
@@ -472,9 +472,9 @@ const commands = {
   // !chelp - Show available clip commands
   async chelp(channel, tags, args) {
     if (isMod(tags)) {
-      return 'Mod: !pclip <#>, !cskip, !cprev, !ccat <game>, !ctop [#], !cvote [#], !chud <pos>, !cremove/!cadd <#> | All: !clip, !cfind, !like/!dislike [#]';
+      return 'Mod: !pclip <#>, !cskip, !cprev, !ccat <game>, !ctop [#], !cvote [#], !chud <pos>, !cremove/!cadd <#> | All: !cclip, !cfind, !like/!dislike [#]';
     }
-    return 'Clip commands: !clip (current), !cfind (browse), !like [#] (upvote), !dislike [#] (downvote)';
+    return 'Clip commands: !cclip (current), !cfind (browse), !like [#] (upvote), !dislike [#] (downvote)';
   },
 
   // !chud <position> - Move the HUD overlay (mod only)
@@ -673,7 +673,7 @@ client.on('connected', (addr, port) => {
   console.log(`Joining channels: ${channels.join(', ')}`);
   console.log(`Multi-channel mode: commands use clips from the channel they're typed in`);
   console.log(`Bot username: ${config.botUsername}`);
-  console.log('Commands: !clip, !cfind, !like, !dislike, !pclip, !cskip, !cprev, !ccat, !ctop, !cvote, !chud, !cremove, !cadd, !cswitch, !clikeon, !clikeoff, !chelp');
+  console.log('Commands: !cclip, !cfind, !like, !dislike, !pclip, !cskip, !cprev, !ccat, !ctop, !cvote, !chud, !cremove, !cadd, !cswitch, !clikeon, !clikeoff, !chelp');
 });
 
 client.on('join', (channel, username, self) => {
