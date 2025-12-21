@@ -82,34 +82,43 @@ if (isset($_GET['set']) || isset($_POST['set'])) {
   exit;
 }
 
-// GET - return current voting status
+// GET - return current voting status and vote_feedback
 if ($pdo) {
   try {
-    $stmt = $pdo->prepare("SELECT voting_enabled FROM channel_settings WHERE login = ?");
+    $stmt = $pdo->prepare("SELECT voting_enabled, vote_feedback FROM channel_settings WHERE login = ?");
     $stmt->execute([$login]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
     // Default to true if no setting exists
     $enabled = true;
-    if ($row && isset($row['voting_enabled'])) {
-      $enabled = (bool)$row['voting_enabled'];
+    $feedback = true;
+    if ($row) {
+      if (isset($row['voting_enabled'])) {
+        $enabled = (bool)$row['voting_enabled'];
+      }
+      if (isset($row['vote_feedback'])) {
+        $feedback = (bool)$row['vote_feedback'];
+      }
     }
 
     echo json_encode([
       "login" => $login,
-      "voting_enabled" => $enabled
+      "voting_enabled" => $enabled,
+      "vote_feedback" => $feedback
     ]);
   } catch (PDOException $e) {
-    // Table might not exist yet, return default (enabled)
+    // Table might not exist yet, return defaults (enabled)
     echo json_encode([
       "login" => $login,
-      "voting_enabled" => true
+      "voting_enabled" => true,
+      "vote_feedback" => true
     ]);
   }
 } else {
   // No database, default to enabled
   echo json_encode([
     "login" => $login,
-    "voting_enabled" => true
+    "voting_enabled" => true,
+    "vote_feedback" => true
   ]);
 }

@@ -45,19 +45,19 @@ const channels = config.channel.split(',').map(c => c.trim().toLowerCase()).filt
 // Key: chat channel (without #), Value: target clip channel
 const channelOverrides = new Map();
 
-// Cache for voting_enabled state - checked from database, cached briefly
-// Key: channel login, Value: { enabled: boolean, cachedAt: timestamp }
-const votingEnabledCache = new Map();
+// Cache for voting settings - checked from database, cached briefly
+// Key: channel login, Value: { votingEnabled: boolean, voteFeedback: boolean, cachedAt: timestamp }
+const votingSettingsCache = new Map();
 const VOTING_CACHE_TTL = 30000; // 30 second cache
 
-// Check if voting is enabled for a channel (from database)
-async function isVotingEnabled(login) {
-  const cached = votingEnabledCache.get(login);
+// Fetch voting settings for a channel (returns both voting_enabled and vote_feedback)
+async function getVotingSettings(login) {
+  const cached = votingSettingsCache.get(login);
   const now = Date.now();
 
   // Return cached value if fresh
   if (cached && (now - cached.cachedAt) < VOTING_CACHE_TTL) {
-    return cached.enabled;
+    return cached;
   }
 
   // Fetch from database via API
@@ -65,14 +65,30 @@ async function isVotingEnabled(login) {
     const url = `${config.apiBaseUrl}/voting_status.php?login=${encodeURIComponent(login)}`;
     const res = await fetchWithTimeout(url, 3000);
     const data = await res.json();
-    const enabled = data.voting_enabled === true;
-    votingEnabledCache.set(login, { enabled, cachedAt: now });
-    return enabled;
+    const settings = {
+      votingEnabled: data.voting_enabled === true,
+      voteFeedback: data.vote_feedback !== false, // Default to true
+      cachedAt: now
+    };
+    votingSettingsCache.set(login, settings);
+    return settings;
   } catch (err) {
-    console.error('Error checking voting status:', err.message);
-    // On error, use cached value if available, otherwise default to false
-    return cached ? cached.enabled : false;
+    console.error('Error checking voting settings:', err.message);
+    // On error, use cached value if available, otherwise default
+    return cached || { votingEnabled: false, voteFeedback: true, cachedAt: now };
   }
+}
+
+// Check if voting is enabled for a channel
+async function isVotingEnabled(login) {
+  const settings = await getVotingSettings(login);
+  return settings.votingEnabled;
+}
+
+// Check if vote feedback/confirmation is enabled for a channel
+async function isVoteFeedbackEnabled(login) {
+  const settings = await getVotingSettings(login);
+  return settings.voteFeedback;
 }
 
 // Helper to get the clip channel for a given chat channel
@@ -250,6 +266,10 @@ const commands = {
     const login = getClipChannel(channel);
     const votingEnabled = await isVotingEnabled(login);
     if (!votingEnabled) return null; // Silently ignore when disabled
+
+    // Check if vote feedback is enabled - if not, stay completely silent
+    const feedbackEnabled = await isVoteFeedbackEnabled(login);
+
     let seq = parseInt(args[0]);
 
     // If no seq provided, get current playing clip
@@ -260,10 +280,10 @@ const commands = {
         if (npData && npData.seq) {
           seq = npData.seq;
         } else {
-          return 'No clip currently playing. Use !like <clip#>';
+          return feedbackEnabled ? 'No clip currently playing. Use !like <clip#>' : null;
         }
       } catch (err) {
-        return 'Could not get current clip.';
+        return feedbackEnabled ? 'Could not get current clip.' : null;
       }
     }
 
@@ -271,10 +291,12 @@ const commands = {
       const user = tags.username || 'anonymous';
       const url = `${config.apiBaseUrl}/vote_submit.php?login=${login}&user=${user}&seq=${seq}&vote=like`;
       const res = await fetchWithTimeout(url);
-      return await res.text();
+      const text = await res.text();
+      // API already respects vote_feedback setting, but text might be empty
+      return text || null;
     } catch (err) {
       console.error('!like error:', err.message);
-      return 'Could not record vote.';
+      return feedbackEnabled ? 'Could not record vote.' : null;
     }
   },
 
@@ -283,6 +305,10 @@ const commands = {
     const login = getClipChannel(channel);
     const votingEnabled = await isVotingEnabled(login);
     if (!votingEnabled) return null; // Silently ignore when disabled
+
+    // Check if vote feedback is enabled - if not, stay completely silent
+    const feedbackEnabled = await isVoteFeedbackEnabled(login);
+
     let seq = parseInt(args[0]);
 
     // If no seq provided, get current playing clip
@@ -293,10 +319,10 @@ const commands = {
         if (npData && npData.seq) {
           seq = npData.seq;
         } else {
-          return 'No clip currently playing. Use !dislike <clip#>';
+          return feedbackEnabled ? 'No clip currently playing. Use !dislike <clip#>' : null;
         }
       } catch (err) {
-        return 'Could not get current clip.';
+        return feedbackEnabled ? 'Could not get current clip.' : null;
       }
     }
 
@@ -304,10 +330,12 @@ const commands = {
       const user = tags.username || 'anonymous';
       const url = `${config.apiBaseUrl}/vote_submit.php?login=${login}&user=${user}&seq=${seq}&vote=dislike`;
       const res = await fetchWithTimeout(url);
-      return await res.text();
+      const text = await res.text();
+      // API already respects vote_feedback setting, but text might be empty
+      return text || null;
     } catch (err) {
       console.error('!dislike error:', err.message);
-      return 'Could not record vote.';
+      return feedbackEnabled ? 'Could not record vote.' : null;
     }
   },
 
@@ -557,7 +585,7 @@ const commands = {
 
       if (data.ok) {
         // Clear cache so next check gets fresh state
-        votingEnabledCache.delete(target);
+        votingSettingsCache.delete(target);
         return `Clip voting disabled for ${target}.`;
       }
       return 'Could not disable voting.';
@@ -583,7 +611,7 @@ const commands = {
 
       if (data.ok) {
         // Clear cache so next check gets fresh state
-        votingEnabledCache.delete(target);
+        votingSettingsCache.delete(target);
         return `Clip voting enabled for ${target}.`;
       }
       return 'Could not enable voting.';
