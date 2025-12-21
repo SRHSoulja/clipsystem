@@ -85,6 +85,7 @@ try {
             blocked_words TEXT DEFAULT '[]',
             blocked_clippers TEXT DEFAULT '[]',
             voting_enabled BOOLEAN DEFAULT TRUE,
+            vote_feedback BOOLEAN DEFAULT TRUE,
             last_refresh TIMESTAMP
         )
     ");
@@ -94,6 +95,7 @@ try {
     $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS blocked_words TEXT DEFAULT '[]'");
     $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS blocked_clippers TEXT DEFAULT '[]'");
     $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS voting_enabled BOOLEAN DEFAULT TRUE");
+    $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS vote_feedback BOOLEAN DEFAULT TRUE");
     $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS last_refresh TIMESTAMP");
 } catch (PDOException $e) {
     // Ignore - table might already be correct
@@ -105,7 +107,7 @@ switch ($action) {
 
         try {
             $stmt = $pdo->prepare("
-                SELECT hud_position, top_position, blocked_words, blocked_clippers, voting_enabled, last_refresh
+                SELECT hud_position, top_position, blocked_words, blocked_clippers, voting_enabled, vote_feedback, last_refresh
                 FROM channel_settings WHERE login = ?
             ");
             $stmt->execute([$login]);
@@ -117,6 +119,7 @@ switch ($action) {
                     'top_position' => 'br',
                     'blocked_words' => '[]',
                     'blocked_clippers' => '[]',
+                    'vote_feedback' => true,
                     'voting_enabled' => true,
                     'last_refresh' => null
                 ];
@@ -165,6 +168,7 @@ switch ($action) {
             'hud_position' => 'change_hud',
             'top_position' => 'change_hud',
             'voting_enabled' => 'toggle_voting',
+            'vote_feedback' => 'toggle_voting',
             'blocked_words' => 'add_blocked_words',
             'blocked_clippers' => 'add_blocked_clippers'
         ];
@@ -185,6 +189,7 @@ switch ($action) {
                     if (!in_array($value, ['tr', 'tl', 'br', 'bl'])) $value = 'tr';
                     break;
                 case 'voting_enabled':
+                case 'vote_feedback':
                     $value = filter_var($value, FILTER_VALIDATE_BOOLEAN) ? 'TRUE' : 'FALSE';
                     break;
                 case 'blocked_words':

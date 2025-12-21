@@ -362,12 +362,19 @@ $login = clean_login($_GET['login'] ?? '');
 
             <div class="card">
                 <h3>Chat Voting</h3>
-                <div style="display: flex; align-items: center; gap: 16px;">
+                <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 12px;">
                     <label class="toggle-switch">
                         <input type="checkbox" id="votingEnabled" onchange="saveVoting()">
                         <span class="toggle-slider"></span>
                     </label>
                     <span>Enable !like and !dislike commands</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 16px;">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="voteFeedback" onchange="saveVoteFeedback()">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span>Show vote confirmation in chat</span>
                 </div>
             </div>
 
@@ -582,6 +589,7 @@ $login = clean_login($_GET['login'] ?? '');
 
                 // Voting
                 document.getElementById('votingEnabled').checked = settings.voting_enabled;
+                document.getElementById('voteFeedback').checked = settings.vote_feedback !== false;
 
                 // Last refresh
                 if (settings.last_refresh) {
@@ -636,6 +644,10 @@ $login = clean_login($_GET['login'] ?? '');
 
         function saveVoting() {
             saveSetting('voting_enabled', document.getElementById('votingEnabled').checked);
+        }
+
+        function saveVoteFeedback() {
+            saveSetting('vote_feedback', document.getElementById('voteFeedback').checked);
         }
 
         function addBlockedWord() {

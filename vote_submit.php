@@ -62,6 +62,22 @@ if ($dir !== "up" && $dir !== "down") {
   exit;
 }
 
+// Check if vote feedback is enabled for this channel
+$showFeedback = true; // Default to showing feedback
+$pdo = get_db_connection();
+if ($pdo) {
+  try {
+    $stmt = $pdo->prepare("SELECT vote_feedback FROM channel_settings WHERE login = ?");
+    $stmt->execute([$login]);
+    $row = $stmt->fetch();
+    if ($row && isset($row['vote_feedback'])) {
+      $showFeedback = (bool)$row['vote_feedback'];
+    }
+  } catch (PDOException $e) {
+    // Ignore - default to showing feedback
+  }
+}
+
 // Look up clip by seq - try database first, fall back to JSON
 $clipId = null;
 $clipTitle = "";
@@ -143,7 +159,7 @@ if ($pdo) {
         $row = $stmt->fetch();
         $up = $row ? (int)$row['up_votes'] : 0;
         $down = $row ? (int)$row['down_votes'] : 0;
-        echo "Already voted {$dir} for Clip #{$seq}. 👍{$up} 👎{$down}";
+        if ($showFeedback) echo "Already voted {$dir} for Clip #{$seq}. 👍{$up} 👎{$down}";
         exit;
       }
 
@@ -181,7 +197,7 @@ if ($pdo) {
       $up = $row ? (int)$row['up_votes'] : 0;
       $down = $row ? (int)$row['down_votes'] : 0;
 
-      echo "Changed vote to {$dir} for Clip #{$seq}. 👍{$up} 👎{$down}";
+      if ($showFeedback) echo "Changed vote to {$dir} for Clip #{$seq}. 👍{$up} 👎{$down}";
       exit;
     }
 
@@ -212,7 +228,7 @@ if ($pdo) {
     $up = $row ? (int)$row['up_votes'] : 0;
     $down = $row ? (int)$row['down_votes'] : 0;
 
-    echo "Voted {$dir} for Clip #{$seq}. 👍{$up} 👎{$down}";
+    if ($showFeedback) echo "Voted {$dir} for Clip #{$seq}. 👍{$up} 👎{$down}";
     exit;
 
   } catch (PDOException $e) {
@@ -236,7 +252,7 @@ $ledgerKey = $clipId . "|" . strtolower($user);
 if (isset($ledger[$ledgerKey])) {
   $up = (int)($votes[$clipId]["up"] ?? 0);
   $down = (int)($votes[$clipId]["down"] ?? 0);
-  echo "Already voted for Clip #{$seq}. 👍{$up} 👎{$down}";
+  if ($showFeedback) echo "Already voted for Clip #{$seq}. 👍{$up} 👎{$down}";
   exit;
 }
 
@@ -251,4 +267,4 @@ $ledger[$ledgerKey] = time();
 $up = (int)$votes[$clipId]["up"];
 $down = (int)$votes[$clipId]["down"];
 
-echo "Voted {$dir} for Clip #{$seq}. 👍{$up} 👎{$down}";
+if ($showFeedback) echo "Voted {$dir} for Clip #{$seq}. 👍{$up} 👎{$down}";
