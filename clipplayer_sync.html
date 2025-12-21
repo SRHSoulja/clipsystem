@@ -37,7 +37,7 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    #infoHud {
+    #voteHud {
       position: absolute;
       right: 24px;
       top: 24px;
@@ -46,36 +46,50 @@
       z-index: 11000;
       display: flex;
       flex-direction: column;
-      gap: 8px;
-      padding: 16px 20px;
-      border-radius: 12px;
-      background: rgba(0,0,0,0.7);
-      border: 2px solid rgba(255,255,255,0.2);
+      gap: 12px;
+      align-items: center;
+      padding: 18px 24px;
+      border-radius: 16px;
+      background: rgba(0,0,0,0.25);
+      border: 2px solid rgba(255,255,255,0.15);
       color: #fff;
-      font: 16px/1.4 system-ui, sans-serif;
+      font: 18px/1.3 system-ui, sans-serif;
       backdrop-filter: blur(12px);
       opacity: 0;
       transform: translateX(6px);
-      transition: opacity 300ms, transform 300ms, top 300ms ease, bottom 300ms ease, left 300ms ease, right 300ms ease;
-      max-width: 500px;
+      transition: opacity 180ms, transform 180ms, top 300ms ease, bottom 300ms ease, left 300ms ease, right 300ms ease;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.6);
+      max-width: 550px;
+      text-align: center;
       pointer-events: none;
     }
-    #infoHud.show { opacity: 1; transform: translateX(0); }
+    #voteHud.show { opacity: 1; transform: translateX(0); }
     /* HUD positions */
-    #infoHud.pos-tr { top: 24px !important; right: 24px !important; bottom: auto !important; left: auto !important; transform: translateX(6px); }
-    #infoHud.pos-tr.show { transform: translateX(0); }
-    #infoHud.pos-tl { top: 24px !important; left: 24px !important; bottom: auto !important; right: auto !important; transform: translateX(-6px); }
-    #infoHud.pos-tl.show { transform: translateX(0); }
-    #infoHud.pos-br { bottom: 24px !important; right: 24px !important; top: auto !important; left: auto !important; transform: translateX(6px); }
-    #infoHud.pos-br.show { transform: translateX(0); }
-    #infoHud.pos-bl { bottom: 24px !important; left: 24px !important; top: auto !important; right: auto !important; transform: translateX(-6px); }
-    #infoHud.pos-bl.show { transform: translateX(0); }
-    #infoHud .clip-title { font-weight: 700; font-size: 18px; color: #fff; }
-    #infoHud .clip-meta { font-size: 14px; color: #a0a0a0; display: flex; gap: 12px; flex-wrap: wrap; }
-    #infoHud .meta-duration { color: #fbbf24; }
-    #infoHud .meta-category { color: #22d3ee; }
-    #infoHud .meta-clipper { color: #c084fc; }
-    #infoHud .live-badge {
+    #voteHud.pos-tr { top: 24px !important; right: 24px !important; bottom: auto !important; left: auto !important; transform: translateX(6px); }
+    #voteHud.pos-tr.show { transform: translateX(0); }
+    #voteHud.pos-tl { top: 24px !important; left: 24px !important; bottom: auto !important; right: auto !important; transform: translateX(-6px); }
+    #voteHud.pos-tl.show { transform: translateX(0); }
+    #voteHud.pos-br { bottom: 24px !important; right: 24px !important; top: auto !important; left: auto !important; transform: translateX(6px); }
+    #voteHud.pos-br.show { transform: translateX(0); }
+    #voteHud.pos-bl { bottom: 24px !important; left: 24px !important; top: auto !important; right: auto !important; transform: translateX(-6px); }
+    #voteHud.pos-bl.show { transform: translateX(0); }
+    #voteHud .clip-info { display: flex; flex-direction: column; gap: 6px; width: 100%; align-items: center; }
+    #voteHud .seq { font-weight: 800; font-size: 24px; color: #fff; text-shadow: 0 2px 4px rgba(0,0,0,0.7); }
+    #voteHud .clip-date-hud { font-weight: 600; font-size: 18px; color: #a0a0ff; margin-left: 10px; }
+    #voteHud .clip-title { font-weight: 600; font-size: 18px; color: #f0f0f0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #voteHud .clip-meta { font-size: 17px; font-weight: 600; color: #e8e8e8; display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+    #voteHud .meta-duration { color: #fbbf24; }
+    #voteHud .meta-category { color: #22d3ee; }
+    #voteHud .meta-clipper-label { color: #a0a0a0; }
+    #voteHud .meta-clipper-name { color: #c084fc; }
+    #voteHud .vote-section { display: flex; gap: 14px; align-items: center; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.2); width: 100%; justify-content: center; }
+    #voteHud .pill { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 999px; font-weight: 700; font-size: 18px; }
+    #voteHud .pill.up { background: rgba(34,197,94,0.2); border: 2px solid rgba(34,197,94,0.6); color: #4ade80; }
+    #voteHud .pill.down { background: rgba(239,68,68,0.2); border: 2px solid rgba(239,68,68,0.6); color: #f87171; }
+    #voteHud .hints { display: flex; flex-direction: column; gap: 3px; font-size: 16px; font-weight: 700; }
+    #voteHud .hint-like { color: #4ade80; }
+    #voteHud .hint-dislike { color: #f87171; }
+    #voteHud .live-badge {
       display: inline-flex;
       align-items: center;
       gap: 6px;
@@ -87,8 +101,9 @@
       font-size: 12px;
       font-weight: 700;
       text-transform: uppercase;
+      margin-bottom: 4px;
     }
-    #infoHud .live-dot {
+    #voteHud .live-dot {
       width: 8px;
       height: 8px;
       background: #ef4444;
@@ -239,17 +254,23 @@
 <body>
   <video id="player" playsinline preload="auto"></video>
 
-  <div id="infoHud">
-    <div style="display: flex; align-items: center; gap: 12px;">
-      <span class="live-badge"><span class="live-dot"></span> LIVE</span>
-      <span id="clipSeq" style="background: rgba(255,255,255,0.15); padding: 4px 10px; border-radius: 6px; font-weight: 700; font-size: 14px; color: #fbbf24;"></span>
-      <span id="clipDate" style="font-weight: 600; font-size: 14px; color: #a0a0ff;"></span>
+  <div id="voteHud">
+    <span class="live-badge"><span class="live-dot"></span> LIVE</span>
+    <div class="clip-info">
+      <div style="display:flex;align-items:baseline;justify-content:center;gap:0;">
+        <span class="seq" id="voteSeq">Clip</span>
+        <span class="clip-date-hud" id="clipDateHud"></span>
+      </div>
       <span class="clip-title" id="clipTitle"></span>
+      <span class="clip-meta" id="clipMeta"></span>
     </div>
-    <div class="clip-meta" id="clipMeta"></div>
-    <div id="clipVotes" style="display: flex; gap: 16px; margin-top: 4px; font-size: 16px; font-weight: 700;">
-      <span id="votesUp" style="color: #4ade80;">👍 0</span>
-      <span id="votesDown" style="color: #f87171;">👎 0</span>
+    <div class="vote-section">
+      <span class="pill up" id="voteUp">👍 0</span>
+      <span class="pill down" id="voteDown">👎 0</span>
+      <div class="hints">
+        <span class="hint-like" id="hintLike">!like #</span>
+        <span class="hint-dislike" id="hintDislike">!dislike #</span>
+      </div>
     </div>
   </div>
 
@@ -288,13 +309,15 @@
 
   const player = document.getElementById("player");
   const loadingOverlay = document.getElementById("loadingOverlay");
-  const infoHud = document.getElementById("infoHud");
+  const voteHud = document.getElementById("voteHud");
+  const voteSeq = document.getElementById("voteSeq");
+  const clipDateHud = document.getElementById("clipDateHud");
   const clipTitle = document.getElementById("clipTitle");
   const clipMeta = document.getElementById("clipMeta");
-  const clipSeqEl = document.getElementById("clipSeq");
-  const clipDateEl = document.getElementById("clipDate");
-  const votesUpEl = document.getElementById("votesUp");
-  const votesDownEl = document.getElementById("votesDown");
+  const voteUp = document.getElementById("voteUp");
+  const voteDown = document.getElementById("voteDown");
+  const hintLike = document.getElementById("hintLike");
+  const hintDislike = document.getElementById("hintDislike");
   const volumeControl = document.getElementById("volumeControl");
   const volumeBtn = document.getElementById("volumeBtn");
   const volumeSlider = document.getElementById("volumeSlider");
@@ -373,12 +396,12 @@
   // Show controls on mouse move
   let hideTimeout = null;
   function showControls() {
-    infoHud.classList.add("show");
+    voteHud.classList.add("show");
     volumeControl.classList.add("show");
     syncStatus.classList.add("show");
     if (hideTimeout) clearTimeout(hideTimeout);
     hideTimeout = setTimeout(() => {
-      infoHud.classList.remove("show");
+      voteHud.classList.remove("show");
       volumeControl.classList.remove("show");
       syncStatus.classList.remove("show");
     }, 4000);
@@ -396,8 +419,8 @@
     if (!force && pos === currentHudPosition) return;
 
     currentHudPosition = pos;
-    infoHud.classList.remove('pos-tr', 'pos-tl', 'pos-br', 'pos-bl');
-    infoHud.classList.add(`pos-${pos}`);
+    voteHud.classList.remove('pos-tr', 'pos-tl', 'pos-br', 'pos-bl');
+    voteHud.classList.add(`pos-${pos}`);
     debugLog(`HUD position: ${pos}`);
   }
 
@@ -438,8 +461,8 @@
       const data = await res.json();
       const up = data.up_votes || data.up || 0;
       const down = data.down_votes || data.down || 0;
-      votesUpEl.textContent = `👍 ${up}`;
-      votesDownEl.textContent = `👎 ${down}`;
+      voteUp.textContent = `👍 ${up}`;
+      voteDown.textContent = `👎 ${down}`;
     } catch (e) {
       // Silently fail - votes aren't critical
     }
@@ -447,29 +470,28 @@
 
   function updateHud(clip) {
     if (!clip) return;
-    clipTitle.textContent = clip.clip_title || clip.title || "Playing...";
+    const seq = clip.seq || clip.clip_seq || 0;
 
-    // Show clip sequence number
-    const seq = clip.seq || clip.clip_seq;
-    if (seq) {
-      clipSeqEl.textContent = `#${seq}`;
-      clipSeqEl.style.display = "";
-    } else {
-      clipSeqEl.style.display = "none";
-    }
+    // Update sequence number and hints
+    voteSeq.textContent = `Clip #${seq}`;
+    hintLike.textContent = `!like ${seq}`;
+    hintDislike.textContent = `!dislike ${seq}`;
 
     // Show clip date
-    const dateStr = formatDate(clip.created_at);
-    clipDateEl.textContent = dateStr ? `• ${dateStr}` : "";
+    clipDateHud.textContent = formatDate(clip.created_at) ? `• ${formatDate(clip.created_at)}` : "";
 
+    // Update title
+    clipTitle.textContent = clip.clip_title || clip.title || "";
+
+    // Build meta line
     const meta = [];
     const dur = formatDuration(clip.clip_duration || clip.duration);
     if (dur) meta.push(`<span class="meta-duration">${dur}</span>`);
     if (clip.game_name) meta.push(`<span class="meta-category">${clip.game_name}</span>`);
     if (clip.clip_curator || clip.creator_name) {
-      meta.push(`<span class="meta-clipper">Clipped by ${clip.clip_curator || clip.creator_name}</span>`);
+      meta.push(`<span class="meta-clipper-label">Clipped by</span> <span class="meta-clipper-name">${clip.clip_curator || clip.creator_name}</span>`);
     }
-    clipMeta.innerHTML = meta.join("");
+    clipMeta.innerHTML = meta.join(" • ");
 
     // Fetch votes for this clip
     const clipId = clip.clip_id || clip.id;
