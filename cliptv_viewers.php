@@ -123,7 +123,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $viewerCount = (int)($row['viewer_count'] ?? 0);
     $skipVotes = (int)($row['skip_votes'] ?? 0);
-    $skipNeeded = $viewerCount === 1 ? 1 : (int)ceil($viewerCount / 2);
+    // Majority = more than half. 1->1, 2->2 (both), 3->2, 4->3, etc.
+    $skipNeeded = $viewerCount === 1 ? 1 : (int)floor($viewerCount / 2) + 1;
     $shouldSkip = $skipVotes >= $skipNeeded && $skipVotes > 0;
 
     // Get this viewer's skip vote status
@@ -163,7 +164,8 @@ try {
 
   $viewerCount = (int)($row['viewer_count'] ?? 0);
   $skipVotes = (int)($row['skip_votes'] ?? 0);
-  $skipNeeded = $viewerCount === 1 ? 1 : (int)ceil($viewerCount / 2);
+  // Majority = more than half. 1->1, 2->2 (both), 3->2, 4->3, etc.
+  $skipNeeded = $viewerCount === 1 ? 1 : (int)floor($viewerCount / 2) + 1;
   $shouldSkip = $skipVotes >= $skipNeeded && $skipVotes > 0;
 
   echo json_encode([

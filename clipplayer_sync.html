@@ -155,8 +155,9 @@
       transform: translateY(10px);
       transition: opacity 300ms, transform 300ms;
       touch-action: auto;
+      pointer-events: none;
     }
-    #volumeControl.show { opacity: 1; transform: translateY(0); }
+    #volumeControl.show { opacity: 1; transform: translateY(0); pointer-events: auto; }
     #volumeControl:hover { opacity: 1 !important; }
     #volumeBtn {
       background: none;
@@ -483,8 +484,9 @@
       opacity: 0;
       transform: translateY(10px);
       transition: opacity 300ms, transform 300ms;
+      pointer-events: none;
     }
-    #viewerControls.show { opacity: 1; transform: translateY(0); }
+    #viewerControls.show { opacity: 1; transform: translateY(0); pointer-events: auto; }
 
     #viewerCount {
       display: flex;
