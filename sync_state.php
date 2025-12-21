@@ -50,6 +50,7 @@ try {
   // Add clip_seq column if it doesn't exist (for existing tables)
   try {
     $pdo->exec("ALTER TABLE sync_state ADD COLUMN IF NOT EXISTS clip_seq INT DEFAULT 0");
+    $pdo->exec("ALTER TABLE sync_state ADD COLUMN IF NOT EXISTS clip_created_at TIMESTAMP");
   } catch (PDOException $e) {
     // Column might already exist, ignore
   }
@@ -65,13 +66,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $clipCurator = $_POST['clip_curator'] ?? '';
   $clipDuration = floatval($_POST['clip_duration'] ?? 30);
   $clipSeq = intval($_POST['clip_seq'] ?? 0);
+  $clipCreatedAt = $_POST['clip_created_at'] ?? null;
   $playlistIndex = intval($_POST['playlist_index'] ?? 0);
   $playlistIds = $_POST['playlist_ids'] ?? '[]';
 
   try {
     $stmt = $pdo->prepare("
-      INSERT INTO sync_state (login, clip_id, clip_url, clip_title, clip_curator, clip_duration, clip_seq, started_at, playlist_index, playlist_ids, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, NOW())
+      INSERT INTO sync_state (login, clip_id, clip_url, clip_title, clip_curator, clip_duration, clip_seq, clip_created_at, started_at, playlist_index, playlist_ids, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, NOW())
       ON CONFLICT (login) DO UPDATE SET
         clip_id = ?,
         clip_url = ?,
@@ -79,14 +81,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         clip_curator = ?,
         clip_duration = ?,
         clip_seq = ?,
+        clip_created_at = ?,
         started_at = NOW(),
         playlist_index = ?,
         playlist_ids = ?,
         updated_at = NOW()
     ");
     $stmt->execute([
-      $login, $clipId, $clipUrl, $clipTitle, $clipCurator, $clipDuration, $clipSeq, $playlistIndex, $playlistIds,
-      $clipId, $clipUrl, $clipTitle, $clipCurator, $clipDuration, $clipSeq, $playlistIndex, $playlistIds
+      $login, $clipId, $clipUrl, $clipTitle, $clipCurator, $clipDuration, $clipSeq, $clipCreatedAt, $playlistIndex, $playlistIds,
+      $clipId, $clipUrl, $clipTitle, $clipCurator, $clipDuration, $clipSeq, $clipCreatedAt, $playlistIndex, $playlistIds
     ]);
 
     echo json_encode([
@@ -126,6 +129,7 @@ try {
       "clip_curator" => $row['clip_curator'],
       "clip_duration" => $duration,
       "clip_seq" => intval($row['clip_seq'] ?? 0),
+      "created_at" => $row['clip_created_at'] ?? null,
       "started_at" => $row['started_at'],
       "current_position" => min($elapsed, $duration),
       "clip_ended" => $clipEnded,

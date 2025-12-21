@@ -243,6 +243,7 @@
     <div style="display: flex; align-items: center; gap: 12px;">
       <span class="live-badge"><span class="live-dot"></span> LIVE</span>
       <span id="clipSeq" style="background: rgba(255,255,255,0.15); padding: 4px 10px; border-radius: 6px; font-weight: 700; font-size: 14px; color: #fbbf24;"></span>
+      <span id="clipDate" style="font-weight: 600; font-size: 14px; color: #a0a0ff;"></span>
       <span class="clip-title" id="clipTitle"></span>
     </div>
     <div class="clip-meta" id="clipMeta"></div>
@@ -291,6 +292,7 @@
   const clipTitle = document.getElementById("clipTitle");
   const clipMeta = document.getElementById("clipMeta");
   const clipSeqEl = document.getElementById("clipSeq");
+  const clipDateEl = document.getElementById("clipDate");
   const votesUpEl = document.getElementById("votesUp");
   const votesDownEl = document.getElementById("votesDown");
   const volumeControl = document.getElementById("volumeControl");
@@ -421,6 +423,13 @@
     return s < 60 ? `${s}s` : `${Math.floor(s/60)}:${(s%60).toString().padStart(2,'0')}`;
   }
 
+  function formatDate(d) {
+    if (!d) return "";
+    try {
+      return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    } catch { return ""; }
+  }
+
   // Fetch and display votes for current clip
   async function fetchVotes(clipId) {
     if (!clipId) return;
@@ -448,6 +457,10 @@
     } else {
       clipSeqEl.style.display = "none";
     }
+
+    // Show clip date
+    const dateStr = formatDate(clip.created_at);
+    clipDateEl.textContent = dateStr ? `• ${dateStr}` : "";
 
     const meta = [];
     const dur = formatDuration(clip.clip_duration || clip.duration);
@@ -532,6 +545,7 @@
       formData.append("clip_curator", clip.creator_name || "");
       formData.append("clip_duration", clip.duration || 30);
       formData.append("clip_seq", clip.seq || 0);
+      if (clip.created_at) formData.append("clip_created_at", clip.created_at);
 
       await fetch(`${API_BASE}/sync_state.php`, {
         method: "POST",
@@ -658,7 +672,8 @@
       clip_curator: next.creator_name,
       clip_duration: next.duration,
       game_name: next.game_name,
-      seq: next.seq
+      seq: next.seq,
+      created_at: next.created_at
     });
   }
 
