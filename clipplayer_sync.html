@@ -1586,6 +1586,11 @@
       // Check if we need to switch clips
       if (data.clip_id !== currentClipId) {
         debugLog(`New clip from server: ${data.clip_id.substring(0,15)}`, "warn");
+        // Immediately reset skip state when new clip detected
+        mySkipVote = false;
+        skipVotes = 0;
+        skipTriggered = false;
+        updateViewerUI();
         await playClipAtPosition(
           data.clip_id,
           data.clip_url,
@@ -1724,20 +1729,20 @@
     }
   }
 
-  async function resetSkipVotes() {
-    try {
-      const formData = new FormData();
-      formData.append('login', login);
-      await fetch(`${API_BASE}/cliptv_skip_reset.php`, {
-        method: 'POST',
-        body: formData
-      });
-      mySkipVote = false;
-      skipVotes = 0;
-      updateViewerUI();
-    } catch (e) {
-      // ignore
-    }
+  function resetSkipVotes() {
+    // Immediately clear local state for instant UI feedback
+    mySkipVote = false;
+    skipVotes = 0;
+    skipTriggered = false;
+    updateViewerUI();
+
+    // Fire-and-forget server reset (don't await)
+    const formData = new FormData();
+    formData.append('login', login);
+    fetch(`${API_BASE}/cliptv_skip_reset.php`, {
+      method: 'POST',
+      body: formData
+    }).catch(() => {}); // Silently ignore errors
   }
 
   // Skip triggered by any viewer when majority reached
@@ -1747,24 +1752,28 @@
     if (skipTriggered) return;
     skipTriggered = true;
 
+    // Immediately clear local vote state for instant UI feedback
+    mySkipVote = false;
+    skipVotes = 0;
+    updateViewerUI();
+
     if (isController) {
       // Controller handles the skip directly
       controllerAdvance();
     } else {
-      // Non-controller: request a skip via server command
-      try {
-        const formData = new FormData();
-        formData.append('login', login);
-        formData.append('command_type', 'skip');
-        formData.append('nonce', Date.now().toString());
-        await fetch(`${API_BASE}/cliptv_command.php`, {
-          method: 'POST',
-          body: formData
-        });
+      // Non-controller: fire-and-forget skip command (no await for instant response)
+      const formData = new FormData();
+      formData.append('login', login);
+      formData.append('command_type', 'skip');
+      formData.append('nonce', Date.now().toString());
+      fetch(`${API_BASE}/cliptv_command.php`, {
+        method: 'POST',
+        body: formData
+      }).then(() => {
         debugLog("Skip command sent to server", "ok");
-      } catch (e) {
+      }).catch(e => {
         debugLog("Failed to send skip command: " + e.message, "err");
-      }
+      });
     }
   }
 
@@ -1804,9 +1813,9 @@
   function startHeartbeat() {
     // Send initial heartbeat
     sendHeartbeat();
-    // Then every 10 seconds
+    // Then every 3 seconds (reduced from 10s for more responsive skip voting)
     if (heartbeatInterval) clearInterval(heartbeatInterval);
-    heartbeatInterval = setInterval(() => sendHeartbeat(), 10000);
+    heartbeatInterval = setInterval(() => sendHeartbeat(), 3000);
   }
 
   // Stop heartbeat on page unload

@@ -63,8 +63,8 @@ try {
   // Table exists
 }
 
-// Viewer timeout - 30 seconds of no heartbeat = gone
-$VIEWER_TIMEOUT = 30;
+// Viewer timeout - 12 seconds of no heartbeat = gone (matches 3s heartbeat interval)
+$VIEWER_TIMEOUT = 12;
 
 // Clean up stale viewers
 try {
