@@ -45,10 +45,35 @@ const channels = config.channel.split(',').map(c => c.trim().toLowerCase()).filt
 // Key: chat channel (without #), Value: target clip channel
 const channelOverrides = new Map();
 
-// Per-channel likes toggle - tracks which channels have voting ENABLED
-// By default, voting is OFF until a mod enables it with !clikeon
-// Key: clip channel name, Value: true if ENABLED
-const likesEnabled = new Map();
+// Cache for voting_enabled state - checked from database, cached briefly
+// Key: channel login, Value: { enabled: boolean, cachedAt: timestamp }
+const votingEnabledCache = new Map();
+const VOTING_CACHE_TTL = 30000; // 30 second cache
+
+// Check if voting is enabled for a channel (from database)
+async function isVotingEnabled(login) {
+  const cached = votingEnabledCache.get(login);
+  const now = Date.now();
+
+  // Return cached value if fresh
+  if (cached && (now - cached.cachedAt) < VOTING_CACHE_TTL) {
+    return cached.enabled;
+  }
+
+  // Fetch from database via API
+  try {
+    const url = `${config.apiBaseUrl}/voting_status.php?login=${encodeURIComponent(login)}`;
+    const res = await fetchWithTimeout(url, 3000);
+    const data = await res.json();
+    const enabled = data.voting_enabled === true;
+    votingEnabledCache.set(login, { enabled, cachedAt: now });
+    return enabled;
+  } catch (err) {
+    console.error('Error checking voting status:', err.message);
+    // On error, use cached value if available, otherwise default to false
+    return cached ? cached.enabled : false;
+  }
+}
 
 // Helper to get the clip channel for a given chat channel
 // Checks for override first, otherwise uses the chat channel name
@@ -223,7 +248,8 @@ const commands = {
   // !like [seq] - Upvote a clip (current clip if no seq provided)
   async like(channel, tags, args) {
     const login = getClipChannel(channel);
-    if (!likesEnabled.get(login)) return null; // Silently ignore when disabled (default)
+    const votingEnabled = await isVotingEnabled(login);
+    if (!votingEnabled) return null; // Silently ignore when disabled
     let seq = parseInt(args[0]);
 
     // If no seq provided, get current playing clip
@@ -255,7 +281,8 @@ const commands = {
   // !dislike [seq] - Downvote a clip (current clip if no seq provided)
   async dislike(channel, tags, args) {
     const login = getClipChannel(channel);
-    if (!likesEnabled.get(login)) return null; // Silently ignore when disabled (default)
+    const votingEnabled = await isVotingEnabled(login);
+    if (!votingEnabled) return null; // Silently ignore when disabled
     let seq = parseInt(args[0]);
 
     // If no seq provided, get current playing clip
@@ -522,8 +549,22 @@ const commands = {
 
     // If channel specified, use that; otherwise use current clip channel
     const target = (args[0] || '').toLowerCase().replace(/^@/, '') || getClipChannel(channel);
-    likesEnabled.delete(target);
-    return `Clip voting disabled for ${target}.`;
+
+    try {
+      const url = `${config.apiBaseUrl}/voting_status.php?login=${encodeURIComponent(target)}&key=${encodeURIComponent(config.adminKey)}&set=0`;
+      const res = await fetchWithTimeout(url);
+      const data = await res.json();
+
+      if (data.ok) {
+        // Clear cache so next check gets fresh state
+        votingEnabledCache.delete(target);
+        return `Clip voting disabled for ${target}.`;
+      }
+      return 'Could not disable voting.';
+    } catch (err) {
+      console.error('!clikeoff error:', err.message);
+      return 'Could not disable voting.';
+    }
   },
 
   // !clikeon [channel] - Enable voting for a channel (mod only)
@@ -534,8 +575,22 @@ const commands = {
 
     // If channel specified, use that; otherwise use current clip channel
     const target = (args[0] || '').toLowerCase().replace(/^@/, '') || getClipChannel(channel);
-    likesEnabled.set(target, true);
-    return `Clip voting enabled for ${target}.`;
+
+    try {
+      const url = `${config.apiBaseUrl}/voting_status.php?login=${encodeURIComponent(target)}&key=${encodeURIComponent(config.adminKey)}&set=1`;
+      const res = await fetchWithTimeout(url);
+      const data = await res.json();
+
+      if (data.ok) {
+        // Clear cache so next check gets fresh state
+        votingEnabledCache.delete(target);
+        return `Clip voting enabled for ${target}.`;
+      }
+      return 'Could not enable voting.';
+    } catch (err) {
+      console.error('!clikeon error:', err.message);
+      return 'Could not enable voting.';
+    }
   },
 
   // !cswitch <channel> - Switch which channel's clips commands affect (mod only)

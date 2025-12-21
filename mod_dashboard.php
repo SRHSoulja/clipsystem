@@ -636,6 +636,32 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
     let perPage = 200;
     let isLoading = false;
 
+    // Check for auto-login from URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlLogin = urlParams.get('login');
+    const urlKey = urlParams.get('key');
+
+    if (urlLogin && urlKey) {
+      // Auto-login with provided credentials
+      document.addEventListener('DOMContentLoaded', async () => {
+        try {
+          const res = await fetch(`${API_BASE}/playlist_api.php?action=list&login=${encodeURIComponent(urlLogin)}&key=${encodeURIComponent(urlKey)}`);
+          const data = await res.json();
+
+          if (!data.error) {
+            LOGIN = urlLogin;
+            adminKey = urlKey;
+            document.querySelector('.header .user').textContent = LOGIN;
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('dashboard').classList.add('active');
+            loadDashboard();
+          }
+        } catch (err) {
+          console.error('Auto-login failed:', err);
+        }
+      });
+    }
+
     // Mobile sidebar toggle
     function toggleSidebar() {
       const sidebar = document.getElementById('sidebar');

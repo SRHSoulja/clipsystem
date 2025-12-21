@@ -423,14 +423,14 @@ $login = clean_login($_GET['login'] ?? '');
 
             <div class="card">
                 <h3>Individual Clip Management</h3>
-                <p style="color: #adadb8; margin-bottom: 12px;">Use the <a href="clip_search.php" style="color: #9147ff;">Clip Browser</a> to search and manage individual clips.</p>
+                <p style="color: #adadb8; margin-bottom: 12px;">Use the <a href="#" id="clipBrowserLink" style="color: #9147ff;">Clip Browser</a> to search and manage individual clips.</p>
             </div>
         </div>
 
         <div class="tab-content" id="tab-playlists">
             <div class="card">
                 <h3>Playlists</h3>
-                <p style="color: #adadb8;">Use the <a href="mod_dashboard.php" style="color: #9147ff;">Mod Dashboard</a> to create and manage playlists.</p>
+                <p style="color: #adadb8;">Use the <a href="#" id="modDashboardLink" style="color: #9147ff;">Mod Dashboard</a> to create and manage playlists.</p>
             </div>
         </div>
 
@@ -554,6 +554,16 @@ $login = clean_login($_GET['login'] ?? '');
                 document.getElementById('blockedClippersGroup').style.display = 'none';
                 document.getElementById('refreshCard').style.display = 'none';
                 document.getElementById('modPasswordCard').style.display = 'none';
+            }
+
+            // Update Clip Browser and Mod Dashboard links with login/key
+            const clipBrowserLink = document.getElementById('clipBrowserLink');
+            const modDashboardLink = document.getElementById('modDashboardLink');
+            if (clipBrowserLink) {
+                clipBrowserLink.href = `clip_search.php?login=${encodeURIComponent(authLogin)}&key=${encodeURIComponent(authKey)}`;
+            }
+            if (modDashboardLink) {
+                modDashboardLink.href = `mod_dashboard.php?login=${encodeURIComponent(authLogin)}&key=${encodeURIComponent(authKey)}`;
             }
 
             // Player URL will be set after loading settings (when we have the instance)
