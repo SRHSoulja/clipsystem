@@ -39,8 +39,10 @@
 
     #infoHud {
       position: absolute;
-      left: 24px;
-      bottom: 24px;
+      right: 24px;
+      top: 24px;
+      bottom: auto;
+      left: auto;
       z-index: 11000;
       display: flex;
       flex-direction: column;
@@ -53,12 +55,21 @@
       font: 16px/1.4 system-ui, sans-serif;
       backdrop-filter: blur(12px);
       opacity: 0;
-      transform: translateY(10px);
-      transition: opacity 300ms, transform 300ms;
+      transform: translateX(6px);
+      transition: opacity 300ms, transform 300ms, top 300ms ease, bottom 300ms ease, left 300ms ease, right 300ms ease;
       max-width: 500px;
       pointer-events: none;
     }
-    #infoHud.show { opacity: 1; transform: translateY(0); }
+    #infoHud.show { opacity: 1; transform: translateX(0); }
+    /* HUD positions */
+    #infoHud.pos-tr { top: 24px !important; right: 24px !important; bottom: auto !important; left: auto !important; transform: translateX(6px); }
+    #infoHud.pos-tr.show { transform: translateX(0); }
+    #infoHud.pos-tl { top: 24px !important; left: 24px !important; bottom: auto !important; right: auto !important; transform: translateX(-6px); }
+    #infoHud.pos-tl.show { transform: translateX(0); }
+    #infoHud.pos-br { bottom: 24px !important; right: 24px !important; top: auto !important; left: auto !important; transform: translateX(6px); }
+    #infoHud.pos-br.show { transform: translateX(0); }
+    #infoHud.pos-bl { bottom: 24px !important; left: 24px !important; top: auto !important; right: auto !important; transform: translateX(-6px); }
+    #infoHud.pos-bl.show { transform: translateX(0); }
     #infoHud .clip-title { font-weight: 700; font-size: 18px; color: #fff; }
     #infoHud .clip-meta { font-size: 14px; color: #a0a0a0; display: flex; gap: 12px; flex-wrap: wrap; }
     #infoHud .meta-duration { color: #fbbf24; }
@@ -320,6 +331,36 @@
 
   document.addEventListener("mousemove", showControls);
   document.addEventListener("click", showControls);
+
+  // HUD Position polling
+  let currentHudPosition = null;
+
+  function setHudPosition(pos, force = false) {
+    const validPositions = ['tr', 'tl', 'br', 'bl'];
+    if (!validPositions.includes(pos)) pos = 'tr';
+    if (!force && pos === currentHudPosition) return;
+
+    currentHudPosition = pos;
+    infoHud.classList.remove('pos-tr', 'pos-tl', 'pos-br', 'pos-bl');
+    infoHud.classList.add(`pos-${pos}`);
+    debugLog(`HUD position: ${pos}`);
+  }
+
+  async function pollHudPosition() {
+    try {
+      const res = await fetch(`${API_BASE}/hud_position.php?login=${encodeURIComponent(login)}`, { cache: "no-store" });
+      const data = await res.json();
+      if (data && (data.hud_position || data.position)) {
+        setHudPosition(data.hud_position || data.position, currentHudPosition === null);
+      }
+    } catch (e) {
+      if (currentHudPosition === null) setHudPosition('tr', true);
+    }
+  }
+
+  // Poll position immediately and every 5 seconds
+  pollHudPosition();
+  setInterval(pollHudPosition, 5000);
 
   function formatDuration(s) {
     if (!s || s <= 0) return "";
