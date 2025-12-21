@@ -223,15 +223,15 @@ const commands = {
     }
   },
 
-  // !pclip <seq> - Force play a specific clip (mod only)
-  async pclip(channel, tags, args) {
+  // !cplay <seq> - Force play a specific clip (mod only)
+  async cplay(channel, tags, args) {
     if (!isMod(tags)) {
       return null; // Silently ignore non-mods
     }
 
     const seq = parseInt(args[0]);
     if (!seq || seq <= 0) {
-      return 'Usage: !pclip <clip#>';
+      return 'Usage: !cplay <clip#>';
     }
 
     const login = getClipChannel(channel);
@@ -240,7 +240,7 @@ const commands = {
       const res = await fetchWithTimeout(url);
       return await res.text();
     } catch (err) {
-      console.error('!pclip error:', err.message);
+      console.error('!cplay error:', err.message);
       return 'Could not play clip.';
     }
   },
@@ -472,7 +472,7 @@ const commands = {
   // !chelp - Show available clip commands
   async chelp(channel, tags, args) {
     if (isMod(tags)) {
-      return 'Mod: !pclip <#>, !cskip, !cprev, !ccat <game>, !ctop [#], !cvote [#], !chud <pos>, !cremove/!cadd <#> | All: !cclip, !cfind, !like/!dislike [#]';
+      return 'Mod: !cplay <#>, !cskip, !cprev, !ccat <game>, !ctop [#], !cvote [#], !chud <pos>, !cremove/!cadd <#> | All: !cclip, !cfind, !like/!dislike [#]';
     }
     return 'Clip commands: !cclip (current), !cfind (browse), !like [#] (upvote), !dislike [#] (downvote)';
   },
@@ -673,7 +673,7 @@ client.on('connected', (addr, port) => {
   console.log(`Joining channels: ${channels.join(', ')}`);
   console.log(`Multi-channel mode: commands use clips from the channel they're typed in`);
   console.log(`Bot username: ${config.botUsername}`);
-  console.log('Commands: !cclip, !cfind, !like, !dislike, !pclip, !cskip, !cprev, !ccat, !ctop, !cvote, !chud, !cremove, !cadd, !cswitch, !clikeon, !clikeoff, !chelp');
+  console.log('Commands: !cclip, !cfind, !like, !dislike, !cplay, !cskip, !cprev, !ccat, !ctop, !cvote, !chud, !cremove, !cadd, !cswitch, !clikeon, !clikeoff, !chelp');
 });
 
 client.on('join', (channel, username, self) => {

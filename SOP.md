@@ -196,7 +196,7 @@ seq_import.php?login=floppyjimmie&key=YOUR_ADMIN_KEY
 ### Mod-Only Commands
 | Command | Description |
 |---------|-------------|
-| `!pclip <#>` | Force play a specific clip by seq number |
+| `!cplay <#>` | Force play a specific clip by seq number |
 | `!cskip` | Skip the current clip |
 | `!ccat <game>` | Filter clips to specific game/category |
 | `!ccat off` | Return to all games (exit category filter) |

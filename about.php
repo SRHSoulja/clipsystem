@@ -107,7 +107,7 @@ header("Content-Type: text/html; charset=utf-8");
       <h3>Full Mod Control</h3>
       <p>Mods have complete control over the clip experience:</p>
       <ul style="color: #adadb8; margin-top: 10px;">
-        <li><strong>!pclip #</strong> - Instantly play any specific clip by number</li>
+        <li><strong>!cplay #</strong> - Instantly play any specific clip by number</li>
         <li><strong>!cskip</strong> - Skip the current clip immediately</li>
         <li><strong>!cprev</strong> - Go back to the previously played clip</li>
         <li><strong>!ccat game</strong> - Filter to only show clips from a specific game</li>

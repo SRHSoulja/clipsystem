@@ -143,10 +143,10 @@ header("Content-Type: text/html; charset=utf-8");
     <h2>Mod Commands</h2>
 
     <div class="command">
-      <span class="command-name">!pclip &lt;#&gt;</span>
+      <span class="command-name">!cplay &lt;#&gt;</span>
       <span class="mod-only">MOD</span>
       <div class="command-desc">Force play a specific clip by its number.</div>
-      <div class="command-example">!pclip 123</div>
+      <div class="command-example">!cplay 123</div>
     </div>
 
     <div class="command">
