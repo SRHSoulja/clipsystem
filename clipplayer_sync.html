@@ -209,6 +209,31 @@
       border-radius: 50%;
       background: currentColor;
     }
+
+    /* Click to unmute overlay */
+    #unmuteOverlay {
+      position: absolute;
+      inset: 0;
+      z-index: 50000;
+      background: rgba(0,0,0,0.6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      opacity: 1;
+      transition: opacity 300ms;
+    }
+    #unmuteOverlay.hide { opacity: 0; pointer-events: none; }
+    #unmuteOverlay .content {
+      text-align: center;
+      color: #fff;
+      font: 600 24px/1.4 system-ui, sans-serif;
+      padding: 30px 50px;
+      background: rgba(0,0,0,0.8);
+      border-radius: 16px;
+      border: 2px solid rgba(255,255,255,0.3);
+    }
+    #unmuteOverlay .icon { font-size: 48px; margin-bottom: 16px; }
   </style>
 </head>
 <body>
@@ -217,9 +242,14 @@
   <div id="infoHud">
     <div style="display: flex; align-items: center; gap: 12px;">
       <span class="live-badge"><span class="live-dot"></span> LIVE</span>
+      <span id="clipSeq" style="background: rgba(255,255,255,0.15); padding: 4px 10px; border-radius: 6px; font-weight: 700; font-size: 14px; color: #fbbf24;"></span>
       <span class="clip-title" id="clipTitle"></span>
     </div>
     <div class="clip-meta" id="clipMeta"></div>
+    <div id="clipVotes" style="display: flex; gap: 16px; margin-top: 4px; font-size: 16px; font-weight: 700;">
+      <span id="votesUp" style="color: #4ade80;">👍 0</span>
+      <span id="votesDown" style="color: #f87171;">👎 0</span>
+    </div>
   </div>
 
   <div id="volumeControl">
@@ -237,6 +267,13 @@
   <div id="debugOverlay"></div>
   <div id="syncStatus"><span class="dot"></span><span id="syncText">Synced</span></div>
 
+  <div id="unmuteOverlay">
+    <div class="content">
+      <div class="icon">🔊</div>
+      <div>Click to Unmute</div>
+    </div>
+  </div>
+
 <script>
 (() => {
   const qs = new URLSearchParams(location.search);
@@ -253,11 +290,27 @@
   const infoHud = document.getElementById("infoHud");
   const clipTitle = document.getElementById("clipTitle");
   const clipMeta = document.getElementById("clipMeta");
+  const clipSeqEl = document.getElementById("clipSeq");
+  const votesUpEl = document.getElementById("votesUp");
+  const votesDownEl = document.getElementById("votesDown");
   const volumeControl = document.getElementById("volumeControl");
   const volumeBtn = document.getElementById("volumeBtn");
   const volumeSlider = document.getElementById("volumeSlider");
   const syncStatus = document.getElementById("syncStatus");
   const syncText = document.getElementById("syncText");
+  const unmuteOverlay = document.getElementById("unmuteOverlay");
+
+  // Hide unmute overlay initially
+  unmuteOverlay.classList.add("hide");
+
+  // Click to unmute handler
+  unmuteOverlay.addEventListener("click", () => {
+    player.muted = false;
+    isMuted = false;
+    updateVolumeIcon();
+    unmuteOverlay.classList.add("hide");
+    debugLog("Unmuted by user click", "ok");
+  });
 
   // Debug
   const debugEnabled = qs.get("debug") === "1";
@@ -368,9 +421,34 @@
     return s < 60 ? `${s}s` : `${Math.floor(s/60)}:${(s%60).toString().padStart(2,'0')}`;
   }
 
+  // Fetch and display votes for current clip
+  async function fetchVotes(clipId) {
+    if (!clipId) return;
+    try {
+      const res = await fetch(`${API_BASE}/votes_api.php?login=${encodeURIComponent(login)}&clip_id=${encodeURIComponent(clipId)}`, { cache: "no-store" });
+      const data = await res.json();
+      const up = data.up_votes || data.up || 0;
+      const down = data.down_votes || data.down || 0;
+      votesUpEl.textContent = `👍 ${up}`;
+      votesDownEl.textContent = `👎 ${down}`;
+    } catch (e) {
+      // Silently fail - votes aren't critical
+    }
+  }
+
   function updateHud(clip) {
     if (!clip) return;
     clipTitle.textContent = clip.clip_title || clip.title || "Playing...";
+
+    // Show clip sequence number
+    const seq = clip.seq || clip.clip_seq;
+    if (seq) {
+      clipSeqEl.textContent = `#${seq}`;
+      clipSeqEl.style.display = "";
+    } else {
+      clipSeqEl.style.display = "none";
+    }
+
     const meta = [];
     const dur = formatDuration(clip.clip_duration || clip.duration);
     if (dur) meta.push(`<span class="meta-duration">${dur}</span>`);
@@ -379,6 +457,10 @@
       meta.push(`<span class="meta-clipper">Clipped by ${clip.clip_curator || clip.creator_name}</span>`);
     }
     clipMeta.innerHTML = meta.join("");
+
+    // Fetch votes for this clip
+    const clipId = clip.clip_id || clip.id;
+    if (clipId) fetchVotes(clipId);
   }
 
   function setSyncStatus(status, text) {
@@ -449,6 +531,7 @@
       formData.append("clip_title", clip.title || "");
       formData.append("clip_curator", clip.creator_name || "");
       formData.append("clip_duration", clip.duration || 30);
+      formData.append("clip_seq", clip.seq || 0);
 
       await fetch(`${API_BASE}/sync_state.php`, {
         method: "POST",
@@ -510,15 +593,19 @@
         isSwitching = false;
         debugLog(`Playing!`, "ok");
       }).catch(err => {
-        // Autoplay blocked - try muted
+        // Autoplay blocked - try muted and show unmute overlay
         debugLog(`Autoplay blocked, trying muted`, "warn");
         player.muted = true;
+        isMuted = true;
+        updateVolumeIcon();
         player.play().then(() => {
           loadingOverlay.classList.add("hide");
           updateHud(clipData);
           showControls();
-          setSyncStatus("synced", "Synced (muted)");
+          setSyncStatus("synced", "Synced");
           isSwitching = false;
+          // Show unmute overlay
+          unmuteOverlay.classList.remove("hide");
         }).catch(e => {
           debugLog(`Play failed: ${e.message}`, "err");
           isSwitching = false;
@@ -570,7 +657,8 @@
       clip_title: next.title,
       clip_curator: next.creator_name,
       clip_duration: next.duration,
-      game_name: next.game_name
+      game_name: next.game_name,
+      seq: next.seq
     });
   }
 
