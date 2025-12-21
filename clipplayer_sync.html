@@ -470,6 +470,104 @@
       #volumeControl { padding: 6px 10px; }
       #syncStatus { padding: 4px 8px; font-size: 10px; }
     }
+
+    /* Viewer count and skip controls */
+    #viewerControls {
+      position: absolute;
+      left: max(24px, env(safe-area-inset-left));
+      bottom: max(24px, env(safe-area-inset-bottom));
+      z-index: 11000;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 300ms, transform 300ms;
+    }
+    #viewerControls.show { opacity: 1; transform: translateY(0); }
+
+    #viewerCount {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.7);
+      border: 2px solid rgba(139, 92, 246, 0.6);
+      color: #a78bfa;
+      font: 600 14px system-ui, sans-serif;
+      backdrop-filter: blur(12px);
+    }
+    #viewerCount .eye { font-size: 16px; }
+
+    #skipBtn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.7);
+      border: 2px solid rgba(251, 191, 36, 0.6);
+      color: #fbbf24;
+      font: 600 14px system-ui, sans-serif;
+      backdrop-filter: blur(12px);
+      cursor: pointer;
+      transition: all 200ms;
+      pointer-events: auto;
+    }
+    #skipBtn:hover { background: rgba(251, 191, 36, 0.2); border-color: #fbbf24; }
+    #skipBtn:active { transform: scale(0.95); }
+    #skipBtn.voted { background: rgba(251, 191, 36, 0.3); border-color: #fbbf24; color: #fff; }
+    #skipBtn.skipping { animation: skipPulse 0.5s ease-in-out; }
+    @keyframes skipPulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+
+    #skipStatus {
+      font-size: 12px;
+      color: #9ca3af;
+      margin-left: 2px;
+    }
+    #skipBtn.voted #skipStatus { color: #fbbf24; }
+
+    /* Mobile responsive for viewer controls */
+    @media (max-width: 768px) {
+      #viewerControls {
+        left: max(12px, env(safe-area-inset-left));
+        bottom: max(12px, env(safe-area-inset-bottom));
+        gap: 8px;
+      }
+      #viewerCount { padding: 6px 10px; font-size: 12px; }
+      #viewerCount .eye { font-size: 14px; }
+      #skipBtn { padding: 8px 14px; font-size: 12px; gap: 6px; }
+    }
+
+    @media (max-width: 480px) {
+      #viewerControls {
+        left: max(10px, env(safe-area-inset-left));
+        bottom: max(10px, env(safe-area-inset-bottom));
+        gap: 6px;
+      }
+      #viewerCount { padding: 5px 8px; font-size: 11px; }
+      #skipBtn { padding: 8px 12px; font-size: 11px; min-height: 44px; }
+    }
+
+    /* Touch-friendly skip button */
+    @media (hover: none) and (pointer: coarse) {
+      #skipBtn {
+        min-height: 44px;
+        min-width: 44px;
+        padding: 10px 20px;
+      }
+    }
+
+    /* Landscape mobile */
+    @media (max-height: 500px) and (orientation: landscape) {
+      #viewerControls { gap: 6px; }
+      #viewerCount { padding: 4px 8px; font-size: 10px; }
+      #skipBtn { padding: 6px 10px; font-size: 10px; }
+    }
   </style>
 </head>
 <body>
@@ -503,6 +601,11 @@
   <div id="volumeControl">
     <button id="volumeBtn">🔊</button>
     <input type="range" id="volumeSlider" min="0" max="100" value="100">
+  </div>
+
+  <div id="viewerControls">
+    <div id="viewerCount"><span class="eye">👁</span><span id="viewerNum">1</span></div>
+    <button id="skipBtn">⏭ Skip<span id="skipStatus"></span></button>
   </div>
 
   <div id="loadingOverlay">
@@ -551,6 +654,25 @@
   const syncText = document.getElementById("syncText");
   const unmuteOverlay = document.getElementById("unmuteOverlay");
   const bufferingIndicator = document.getElementById("bufferingIndicator");
+  const viewerControls = document.getElementById("viewerControls");
+  const viewerNum = document.getElementById("viewerNum");
+  const skipBtn = document.getElementById("skipBtn");
+  const skipStatus = document.getElementById("skipStatus");
+
+  // Viewer ID - persistent per browser
+  const viewerIdKey = `clip_tv_viewer_id_${login}`;
+  let viewerId = localStorage.getItem(viewerIdKey);
+  if (!viewerId) {
+    viewerId = 'v_' + Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
+    localStorage.setItem(viewerIdKey, viewerId);
+  }
+
+  // Viewer state
+  let viewerCount = 1;
+  let skipVotes = 0;
+  let skipNeeded = 1;
+  let mySkipVote = false;
+  let heartbeatInterval = null;
 
   // Hide unmute overlay initially
   unmuteOverlay.classList.add("hide");
@@ -766,6 +888,7 @@
     voteHud.classList.remove("show");
     volumeControl.classList.remove("show");
     syncStatus.classList.remove("show");
+    viewerControls.classList.remove("show");
     controlsVisible = false;
     if (hideTimeout) clearTimeout(hideTimeout);
   }
@@ -774,6 +897,7 @@
     voteHud.classList.add("show");
     volumeControl.classList.add("show");
     syncStatus.classList.add("show");
+    viewerControls.classList.add("show");
     controlsVisible = true;
     if (hideTimeout) clearTimeout(hideTimeout);
     hideTimeout = setTimeout(hideControls, 4000);
@@ -782,7 +906,7 @@
   // Handle tap to toggle controls on mobile
   function handleTap(e) {
     // Ignore taps on interactive elements
-    if (e.target.closest('#volumeControl, #volumeBtn, #volumeSlider, #unmuteOverlay')) {
+    if (e.target.closest('#volumeControl, #volumeBtn, #volumeSlider, #unmuteOverlay, #skipBtn, #viewerControls')) {
       return;
     }
     // Toggle controls on tap
@@ -1259,6 +1383,9 @@
         clipStartTime = Date.now(); // Start grace period
         debugLog(`Playing!`, "ok");
 
+        // Reset skip votes for new clip
+        if (isController) resetSkipVotes();
+
         // Start preloading next clip after a delay
         if (isController) setTimeout(preloadNextClip, 5000);
       }).catch(err => {
@@ -1276,6 +1403,8 @@
           clipStartTime = Date.now(); // Start grace period
           // Show unmute overlay
           unmuteOverlay.classList.remove("hide");
+          // Reset skip votes for new clip
+          if (isController) resetSkipVotes();
           // Start preloading next clip after a delay
           if (isController) setTimeout(preloadNextClip, 5000);
         }).catch(e => {
@@ -1524,6 +1653,102 @@
     screen.orientation.addEventListener('change', () => setTimeout(handleOrientationChange, 200));
   }
 
+  // ===== VIEWER TRACKING & SKIP VOTING =====
+
+  function updateViewerUI() {
+    viewerNum.textContent = viewerCount;
+    if (viewerCount === 1) {
+      skipStatus.textContent = '';
+    } else {
+      skipStatus.textContent = ` ${skipVotes}/${skipNeeded}`;
+    }
+    skipBtn.classList.toggle('voted', mySkipVote);
+  }
+
+  async function sendHeartbeat(wantsSkip = null) {
+    try {
+      const formData = new FormData();
+      formData.append('login', login);
+      formData.append('viewer_id', viewerId);
+      if (currentClipId) formData.append('clip_id', currentClipId);
+      if (wantsSkip !== null) formData.append('skip', wantsSkip ? '1' : '0');
+
+      const res = await fetch(`${API_BASE}/cliptv_viewers.php`, {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+
+      if (data.ok) {
+        viewerCount = data.viewer_count || 1;
+        skipVotes = data.skip_votes || 0;
+        skipNeeded = data.skip_needed || 1;
+        mySkipVote = data.my_skip_vote || false;
+        updateViewerUI();
+
+        // Check if majority wants to skip
+        if (data.should_skip && isController && canSkipClip()) {
+          debugLog("Majority voted to skip!", "ok");
+          skipBtn.classList.add('skipping');
+          setTimeout(() => skipBtn.classList.remove('skipping'), 500);
+          controllerAdvance();
+        }
+      }
+    } catch (e) {
+      debugLog("Heartbeat error: " + e.message, "err");
+    }
+  }
+
+  async function resetSkipVotes() {
+    try {
+      const formData = new FormData();
+      formData.append('login', login);
+      await fetch(`${API_BASE}/cliptv_skip_reset.php`, {
+        method: 'POST',
+        body: formData
+      });
+      mySkipVote = false;
+      skipVotes = 0;
+      updateViewerUI();
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  // Skip button click handler
+  skipBtn.addEventListener('click', () => {
+    if (!canSkipClip()) {
+      debugLog("Skip blocked - clip just started", "warn");
+      return;
+    }
+
+    // Toggle skip vote
+    const newVote = !mySkipVote;
+    mySkipVote = newVote;
+    skipBtn.classList.toggle('voted', newVote);
+
+    // Send to server
+    sendHeartbeat(newVote);
+    debugLog(`Skip vote: ${newVote ? 'yes' : 'cancelled'}`, "ok");
+
+    // Keep controls visible
+    showControls();
+  });
+
+  // Start heartbeat interval
+  function startHeartbeat() {
+    // Send initial heartbeat
+    sendHeartbeat();
+    // Then every 10 seconds
+    if (heartbeatInterval) clearInterval(heartbeatInterval);
+    heartbeatInterval = setInterval(() => sendHeartbeat(), 10000);
+  }
+
+  // Stop heartbeat on page unload
+  window.addEventListener('beforeunload', () => {
+    if (heartbeatInterval) clearInterval(heartbeatInterval);
+  });
+
   async function init() {
     debugLog("Init...");
 
@@ -1567,6 +1792,9 @@
     const pollInterval = isSlowConnection ? 4000 : 2000;
     syncInterval = setInterval(pollSyncState, pollInterval);
     debugLog(`Sync poll: ${pollInterval}ms`);
+
+    // Start viewer heartbeat
+    startHeartbeat();
   }
 
   init();
