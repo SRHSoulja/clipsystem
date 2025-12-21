@@ -1,0 +1,619 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>FloppyJimmie Clip TV</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+
+    video {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      background: #000;
+    }
+
+    #loadingOverlay {
+      position: absolute;
+      inset: 0;
+      z-index: 99999;
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 1;
+      transition: opacity 400ms ease-out;
+    }
+    #loadingOverlay.hide { opacity: 0; pointer-events: none; }
+    #loadingOverlay .content { text-align: center; color: #fff; font: 600 24px/1.4 system-ui, sans-serif; }
+    #loadingOverlay .spinner {
+      width: 48px; height: 48px; border-radius: 50%;
+      border: 4px solid rgba(255,255,255,0.2); border-top-color: #fff;
+      margin: 0 auto 20px; animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    #infoHud {
+      position: absolute;
+      left: 24px;
+      bottom: 24px;
+      z-index: 11000;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 16px 20px;
+      border-radius: 12px;
+      background: rgba(0,0,0,0.7);
+      border: 2px solid rgba(255,255,255,0.2);
+      color: #fff;
+      font: 16px/1.4 system-ui, sans-serif;
+      backdrop-filter: blur(12px);
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 300ms, transform 300ms;
+      max-width: 500px;
+      pointer-events: none;
+    }
+    #infoHud.show { opacity: 1; transform: translateY(0); }
+    #infoHud .clip-title { font-weight: 700; font-size: 18px; color: #fff; }
+    #infoHud .clip-meta { font-size: 14px; color: #a0a0a0; display: flex; gap: 12px; flex-wrap: wrap; }
+    #infoHud .meta-duration { color: #fbbf24; }
+    #infoHud .meta-category { color: #22d3ee; }
+    #infoHud .meta-clipper { color: #c084fc; }
+    #infoHud .live-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(239, 68, 68, 0.2);
+      border: 1px solid rgba(239, 68, 68, 0.6);
+      color: #f87171;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    #infoHud .live-dot {
+      width: 8px;
+      height: 8px;
+      background: #ef4444;
+      border-radius: 50%;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    /* Volume control */
+    #volumeControl {
+      position: absolute;
+      right: 24px;
+      bottom: 24px;
+      z-index: 11000;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.7);
+      border: 2px solid rgba(255,255,255,0.2);
+      backdrop-filter: blur(12px);
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 300ms, transform 300ms;
+    }
+    #volumeControl.show { opacity: 1; transform: translateY(0); }
+    #volumeControl:hover { opacity: 1 !important; }
+    #volumeBtn {
+      background: none;
+      border: none;
+      color: #fff;
+      font-size: 24px;
+      cursor: pointer;
+      padding: 0;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #volumeSlider {
+      width: 100px;
+      height: 6px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: rgba(255,255,255,0.3);
+      border-radius: 3px;
+      cursor: pointer;
+    }
+    #volumeSlider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      background: #fff;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+    #volumeSlider::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      background: #fff;
+      border-radius: 50%;
+      cursor: pointer;
+      border: none;
+    }
+
+    #debugOverlay {
+      position: absolute;
+      right: 10px;
+      top: 10px;
+      z-index: 999999;
+      background: rgba(0,0,0,0.95);
+      color: #0f0;
+      font: 12px/1.4 monospace;
+      padding: 10px 12px;
+      border-radius: 6px;
+      border: 2px solid #0f0;
+      max-width: 450px;
+      max-height: 250px;
+      overflow: hidden;
+      display: none;
+      pointer-events: none;
+    }
+    #debugOverlay.show { display: block; }
+    #debugOverlay .ok { color: #4ade80; }
+    #debugOverlay .err { color: #f87171; }
+    #debugOverlay .warn { color: #fbbf24; }
+
+    /* Sync status indicator */
+    #syncStatus {
+      position: absolute;
+      left: 24px;
+      top: 24px;
+      z-index: 11000;
+      padding: 8px 14px;
+      border-radius: 8px;
+      background: rgba(0,0,0,0.7);
+      border: 2px solid rgba(34, 197, 94, 0.6);
+      color: #4ade80;
+      font: 600 14px system-ui, sans-serif;
+      backdrop-filter: blur(12px);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      opacity: 0;
+      transition: opacity 300ms;
+    }
+    #syncStatus.show { opacity: 1; }
+    #syncStatus.syncing { border-color: rgba(251, 191, 36, 0.6); color: #fbbf24; }
+    #syncStatus.error { border-color: rgba(239, 68, 68, 0.6); color: #f87171; }
+    #syncStatus .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+  </style>
+</head>
+<body>
+  <video id="player" playsinline preload="auto"></video>
+
+  <div id="infoHud">
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <span class="live-badge"><span class="live-dot"></span> LIVE</span>
+      <span class="clip-title" id="clipTitle"></span>
+    </div>
+    <div class="clip-meta" id="clipMeta"></div>
+  </div>
+
+  <div id="volumeControl">
+    <button id="volumeBtn">🔊</button>
+    <input type="range" id="volumeSlider" min="0" max="100" value="100">
+  </div>
+
+  <div id="loadingOverlay">
+    <div class="content">
+      <div class="spinner"></div>
+      <div class="text">Connecting to Clip TV...</div>
+    </div>
+  </div>
+
+  <div id="debugOverlay"></div>
+  <div id="syncStatus"><span class="dot"></span><span id="syncText">Synced</span></div>
+
+<script>
+(() => {
+  const qs = new URLSearchParams(location.search);
+  const login = (qs.get("login") || "floppyjimmie").toLowerCase();
+  const API_BASE = "https://clipsystem-production.up.railway.app";
+
+  // Twitch GQL for MP4 URLs
+  const GQL_URL = "https://gql.twitch.tv/gql";
+  const CLIENT_ID = "kimne78kx3ncx6brgo4mv6wki5h1ko";
+  const QUERY_HASH = "36b89d2507fce29e5ca551df756d27c1cfe079e2609642b4390aa4c35796eb11";
+
+  const player = document.getElementById("player");
+  const loadingOverlay = document.getElementById("loadingOverlay");
+  const infoHud = document.getElementById("infoHud");
+  const clipTitle = document.getElementById("clipTitle");
+  const clipMeta = document.getElementById("clipMeta");
+  const volumeControl = document.getElementById("volumeControl");
+  const volumeBtn = document.getElementById("volumeBtn");
+  const volumeSlider = document.getElementById("volumeSlider");
+  const syncStatus = document.getElementById("syncStatus");
+  const syncText = document.getElementById("syncText");
+
+  // Debug
+  const debugEnabled = qs.get("debug") === "1";
+  const debugOverlay = document.getElementById("debugOverlay");
+  const debugLines = [];
+
+  function debugLog(msg, type = "info") {
+    if (!debugEnabled) return;
+    const time = new Date().toLocaleTimeString("en-US", { hour12: false });
+    debugLines.push({ time, msg, type });
+    if (debugLines.length > 25) debugLines.shift();
+    debugOverlay.classList.add("show");
+    debugOverlay.innerHTML = debugLines.map(l => `<div class="${l.type}">${l.time} ${l.msg}</div>`).join("");
+  }
+
+  // State
+  let currentClipId = null;
+  let isController = false; // First viewer becomes the controller
+  let clips = [];
+  let isSwitching = false;
+  let syncInterval = null;
+
+  // Volume control
+  const volumeKey = `clip_tv_volume_${login}`;
+  let savedVolume = parseFloat(localStorage.getItem(volumeKey) || "1");
+  let isMuted = false;
+
+  player.volume = savedVolume;
+  volumeSlider.value = savedVolume * 100;
+  updateVolumeIcon();
+
+  function updateVolumeIcon() {
+    if (isMuted || player.volume === 0) {
+      volumeBtn.textContent = "🔇";
+    } else if (player.volume < 0.5) {
+      volumeBtn.textContent = "🔉";
+    } else {
+      volumeBtn.textContent = "🔊";
+    }
+  }
+
+  volumeBtn.addEventListener("click", () => {
+    isMuted = !isMuted;
+    player.muted = isMuted;
+    updateVolumeIcon();
+  });
+
+  volumeSlider.addEventListener("input", (e) => {
+    const vol = e.target.value / 100;
+    player.volume = vol;
+    savedVolume = vol;
+    localStorage.setItem(volumeKey, vol.toString());
+    isMuted = false;
+    player.muted = false;
+    updateVolumeIcon();
+  });
+
+  // Show controls on mouse move
+  let hideTimeout = null;
+  function showControls() {
+    infoHud.classList.add("show");
+    volumeControl.classList.add("show");
+    syncStatus.classList.add("show");
+    if (hideTimeout) clearTimeout(hideTimeout);
+    hideTimeout = setTimeout(() => {
+      infoHud.classList.remove("show");
+      volumeControl.classList.remove("show");
+      syncStatus.classList.remove("show");
+    }, 4000);
+  }
+
+  document.addEventListener("mousemove", showControls);
+  document.addEventListener("click", showControls);
+
+  function formatDuration(s) {
+    if (!s || s <= 0) return "";
+    s = Math.round(s);
+    return s < 60 ? `${s}s` : `${Math.floor(s/60)}:${(s%60).toString().padStart(2,'0')}`;
+  }
+
+  function updateHud(clip) {
+    if (!clip) return;
+    clipTitle.textContent = clip.clip_title || clip.title || "Playing...";
+    const meta = [];
+    const dur = formatDuration(clip.clip_duration || clip.duration);
+    if (dur) meta.push(`<span class="meta-duration">${dur}</span>`);
+    if (clip.game_name) meta.push(`<span class="meta-category">${clip.game_name}</span>`);
+    if (clip.clip_curator || clip.creator_name) {
+      meta.push(`<span class="meta-clipper">Clipped by ${clip.clip_curator || clip.creator_name}</span>`);
+    }
+    clipMeta.innerHTML = meta.join("");
+  }
+
+  function setSyncStatus(status, text) {
+    syncStatus.className = "show";
+    if (status === "synced") {
+      syncStatus.classList.remove("syncing", "error");
+    } else if (status === "syncing") {
+      syncStatus.classList.add("syncing");
+      syncStatus.classList.remove("error");
+    } else if (status === "error") {
+      syncStatus.classList.add("error");
+      syncStatus.classList.remove("syncing");
+    }
+    syncText.textContent = text;
+  }
+
+  // GQL: Get MP4 URL
+  async function getMp4Url(clipId) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
+
+      const res = await fetch(GQL_URL, {
+        method: "POST",
+        headers: { "Client-ID": CLIENT_ID, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          operationName: "VideoAccessToken_Clip",
+          variables: { slug: clipId },
+          extensions: { persistedQuery: { version: 1, sha256Hash: QUERY_HASH } }
+        }),
+        signal: controller.signal
+      });
+      clearTimeout(timeout);
+
+      if (!res.ok) return null;
+      const data = await res.json();
+      const clip = data?.data?.clip;
+      if (!clip) return null;
+
+      const token = clip.playbackAccessToken?.value;
+      const sig = clip.playbackAccessToken?.signature;
+      const qualities = clip.videoQualities || [];
+      if (!token || !sig || !qualities.length) return null;
+
+      const best = qualities.sort((a,b) => (parseInt(b.quality)||0) - (parseInt(a.quality)||0))[0];
+      const sep = best.sourceURL.includes("?") ? "&" : "?";
+      return `${best.sourceURL}${sep}sig=${encodeURIComponent(sig)}&token=${encodeURIComponent(token)}`;
+    } catch (e) {
+      debugLog("GQL err: " + e.message, "err");
+      return null;
+    }
+  }
+
+  // Weighted clip selection (for controller)
+  function pickNextClip() {
+    if (!clips.length) return null;
+    // Simple random for now - could add weighted selection later
+    return clips[Math.floor(Math.random() * clips.length)];
+  }
+
+  // Update server with new clip (controller only)
+  async function setServerState(clip, mp4Url) {
+    try {
+      const formData = new FormData();
+      formData.append("login", login);
+      formData.append("clip_id", clip.id);
+      formData.append("clip_url", mp4Url);
+      formData.append("clip_title", clip.title || "");
+      formData.append("clip_curator", clip.creator_name || "");
+      formData.append("clip_duration", clip.duration || 30);
+
+      await fetch(`${API_BASE}/sync_state.php`, {
+        method: "POST",
+        body: formData
+      });
+      debugLog("Server state updated", "ok");
+    } catch (e) {
+      debugLog("Failed to update server: " + e.message, "err");
+    }
+  }
+
+  // Play a clip and seek to position
+  async function playClipAtPosition(clipId, mp4Url, position, duration, clipData) {
+    if (isSwitching && clipId === currentClipId) return;
+    isSwitching = true;
+
+    debugLog(`Loading: ${clipId.substring(0,20)}... @ ${position.toFixed(1)}s`);
+    setSyncStatus("syncing", "Syncing...");
+
+    // If we don't have URL, fetch it
+    if (!mp4Url) {
+      mp4Url = await getMp4Url(clipId);
+      if (!mp4Url) {
+        debugLog("Failed to get MP4 URL", "err");
+        isSwitching = false;
+        return;
+      }
+    }
+
+    currentClipId = clipId;
+    player.src = mp4Url;
+    player.load();
+
+    player.oncanplay = () => {
+      player.oncanplay = null;
+      // Seek to current position
+      const seekTo = Math.min(position, duration - 0.5);
+      if (seekTo > 0.5) {
+        player.currentTime = seekTo;
+        debugLog(`Seeked to ${seekTo.toFixed(1)}s`, "ok");
+      }
+
+      player.play().then(() => {
+        loadingOverlay.classList.add("hide");
+        updateHud(clipData);
+        showControls();
+        setSyncStatus("synced", "Synced");
+        isSwitching = false;
+        debugLog(`Playing: ${clipData?.clip_title?.substring(0,30) || clipId}`, "ok");
+      }).catch(err => {
+        debugLog(`Play err: ${err.message}`, "err");
+        isSwitching = false;
+      });
+    };
+
+    player.onerror = () => {
+      debugLog("Video error", "err");
+      setSyncStatus("error", "Error");
+      isSwitching = false;
+    };
+  }
+
+  // Controller: pick next clip and broadcast
+  async function controllerAdvance() {
+    if (!isController) return;
+    debugLog("Controller advancing to next clip...");
+
+    const next = pickNextClip();
+    if (!next) {
+      debugLog("No clips available", "err");
+      return;
+    }
+
+    const mp4Url = await getMp4Url(next.id);
+    if (!mp4Url) {
+      debugLog("Failed to get MP4 for next clip", "err");
+      // Try another clip
+      setTimeout(controllerAdvance, 1000);
+      return;
+    }
+
+    // Update server state (this broadcasts to all viewers)
+    await setServerState(next, mp4Url);
+
+    // Play locally
+    await playClipAtPosition(next.id, mp4Url, 0, next.duration || 30, {
+      clip_title: next.title,
+      clip_curator: next.creator_name,
+      clip_duration: next.duration,
+      game_name: next.game_name
+    });
+  }
+
+  // Poll sync state
+  async function pollSyncState() {
+    try {
+      const res = await fetch(`${API_BASE}/sync_state.php?login=${encodeURIComponent(login)}`, { cache: "no-store" });
+      const data = await res.json();
+
+      if (!data.has_state) {
+        // No state - become controller
+        if (!isController) {
+          isController = true;
+          debugLog("Becoming controller", "ok");
+          controllerAdvance();
+        }
+        return;
+      }
+
+      // Check if clip ended (server-side)
+      if (data.clip_ended) {
+        if (isController) {
+          // Controller advances to next clip
+          controllerAdvance();
+        }
+        // Non-controller will get new state on next poll
+        return;
+      }
+
+      // Check if we need to switch clips
+      if (data.clip_id !== currentClipId) {
+        debugLog(`New clip from server: ${data.clip_id.substring(0,15)}`, "warn");
+        await playClipAtPosition(
+          data.clip_id,
+          data.clip_url,
+          data.current_position,
+          data.clip_duration,
+          data
+        );
+        return;
+      }
+
+      // Check if we're out of sync (more than 3 seconds off)
+      const serverPos = data.current_position;
+      const localPos = player.currentTime;
+      const drift = Math.abs(serverPos - localPos);
+
+      if (drift > 3 && !player.paused && !isSwitching) {
+        debugLog(`Sync drift: ${drift.toFixed(1)}s - correcting`, "warn");
+        setSyncStatus("syncing", "Re-syncing...");
+        player.currentTime = serverPos;
+        setTimeout(() => setSyncStatus("synced", "Synced"), 500);
+      }
+
+    } catch (e) {
+      debugLog("Poll error: " + e.message, "err");
+      setSyncStatus("error", "Connection lost");
+    }
+  }
+
+  // Video ended - controller advances
+  player.onended = () => {
+    debugLog("Video ended");
+    if (isController) {
+      controllerAdvance();
+    }
+  };
+
+  // Init
+  async function init() {
+    debugLog("Init starting...");
+
+    // Fetch clips for controller selection
+    try {
+      const res = await fetch(`${API_BASE}/twitch_reel_api.php?login=${encodeURIComponent(login)}&days=0&pool=300`, { cache: "no-store" });
+      const data = await res.json();
+      clips = Array.isArray(data.clips) ? data.clips : [];
+      debugLog(`Loaded ${clips.length} clips`, "ok");
+    } catch (e) {
+      debugLog("Fetch clips failed: " + e.message, "err");
+    }
+
+    // Check current sync state
+    try {
+      const res = await fetch(`${API_BASE}/sync_state.php?login=${encodeURIComponent(login)}`, { cache: "no-store" });
+      const data = await res.json();
+
+      if (data.has_state && !data.clip_ended) {
+        // Join existing stream
+        debugLog("Joining existing stream...", "ok");
+        await playClipAtPosition(
+          data.clip_id,
+          data.clip_url,
+          data.current_position,
+          data.clip_duration,
+          data
+        );
+      } else {
+        // No active stream - become controller
+        isController = true;
+        debugLog("No active stream - becoming controller", "ok");
+        controllerAdvance();
+      }
+    } catch (e) {
+      debugLog("Init sync check failed: " + e.message, "err");
+      // Fallback: become controller
+      isController = true;
+      controllerAdvance();
+    }
+
+    // Start sync polling (every 2 seconds)
+    syncInterval = setInterval(pollSyncState, 2000);
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>

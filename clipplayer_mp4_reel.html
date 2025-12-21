@@ -196,6 +196,65 @@
     #topClipsOverlay .votes-up { color: #4ade80; }
     #topClipsOverlay .votes-down { color: #f87171; }
     #topClipsOverlay .net-score { color: #fbbf24; font-weight: 800; }
+
+    /* Volume control */
+    #volumeControl {
+      position: absolute;
+      right: 24px;
+      bottom: 24px;
+      z-index: 11000;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.7);
+      border: 2px solid rgba(255,255,255,0.2);
+      backdrop-filter: blur(12px);
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 300ms, transform 300ms;
+      pointer-events: auto;
+    }
+    #volumeControl.show { opacity: 1; transform: translateY(0); }
+    #volumeBtn {
+      background: none;
+      border: none;
+      color: #fff;
+      font-size: 24px;
+      cursor: pointer;
+      padding: 0;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #volumeSlider {
+      width: 100px;
+      height: 6px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: rgba(255,255,255,0.3);
+      border-radius: 3px;
+      cursor: pointer;
+    }
+    #volumeSlider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      background: #fff;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+    #volumeSlider::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      background: #fff;
+      border-radius: 50%;
+      cursor: pointer;
+      border: none;
+    }
   </style>
 </head>
 <body>
@@ -234,6 +293,11 @@
     <div id="topClipsList"></div>
   </div>
 
+  <div id="volumeControl">
+    <button id="volumeBtn">🔊</button>
+    <input type="range" id="volumeSlider" min="0" max="100" value="100">
+  </div>
+
 <script>
 (() => {
   const qs = new URLSearchParams(location.search);
@@ -268,6 +332,56 @@
   const hintDislike = document.getElementById("hintDislike");
 
   player.muted = forceMuted;
+
+  // Volume control
+  const volumeControl = document.getElementById("volumeControl");
+  const volumeBtn = document.getElementById("volumeBtn");
+  const volumeSlider = document.getElementById("volumeSlider");
+  const volumeKey = `clip_volume_${login}`;
+  let savedVolume = parseFloat(localStorage.getItem(volumeKey) || "1");
+  let isMuted = forceMuted;
+
+  player.volume = savedVolume;
+  volumeSlider.value = savedVolume * 100;
+
+  function updateVolumeIcon() {
+    if (isMuted || player.volume === 0) {
+      volumeBtn.textContent = "🔇";
+    } else if (player.volume < 0.5) {
+      volumeBtn.textContent = "🔉";
+    } else {
+      volumeBtn.textContent = "🔊";
+    }
+  }
+  updateVolumeIcon();
+
+  volumeBtn.addEventListener("click", () => {
+    isMuted = !isMuted;
+    player.muted = isMuted;
+    updateVolumeIcon();
+  });
+
+  volumeSlider.addEventListener("input", (e) => {
+    const vol = e.target.value / 100;
+    player.volume = vol;
+    savedVolume = vol;
+    localStorage.setItem(volumeKey, vol.toString());
+    isMuted = false;
+    player.muted = false;
+    updateVolumeIcon();
+  });
+
+  // Show volume control on mouse move
+  let volumeHideTimeout = null;
+  function showVolumeControl() {
+    volumeControl.classList.add("show");
+    if (volumeHideTimeout) clearTimeout(volumeHideTimeout);
+    volumeHideTimeout = setTimeout(() => {
+      volumeControl.classList.remove("show");
+    }, 3000);
+  }
+  document.addEventListener("mousemove", showVolumeControl);
+  document.addEventListener("click", showVolumeControl);
 
   // HUD Position polling
   const hudEnabled = qs.get("hud") !== "0";
