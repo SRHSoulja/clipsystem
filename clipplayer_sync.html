@@ -498,6 +498,10 @@
   let clips = [];
   let isSwitching = false;
   let syncInterval = null;
+  let lastPlaybackTime = 0;
+  let lastPlaybackCheck = Date.now();
+  let stallRecoveryAttempts = 0;
+  const MAX_STALL_RECOVERY = 3;
 
   // Volume control
   const volumeKey = `clip_tv_volume_${login}`;
@@ -550,6 +554,79 @@
 
   document.addEventListener("mousemove", showControls);
   document.addEventListener("click", showControls);
+
+  // Freeze detection and recovery
+  function tryRecoverPlayback() {
+    if (isSwitching || player.paused) return;
+
+    stallRecoveryAttempts++;
+    debugLog(`Stall recovery attempt ${stallRecoveryAttempts}/${MAX_STALL_RECOVERY}`, "warn");
+    setSyncStatus("syncing", "Recovering...");
+
+    if (stallRecoveryAttempts > MAX_STALL_RECOVERY) {
+      // Too many attempts - skip to next clip
+      debugLog("Too many stall recoveries - skipping clip", "err");
+      stallRecoveryAttempts = 0;
+      if (isController) {
+        controllerAdvance();
+      }
+      return;
+    }
+
+    // Try to recover: seek slightly forward and replay
+    const currentTime = player.currentTime;
+    player.currentTime = currentTime + 0.1;
+    player.play().then(() => {
+      debugLog("Playback recovered", "ok");
+      setSyncStatus("synced", "Synced");
+    }).catch(e => {
+      debugLog("Recovery play failed: " + e.message, "err");
+    });
+  }
+
+  // Stalled event - network/buffer issue
+  player.addEventListener("stalled", () => {
+    debugLog("Video stalled - network issue", "warn");
+    setSyncStatus("syncing", "Buffering...");
+    // Give it a moment then try to recover
+    setTimeout(() => {
+      if (!player.paused && player.readyState < 3) {
+        tryRecoverPlayback();
+      }
+    }, 3000);
+  });
+
+  // Waiting event - waiting for data
+  player.addEventListener("waiting", () => {
+    debugLog("Video waiting for data", "warn");
+    setSyncStatus("syncing", "Buffering...");
+  });
+
+  // Playing event - recovered from waiting/stalled
+  player.addEventListener("playing", () => {
+    stallRecoveryAttempts = 0; // Reset on successful play
+    lastPlaybackTime = player.currentTime;
+    lastPlaybackCheck = Date.now();
+  });
+
+  // Periodic playback health check - catch silent freezes
+  setInterval(() => {
+    if (isSwitching || player.paused || player.ended) return;
+
+    const now = Date.now();
+    const timeSinceCheck = (now - lastPlaybackCheck) / 1000;
+    const expectedProgress = timeSinceCheck * player.playbackRate;
+    const actualProgress = player.currentTime - lastPlaybackTime;
+
+    // If video should have progressed but didn't (frozen)
+    if (timeSinceCheck > 2 && actualProgress < 0.5 && player.readyState >= 2) {
+      debugLog(`Frozen detected: expected ${expectedProgress.toFixed(1)}s, got ${actualProgress.toFixed(1)}s`, "warn");
+      tryRecoverPlayback();
+    }
+
+    lastPlaybackTime = player.currentTime;
+    lastPlaybackCheck = now;
+  }, 3000);
 
   // HUD Position polling
   let currentHudPosition = null;
@@ -741,6 +818,11 @@
     }
 
     currentClipId = clipId;
+
+    // Reset recovery state for new clip
+    stallRecoveryAttempts = 0;
+    lastPlaybackTime = 0;
+    lastPlaybackCheck = Date.now();
 
     // Clear old handlers
     player.oncanplay = null;
