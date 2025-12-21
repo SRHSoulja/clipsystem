@@ -249,6 +249,147 @@
       border: 2px solid rgba(255,255,255,0.3);
     }
     #unmuteOverlay .icon { font-size: 48px; margin-bottom: 16px; }
+
+    /* Mobile responsive styles */
+    @media (max-width: 768px) {
+      #voteHud {
+        right: 12px;
+        top: 12px;
+        padding: 12px 16px;
+        gap: 8px;
+        max-width: calc(100vw - 24px);
+        border-radius: 12px;
+      }
+      #voteHud.pos-tr { top: 12px !important; right: 12px !important; }
+      #voteHud.pos-tl { top: 12px !important; left: 12px !important; }
+      #voteHud.pos-br { bottom: 12px !important; right: 12px !important; }
+      #voteHud.pos-bl { bottom: 12px !important; left: 12px !important; }
+      #voteHud .seq { font-size: 20px; }
+      #voteHud .clip-date-hud { font-size: 14px; margin-left: 6px; }
+      #voteHud .clip-title { font-size: 15px; }
+      #voteHud .clip-meta { font-size: 13px; gap: 8px; }
+      #voteHud .vote-section { gap: 8px; padding-top: 6px; flex-wrap: wrap; }
+      #voteHud .pill { padding: 6px 10px; font-size: 14px; }
+      #voteHud .hints { font-size: 12px; gap: 2px; }
+      #voteHud .live-badge { font-size: 10px; padding: 3px 8px; }
+
+      #volumeControl {
+        right: 12px;
+        bottom: 12px;
+        padding: 10px 14px;
+        gap: 8px;
+      }
+      #volumeBtn { font-size: 20px; width: 28px; height: 28px; }
+      #volumeSlider { width: 80px; }
+
+      #syncStatus {
+        left: 12px;
+        top: 12px;
+        padding: 6px 10px;
+        font-size: 12px;
+        gap: 6px;
+      }
+      #syncStatus .dot { width: 6px; height: 6px; }
+
+      #unmuteOverlay .content {
+        padding: 24px 36px;
+        font-size: 20px;
+      }
+      #unmuteOverlay .icon { font-size: 40px; margin-bottom: 12px; }
+
+      #loadingOverlay .content { font-size: 20px; }
+      #loadingOverlay .spinner { width: 40px; height: 40px; margin-bottom: 16px; }
+    }
+
+    @media (max-width: 480px) {
+      #voteHud {
+        right: 8px;
+        top: 8px;
+        padding: 10px 12px;
+        gap: 6px;
+      }
+      #voteHud.pos-tr { top: 8px !important; right: 8px !important; }
+      #voteHud.pos-tl { top: 8px !important; left: 8px !important; }
+      #voteHud.pos-br { bottom: 8px !important; right: 8px !important; }
+      #voteHud.pos-bl { bottom: 8px !important; left: 8px !important; }
+      #voteHud .seq { font-size: 16px; }
+      #voteHud .clip-date-hud { font-size: 12px; }
+      #voteHud .clip-title { font-size: 13px; }
+      #voteHud .clip-meta { font-size: 11px; gap: 6px; }
+      #voteHud .vote-section { gap: 6px; }
+      #voteHud .pill { padding: 5px 8px; font-size: 12px; }
+      #voteHud .hints { font-size: 10px; }
+      #voteHud .live-badge { font-size: 9px; padding: 2px 6px; }
+
+      #volumeControl {
+        right: 8px;
+        bottom: 8px;
+        padding: 8px 12px;
+      }
+      #volumeBtn { font-size: 18px; width: 24px; height: 24px; }
+      #volumeSlider { width: 60px; height: 8px; }
+      #volumeSlider::-webkit-slider-thumb { width: 20px; height: 20px; }
+      #volumeSlider::-moz-range-thumb { width: 20px; height: 20px; }
+
+      #syncStatus {
+        left: 8px;
+        top: 8px;
+        padding: 5px 8px;
+        font-size: 11px;
+      }
+
+      #unmuteOverlay .content {
+        padding: 20px 28px;
+        font-size: 18px;
+        margin: 16px;
+      }
+      #unmuteOverlay .icon { font-size: 36px; }
+
+      #loadingOverlay .content { font-size: 18px; }
+      #loadingOverlay .spinner { width: 36px; height: 36px; }
+    }
+
+    /* Touch-friendly: larger tap targets */
+    @media (hover: none) and (pointer: coarse) {
+      #volumeControl {
+        pointer-events: auto;
+      }
+      #volumeSlider {
+        height: 10px;
+      }
+      #volumeSlider::-webkit-slider-thumb {
+        width: 24px;
+        height: 24px;
+      }
+      #volumeSlider::-moz-range-thumb {
+        width: 24px;
+        height: 24px;
+      }
+      #volumeBtn {
+        width: 36px;
+        height: 36px;
+        font-size: 24px;
+      }
+    }
+
+    /* Landscape mobile - keep HUD smaller */
+    @media (max-height: 500px) and (orientation: landscape) {
+      #voteHud {
+        padding: 8px 12px;
+        gap: 4px;
+        max-width: 45vw;
+      }
+      #voteHud .seq { font-size: 16px; }
+      #voteHud .clip-title { font-size: 12px; }
+      #voteHud .clip-meta { font-size: 10px; }
+      #voteHud .vote-section { padding-top: 4px; gap: 6px; }
+      #voteHud .pill { padding: 4px 8px; font-size: 11px; }
+      #voteHud .hints { font-size: 9px; }
+      #voteHud .live-badge { display: none; }
+
+      #volumeControl { padding: 6px 10px; }
+      #syncStatus { padding: 4px 8px; font-size: 10px; }
+    }
   </style>
 </head>
 <body>
