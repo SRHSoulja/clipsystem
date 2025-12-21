@@ -107,15 +107,15 @@ header("Content-Type: text/html; charset=utf-8");
 
     <div class="note">
       <div class="note-title">Multi-Channel Mode</div>
-      Commands in each channel control that channel's clips. Type !clip 5 in #joshbelmar to see Josh's clip #5.
+      Commands in each channel control that channel's clips. Type !cclip 5 in #joshbelmar to see Josh's clip #5.
     </div>
 
     <h2>Everyone</h2>
 
     <div class="command">
-      <span class="command-name">!clip [#]</span>
+      <span class="command-name">!cclip [#]</span>
       <div class="command-desc">Shows the currently playing clip, or look up a specific clip by number.</div>
-      <div class="command-example">!clip &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(show current clip)<br>!clip 42 &nbsp;(look up clip #42)</div>
+      <div class="command-example">!cclip &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(show current clip)<br>!cclip 42 &nbsp;(look up clip #42)</div>
     </div>
 
     <div class="command">

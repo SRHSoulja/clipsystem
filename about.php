@@ -123,7 +123,7 @@ header("Content-Type: text/html; charset=utf-8");
       <p>Viewers can interact with clips through voting:</p>
       <ul style="color: #adadb8; margin-top: 10px;">
         <li><strong>!like / !dislike</strong> - Vote on the current clip or any clip by number</li>
-        <li><strong>!clip</strong> - See info about the currently playing clip</li>
+        <li><strong>!cclip</strong> - See info about the currently playing clip</li>
         <li><strong>!cfind</strong> - Search clips by title, clipper, or game</li>
       </ul>
       <p style="margin-top: 10px;">Voting can be enabled/disabled per-channel by admins.</p>

@@ -187,8 +187,7 @@ seq_import.php?login=floppyjimmie&key=YOUR_ADMIN_KEY
 ### All Users
 | Command | Description |
 |---------|-------------|
-| `!clip` | Show currently playing clip with link |
-| `!clips` | Alias for !clip |
+| `!cclip` | Show currently playing clip with link |
 | `!cfind` | Get link to clip search page |
 | `!like [#]` | Upvote current clip or specific clip# |
 | `!dislike [#]` | Downvote current clip or specific clip# |
@@ -248,7 +247,7 @@ Requires `clip_played.php` tracking to be active.
 |----------|--------|---------|
 | `twitch_reel_api.php` | GET | Get clip pool for player |
 | `now_playing.php` | POST | Report currently playing clip |
-| `now_playing_get.php` | GET | Get current clip (for !clip command) |
+| `now_playing_get.php` | GET | Get current clip (for !cclip command) |
 | `clip_played.php` | GET | Report clip was played (for rotation) |
 | `force_play_get.php` | GET | Check for force play command |
 | `force_play_clear.php` | GET | Clear force play after playing |
