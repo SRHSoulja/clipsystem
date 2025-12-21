@@ -460,13 +460,13 @@
     }
   }
 
-  // Play a clip and seek to position
+  // Play a clip and seek to position - FAST START
   async function playClipAtPosition(clipId, mp4Url, position, duration, clipData) {
     if (isSwitching && clipId === currentClipId) return;
     isSwitching = true;
 
-    debugLog(`Loading: ${clipId.substring(0,20)}... @ ${position.toFixed(1)}s`);
-    setSyncStatus("syncing", "Syncing...");
+    debugLog(`Loading: ${clipId?.substring(0,20) || 'unknown'}...`);
+    setSyncStatus("syncing", "Loading...");
 
     // If we don't have URL, fetch it
     if (!mp4Url) {
@@ -474,41 +474,73 @@
       if (!mp4Url) {
         debugLog("Failed to get MP4 URL", "err");
         isSwitching = false;
+        // Try next clip
+        if (isController) setTimeout(controllerAdvance, 500);
         return;
       }
     }
 
     currentClipId = clipId;
-    player.src = mp4Url;
-    player.load();
 
-    player.oncanplay = () => {
-      player.oncanplay = null;
-      // Seek to current position
-      const seekTo = Math.min(position, duration - 0.5);
-      if (seekTo > 0.5) {
+    // Clear old handlers
+    player.oncanplay = null;
+    player.oncanplaythrough = null;
+    player.onerror = null;
+    player.onloadedmetadata = null;
+
+    player.src = mp4Url;
+
+    // Start playing immediately when we have metadata (fastest possible start)
+    player.onloadedmetadata = () => {
+      player.onloadedmetadata = null;
+
+      // Seek to current position if joining mid-clip
+      const seekTo = Math.min(position || 0, (duration || 30) - 0.5);
+      if (seekTo > 1) {
         player.currentTime = seekTo;
-        debugLog(`Seeked to ${seekTo.toFixed(1)}s`, "ok");
+        debugLog(`Seek to ${seekTo.toFixed(1)}s`);
       }
 
+      // Play immediately - don't wait for buffering
       player.play().then(() => {
         loadingOverlay.classList.add("hide");
         updateHud(clipData);
         showControls();
         setSyncStatus("synced", "Synced");
         isSwitching = false;
-        debugLog(`Playing: ${clipData?.clip_title?.substring(0,30) || clipId}`, "ok");
+        debugLog(`Playing!`, "ok");
       }).catch(err => {
-        debugLog(`Play err: ${err.message}`, "err");
-        isSwitching = false;
+        // Autoplay blocked - try muted
+        debugLog(`Autoplay blocked, trying muted`, "warn");
+        player.muted = true;
+        player.play().then(() => {
+          loadingOverlay.classList.add("hide");
+          updateHud(clipData);
+          showControls();
+          setSyncStatus("synced", "Synced (muted)");
+          isSwitching = false;
+        }).catch(e => {
+          debugLog(`Play failed: ${e.message}`, "err");
+          isSwitching = false;
+        });
       });
     };
 
     player.onerror = () => {
-      debugLog("Video error", "err");
+      debugLog("Video error - trying next", "err");
       setSyncStatus("error", "Error");
       isSwitching = false;
+      if (isController) setTimeout(controllerAdvance, 500);
     };
+
+    // Timeout - if nothing happens in 8 seconds, try next clip
+    setTimeout(() => {
+      if (isSwitching && currentClipId === clipId) {
+        debugLog("Load timeout - trying next", "warn");
+        isSwitching = false;
+        if (isController) controllerAdvance();
+      }
+    }, 8000);
   }
 
   // Controller: pick next clip and broadcast
@@ -607,49 +639,47 @@
     }
   };
 
-  // Init
+  // Init - FAST parallel loading
   async function init() {
-    debugLog("Init starting...");
+    debugLog("Init...");
 
-    // Fetch clips for controller selection
-    try {
-      const res = await fetch(`${API_BASE}/twitch_reel_api.php?login=${encodeURIComponent(login)}&days=0&pool=300`, { cache: "no-store" });
-      const data = await res.json();
-      clips = Array.isArray(data.clips) ? data.clips : [];
-      debugLog(`Loaded ${clips.length} clips`, "ok");
-    } catch (e) {
-      debugLog("Fetch clips failed: " + e.message, "err");
+    // Fetch clips AND sync state in parallel for faster startup
+    const [clipsResult, syncResult] = await Promise.allSettled([
+      fetch(`${API_BASE}/twitch_reel_api.php?login=${encodeURIComponent(login)}&days=0&pool=100`, { cache: "no-store" })
+        .then(r => r.json())
+        .catch(() => ({ clips: [] })),
+      fetch(`${API_BASE}/sync_state.php?login=${encodeURIComponent(login)}`, { cache: "no-store" })
+        .then(r => r.json())
+        .catch(() => ({ has_state: false }))
+    ]);
+
+    // Process clips
+    if (clipsResult.status === 'fulfilled') {
+      clips = Array.isArray(clipsResult.value.clips) ? clipsResult.value.clips : [];
+      debugLog(`${clips.length} clips loaded`, "ok");
     }
 
-    // Check current sync state
-    try {
-      const res = await fetch(`${API_BASE}/sync_state.php?login=${encodeURIComponent(login)}`, { cache: "no-store" });
-      const data = await res.json();
+    // Process sync state
+    const syncData = syncResult.status === 'fulfilled' ? syncResult.value : { has_state: false };
 
-      if (data.has_state && !data.clip_ended) {
-        // Join existing stream
-        debugLog("Joining existing stream...", "ok");
-        await playClipAtPosition(
-          data.clip_id,
-          data.clip_url,
-          data.current_position,
-          data.clip_duration,
-          data
-        );
-      } else {
-        // No active stream - become controller
-        isController = true;
-        debugLog("No active stream - becoming controller", "ok");
-        controllerAdvance();
-      }
-    } catch (e) {
-      debugLog("Init sync check failed: " + e.message, "err");
-      // Fallback: become controller
+    if (syncData.has_state && !syncData.clip_ended && syncData.clip_id) {
+      // Join existing stream immediately
+      debugLog("Joining stream...", "ok");
+      playClipAtPosition(
+        syncData.clip_id,
+        syncData.clip_url,
+        syncData.current_position,
+        syncData.clip_duration,
+        syncData
+      );
+    } else {
+      // No active stream - become controller
       isController = true;
+      debugLog("Starting new stream", "ok");
       controllerAdvance();
     }
 
-    // Start sync polling (every 2 seconds)
+    // Start sync polling
     syncInterval = setInterval(pollSyncState, 2000);
   }
 
