@@ -111,6 +111,17 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
     }
     .header h1 { font-size: 20px; color: #9147ff; }
     .header .user { color: #adadb8; }
+    .header .nav-links { display: flex; gap: 12px; align-items: center; }
+    .header .nav-link {
+      color: #bf94ff;
+      text-decoration: none;
+      padding: 6px 12px;
+      border-radius: 4px;
+      background: rgba(145, 71, 255, 0.15);
+      font-size: 14px;
+      transition: background 0.2s;
+    }
+    .header .nav-link:hover { background: rgba(145, 71, 255, 0.3); }
 
     .main {
       display: flex;
@@ -537,7 +548,11 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
   <div class="dashboard" id="dashboard">
     <div class="header">
       <h1>Mod Dashboard</h1>
-      <button class="mobile-toggle" onclick="toggleSidebar()">Playlists</button>
+      <div class="nav-links">
+        <a href="#" id="manageClipsLink" class="nav-link" style="display:none;">Manage Clips</a>
+        <a href="#" id="searchClipsLink" class="nav-link" style="display:none;">Search Clips</a>
+        <button class="mobile-toggle" onclick="toggleSidebar()">Playlists</button>
+      </div>
       <div class="user"><?php echo htmlspecialchars($login); ?></div>
     </div>
 
@@ -711,6 +726,15 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
         document.querySelector('.header .user').textContent = LOGIN;
         document.getElementById('loginScreen').style.display = 'none';
         document.getElementById('dashboard').classList.add('active');
+
+        // Show and configure navigation links
+        const manageLink = document.getElementById('manageClipsLink');
+        const searchLink = document.getElementById('searchClipsLink');
+        manageLink.href = `clip_manage.php?login=${encodeURIComponent(LOGIN)}&key=${encodeURIComponent(adminKey)}`;
+        manageLink.style.display = 'inline-block';
+        searchLink.href = `clip_search.php?login=${encodeURIComponent(LOGIN)}`;
+        searchLink.style.display = 'inline-block';
+
         loadDashboard();
       } catch (err) {
         document.getElementById('loginError').textContent = 'Connection error';

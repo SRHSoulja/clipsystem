@@ -2,19 +2,40 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
   <title>FloppyJimmie Clip TV</title>
   <style>
-    html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-touch-callout: none;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100vh;
+      height: calc(var(--vh, 1vh) * 100);
+      background: #000;
+      overflow: hidden;
+      touch-action: none;
+      overscroll-behavior: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
 
     video {
-      position: absolute;
+      position: fixed;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
       object-fit: contain;
       background: #000;
+      margin: 0;
+      padding: 0;
+      display: block;
+      touch-action: manipulation;
     }
 
     #loadingOverlay {
@@ -39,8 +60,8 @@
 
     #voteHud {
       position: absolute;
-      right: 24px;
-      top: 24px;
+      right: max(24px, env(safe-area-inset-right));
+      top: max(24px, env(safe-area-inset-top));
       bottom: auto;
       left: auto;
       z-index: 11000;
@@ -64,14 +85,14 @@
       pointer-events: none;
     }
     #voteHud.show { opacity: 1; transform: translateX(0); }
-    /* HUD positions */
-    #voteHud.pos-tr { top: 24px !important; right: 24px !important; bottom: auto !important; left: auto !important; transform: translateX(6px); }
+    /* HUD positions with safe area support */
+    #voteHud.pos-tr { top: max(24px, env(safe-area-inset-top)) !important; right: max(24px, env(safe-area-inset-right)) !important; bottom: auto !important; left: auto !important; transform: translateX(6px); }
     #voteHud.pos-tr.show { transform: translateX(0); }
-    #voteHud.pos-tl { top: 24px !important; left: 24px !important; bottom: auto !important; right: auto !important; transform: translateX(-6px); }
+    #voteHud.pos-tl { top: max(24px, env(safe-area-inset-top)) !important; left: max(24px, env(safe-area-inset-left)) !important; bottom: auto !important; right: auto !important; transform: translateX(-6px); }
     #voteHud.pos-tl.show { transform: translateX(0); }
-    #voteHud.pos-br { bottom: 24px !important; right: 24px !important; top: auto !important; left: auto !important; transform: translateX(6px); }
+    #voteHud.pos-br { bottom: max(24px, env(safe-area-inset-bottom)) !important; right: max(24px, env(safe-area-inset-right)) !important; top: auto !important; left: auto !important; transform: translateX(6px); }
     #voteHud.pos-br.show { transform: translateX(0); }
-    #voteHud.pos-bl { bottom: 24px !important; left: 24px !important; top: auto !important; right: auto !important; transform: translateX(-6px); }
+    #voteHud.pos-bl { bottom: max(24px, env(safe-area-inset-bottom)) !important; left: max(24px, env(safe-area-inset-left)) !important; top: auto !important; right: auto !important; transform: translateX(-6px); }
     #voteHud.pos-bl.show { transform: translateX(0); }
     #voteHud .clip-info { display: flex; flex-direction: column; gap: 6px; width: 100%; align-items: center; }
     #voteHud .seq { font-weight: 800; font-size: 24px; color: #fff; text-shadow: 0 2px 4px rgba(0,0,0,0.7); }
@@ -118,13 +139,14 @@
     /* Volume control */
     #volumeControl {
       position: absolute;
-      right: 24px;
-      bottom: 24px;
+      right: max(24px, env(safe-area-inset-right));
+      bottom: max(24px, env(safe-area-inset-bottom));
       z-index: 11000;
       display: flex;
       align-items: center;
       gap: 10px;
       padding: 12px 16px;
+      min-height: 44px;
       border-radius: 999px;
       background: rgba(0,0,0,0.7);
       border: 2px solid rgba(255,255,255,0.2);
@@ -132,6 +154,7 @@
       opacity: 0;
       transform: translateY(10px);
       transition: opacity 300ms, transform 300ms;
+      touch-action: auto;
     }
     #volumeControl.show { opacity: 1; transform: translateY(0); }
     #volumeControl:hover { opacity: 1 !important; }
@@ -199,8 +222,8 @@
     /* Sync status indicator */
     #syncStatus {
       position: absolute;
-      left: 24px;
-      top: 24px;
+      left: max(24px, env(safe-area-inset-left));
+      top: max(24px, env(safe-area-inset-top));
       z-index: 11000;
       padding: 8px 14px;
       border-radius: 8px;
@@ -223,6 +246,40 @@
       height: 8px;
       border-radius: 50%;
       background: currentColor;
+    }
+
+    /* Buffering indicator */
+    #bufferingIndicator {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 40000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      background: rgba(0,0,0,0.75);
+      padding: 20px 30px;
+      border-radius: 12px;
+      color: #fff;
+      font: 600 16px system-ui, sans-serif;
+      pointer-events: none;
+      backdrop-filter: blur(8px);
+    }
+    #bufferingIndicator.show { display: flex; }
+    #bufferingIndicator .spinner {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: 3px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      margin-bottom: 12px;
+      animation: spin 0.6s linear infinite;
+    }
+    #bufferingIndicator .text {
+      font-size: 14px;
+      color: #fbbf24;
     }
 
     /* Click to unmute overlay */
@@ -260,10 +317,10 @@
         max-width: calc(100vw - 24px);
         border-radius: 12px;
       }
-      #voteHud.pos-tr { top: 12px !important; right: 12px !important; }
-      #voteHud.pos-tl { top: 12px !important; left: 12px !important; }
-      #voteHud.pos-br { bottom: 12px !important; right: 12px !important; }
-      #voteHud.pos-bl { bottom: 12px !important; left: 12px !important; }
+      #voteHud.pos-tr { top: max(12px, env(safe-area-inset-top)) !important; right: max(12px, env(safe-area-inset-right)) !important; }
+      #voteHud.pos-tl { top: max(12px, env(safe-area-inset-top)) !important; left: max(12px, env(safe-area-inset-left)) !important; }
+      #voteHud.pos-br { bottom: max(70px, env(safe-area-inset-bottom)) !important; right: max(12px, env(safe-area-inset-right)) !important; }
+      #voteHud.pos-bl { bottom: max(70px, env(safe-area-inset-bottom)) !important; left: max(12px, env(safe-area-inset-left)) !important; }
       #voteHud .seq { font-size: 20px; }
       #voteHud .clip-date-hud { font-size: 14px; margin-left: 6px; }
       #voteHud .clip-title { font-size: 15px; }
@@ -274,17 +331,17 @@
       #voteHud .live-badge { font-size: 10px; padding: 3px 8px; }
 
       #volumeControl {
-        right: 12px;
-        bottom: 12px;
+        right: max(12px, env(safe-area-inset-right));
+        bottom: max(12px, env(safe-area-inset-bottom));
         padding: 10px 14px;
         gap: 8px;
       }
-      #volumeBtn { font-size: 20px; width: 28px; height: 28px; }
-      #volumeSlider { width: 80px; }
+      #volumeBtn { font-size: 20px; width: 36px; height: 36px; min-width: 44px; min-height: 44px; }
+      #volumeSlider { width: 100px; }
 
       #syncStatus {
-        left: 12px;
-        top: 12px;
+        left: max(12px, env(safe-area-inset-left));
+        top: max(12px, env(safe-area-inset-top));
         padding: 6px 10px;
         font-size: 12px;
         gap: 6px;
@@ -308,10 +365,10 @@
         padding: 10px 12px;
         gap: 6px;
       }
-      #voteHud.pos-tr { top: 8px !important; right: 8px !important; }
-      #voteHud.pos-tl { top: 8px !important; left: 8px !important; }
-      #voteHud.pos-br { bottom: 8px !important; right: 8px !important; }
-      #voteHud.pos-bl { bottom: 8px !important; left: 8px !important; }
+      #voteHud.pos-tr { top: max(10px, env(safe-area-inset-top)) !important; right: max(10px, env(safe-area-inset-right)) !important; }
+      #voteHud.pos-tl { top: max(10px, env(safe-area-inset-top)) !important; left: max(10px, env(safe-area-inset-left)) !important; }
+      #voteHud.pos-br { bottom: max(60px, env(safe-area-inset-bottom)) !important; right: max(10px, env(safe-area-inset-right)) !important; }
+      #voteHud.pos-bl { bottom: max(60px, env(safe-area-inset-bottom)) !important; left: max(10px, env(safe-area-inset-left)) !important; }
       #voteHud .seq { font-size: 16px; }
       #voteHud .clip-date-hud { font-size: 12px; }
       #voteHud .clip-title { font-size: 13px; }
@@ -322,18 +379,18 @@
       #voteHud .live-badge { font-size: 9px; padding: 2px 6px; }
 
       #volumeControl {
-        right: 8px;
-        bottom: 8px;
-        padding: 8px 12px;
+        right: max(10px, env(safe-area-inset-right));
+        bottom: max(10px, env(safe-area-inset-bottom));
+        padding: 10px 14px;
       }
-      #volumeBtn { font-size: 18px; width: 24px; height: 24px; }
-      #volumeSlider { width: 60px; height: 8px; }
-      #volumeSlider::-webkit-slider-thumb { width: 20px; height: 20px; }
-      #volumeSlider::-moz-range-thumb { width: 20px; height: 20px; }
+      #volumeBtn { font-size: 20px; width: 44px; height: 44px; min-width: 44px; min-height: 44px; }
+      #volumeSlider { width: 80px; height: 10px; }
+      #volumeSlider::-webkit-slider-thumb { width: 24px; height: 24px; }
+      #volumeSlider::-moz-range-thumb { width: 24px; height: 24px; }
 
       #syncStatus {
-        left: 8px;
-        top: 8px;
+        left: max(10px, env(safe-area-inset-left));
+        top: max(10px, env(safe-area-inset-top));
         padding: 5px 8px;
         font-size: 11px;
       }
@@ -353,22 +410,45 @@
     @media (hover: none) and (pointer: coarse) {
       #volumeControl {
         pointer-events: auto;
+        padding: 14px 20px;
+        gap: 12px;
       }
       #volumeSlider {
-        height: 10px;
+        height: 12px;
+        width: 120px;
       }
       #volumeSlider::-webkit-slider-thumb {
-        width: 24px;
-        height: 24px;
+        width: 28px;
+        height: 28px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.3);
       }
       #volumeSlider::-moz-range-thumb {
-        width: 24px;
-        height: 24px;
+        width: 28px;
+        height: 28px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      }
+      #volumeSlider:active::-webkit-slider-thumb {
+        width: 32px;
+        height: 32px;
+      }
+      #volumeSlider:active::-moz-range-thumb {
+        width: 32px;
+        height: 32px;
       }
       #volumeBtn {
-        width: 36px;
-        height: 36px;
-        font-size: 24px;
+        width: 44px;
+        height: 44px;
+        min-width: 44px;
+        min-height: 44px;
+        font-size: 26px;
+      }
+      #volumeBtn:active {
+        transform: scale(0.95);
+        opacity: 0.8;
+      }
+      #voteHud .pill {
+        min-height: 36px;
+        padding: 8px 12px;
       }
     }
 
@@ -393,7 +473,12 @@
   </style>
 </head>
 <body>
-  <video id="player" playsinline preload="auto"></video>
+  <video id="player" playsinline webkit-playsinline muted preload="metadata" x-webkit-airplay="allow"></video>
+
+  <div id="bufferingIndicator">
+    <div class="spinner"></div>
+    <div class="text">Buffering...</div>
+  </div>
 
   <div id="voteHud">
     <span class="live-badge"><span class="live-dot"></span> LIVE</span>
@@ -465,9 +550,45 @@
   const syncStatus = document.getElementById("syncStatus");
   const syncText = document.getElementById("syncText");
   const unmuteOverlay = document.getElementById("unmuteOverlay");
+  const bufferingIndicator = document.getElementById("bufferingIndicator");
 
   // Hide unmute overlay initially
   unmuteOverlay.classList.add("hide");
+
+  // Mobile viewport height fix (handles address bar)
+  function updateViewportHeight() {
+    const vh = window.innerHeight * 0.01;
+    document.documentElement.style.setProperty('--vh', `${vh}px`);
+  }
+  updateViewportHeight();
+  window.addEventListener('resize', updateViewportHeight);
+
+  // iOS-specific scroll handling for address bar
+  if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
+    let ticking = false;
+    window.addEventListener('scroll', () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          updateViewportHeight();
+          ticking = false;
+        });
+        ticking = true;
+      }
+    });
+  }
+
+  // Touch text for mobile
+  if ('ontouchstart' in window) {
+    const unmuteText = document.querySelector('#unmuteOverlay .content div:last-child');
+    if (unmuteText) unmuteText.textContent = 'Tap to Unmute';
+  }
+
+  // Prevent pull-to-refresh and overscroll
+  document.addEventListener('touchmove', (e) => {
+    if (e.target === document.body || e.target.tagName === 'VIDEO') {
+      e.preventDefault();
+    }
+  }, { passive: false });
 
   // Click to unmute handler
   unmuteOverlay.addEventListener("click", () => {
@@ -501,7 +622,106 @@
   let lastPlaybackTime = 0;
   let lastPlaybackCheck = Date.now();
   let stallRecoveryAttempts = 0;
-  const MAX_STALL_RECOVERY = 3;
+  const MAX_STALL_RECOVERY = 5; // More attempts before skipping
+
+  // Connection quality detection
+  let isSlowConnection = false;
+  let prefersLowQuality = false;
+  let preloadedUrl = null;
+  let preloadedClipId = null;
+  let preloadVideo = null; // Hidden video element for actual preloading
+
+  // Adaptive quality - drops quality when buffering issues detected
+  let currentQualityLevel = 2; // 0=160p, 1=360p, 2=480p, 3=720p, 4=1080p
+  const QUALITY_LEVELS = [160, 360, 480, 720, 1080];
+  let bufferingCount = 0; // Count buffering events per clip
+  let lastQualityDropTime = 0;
+  const QUALITY_DROP_COOLDOWN = 30000; // Don't drop quality more than once per 30s
+  const QUALITY_RECOVER_TIME = 120000; // Try higher quality after 2 min of smooth playback
+  let smoothPlaybackStart = 0;
+
+  function getTargetQuality() {
+    return QUALITY_LEVELS[currentQualityLevel] || 480;
+  }
+
+  function dropQuality() {
+    const now = Date.now();
+    if (now - lastQualityDropTime < QUALITY_DROP_COOLDOWN) return false;
+    if (currentQualityLevel <= 0) return false; // Already at lowest
+
+    currentQualityLevel--;
+    lastQualityDropTime = now;
+    smoothPlaybackStart = 0; // Reset smooth playback timer
+    debugLog(`Quality dropped to ${getTargetQuality()}p due to buffering`, "warn");
+    return true;
+  }
+
+  function tryRecoverQuality() {
+    if (currentQualityLevel >= QUALITY_LEVELS.length - 1) return; // Already at max
+    if (isMobile && currentQualityLevel >= 2) return; // Don't go above 480p on mobile
+    if (isSlowConnection && currentQualityLevel >= 1) return; // Don't go above 360p on slow
+
+    const now = Date.now();
+    if (smoothPlaybackStart > 0 && (now - smoothPlaybackStart) > QUALITY_RECOVER_TIME) {
+      currentQualityLevel++;
+      smoothPlaybackStart = now;
+      debugLog(`Quality recovered to ${getTargetQuality()}p`, "ok");
+    }
+  }
+
+  // Detect mobile device
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+  function detectConnectionQuality() {
+    const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    if (conn) {
+      // Slow if: saveData enabled, slow effectiveType, or low downlink
+      // More aggressive threshold: 2.5 Mbps for mobile, 1.5 for desktop
+      const downlinkThreshold = isMobile ? 2.5 : 1.5;
+      isSlowConnection = conn.saveData ||
+        ['slow-2g', '2g', '3g'].includes(conn.effectiveType) ||
+        (conn.downlink && conn.downlink < downlinkThreshold);
+      prefersLowQuality = isSlowConnection || isMobile; // Always prefer low quality on mobile
+
+      // Set initial quality level based on connection
+      if (conn.saveData || ['slow-2g', '2g'].includes(conn.effectiveType)) {
+        currentQualityLevel = 0; // 160p for very slow
+      } else if (isSlowConnection || conn.effectiveType === '3g') {
+        currentQualityLevel = 1; // 360p for slow
+      } else if (isMobile) {
+        currentQualityLevel = 2; // 480p for mobile
+      } else {
+        currentQualityLevel = 3; // 720p for fast desktop
+      }
+
+      debugLog(`Connection: ${conn.effectiveType || 'unknown'}, ${conn.downlink || '?'}Mbps, mobile=${isMobile}, quality=${getTargetQuality()}p`);
+
+      // Listen for connection changes
+      conn.addEventListener('change', () => {
+        const wasSlow = isSlowConnection;
+        isSlowConnection = conn.saveData ||
+          ['slow-2g', '2g', '3g'].includes(conn.effectiveType) ||
+          (conn.downlink && conn.downlink < downlinkThreshold);
+        prefersLowQuality = isSlowConnection || isMobile;
+        if (wasSlow !== isSlowConnection) {
+          debugLog(`Connection changed: slow=${isSlowConnection}`, "warn");
+          // Adjust quality on connection change
+          if (isSlowConnection && currentQualityLevel > 1) {
+            currentQualityLevel = 1;
+            debugLog(`Quality adjusted to ${getTargetQuality()}p`, "warn");
+          }
+        }
+      });
+    } else {
+      // No Network Information API - assume slow on mobile
+      isSlowConnection = isMobile;
+      prefersLowQuality = isMobile;
+      // Conservative quality without connection info
+      currentQualityLevel = isMobile ? 1 : 2; // 360p mobile, 480p desktop
+      debugLog(`No connection API, mobile=${isMobile}, quality=${getTargetQuality()}p`);
+    }
+  }
+  detectConnectionQuality();
 
   // Volume control
   const volumeKey = `clip_tv_volume_${login}`;
@@ -540,24 +760,81 @@
 
   // Show controls on mouse move
   let hideTimeout = null;
+  let controlsVisible = false;
+
+  function hideControls() {
+    voteHud.classList.remove("show");
+    volumeControl.classList.remove("show");
+    syncStatus.classList.remove("show");
+    controlsVisible = false;
+    if (hideTimeout) clearTimeout(hideTimeout);
+  }
+
   function showControls() {
     voteHud.classList.add("show");
     volumeControl.classList.add("show");
     syncStatus.classList.add("show");
+    controlsVisible = true;
     if (hideTimeout) clearTimeout(hideTimeout);
-    hideTimeout = setTimeout(() => {
-      voteHud.classList.remove("show");
-      volumeControl.classList.remove("show");
-      syncStatus.classList.remove("show");
-    }, 4000);
+    hideTimeout = setTimeout(hideControls, 4000);
   }
 
-  document.addEventListener("mousemove", showControls);
-  document.addEventListener("click", showControls);
+  // Handle tap to toggle controls on mobile
+  function handleTap(e) {
+    // Ignore taps on interactive elements
+    if (e.target.closest('#volumeControl, #volumeBtn, #volumeSlider, #unmuteOverlay')) {
+      return;
+    }
+    // Toggle controls on tap
+    if (controlsVisible) {
+      hideControls();
+    } else {
+      showControls();
+    }
+  }
+
+  // Use different handlers for touch vs mouse devices
+  if ('ontouchstart' in window) {
+    document.addEventListener("touchend", handleTap);
+    document.addEventListener("touchstart", showControls);
+  } else {
+    document.addEventListener("mousemove", showControls);
+    document.addEventListener("click", showControls);
+  }
+
+  // Double-tap to play/pause on video
+  let lastVideoTap = 0;
+  player.addEventListener('touchend', (e) => {
+    const now = Date.now();
+    const timeSinceLastTap = now - lastVideoTap;
+    if (timeSinceLastTap < 300 && timeSinceLastTap > 0) {
+      e.preventDefault();
+      if (player.paused) {
+        player.play();
+      } else {
+        player.pause();
+      }
+    }
+    lastVideoTap = now;
+  });
+
+  // Grace period - prevent skipping immediately after a clip starts
+  let clipStartTime = 0;
+  const MIN_PLAY_TIME = 3000; // Must play at least 3 seconds before allowing skip
+
+  function canSkipClip() {
+    const elapsed = Date.now() - clipStartTime;
+    if (elapsed < MIN_PLAY_TIME) {
+      debugLog(`Skip blocked - only ${elapsed}ms elapsed (need ${MIN_PLAY_TIME}ms)`, "warn");
+      return false;
+    }
+    return true;
+  }
 
   // Freeze detection and recovery
   function tryRecoverPlayback() {
     if (isSwitching || player.paused) return;
+    if (!canSkipClip()) return; // Don't skip during grace period
 
     stallRecoveryAttempts++;
     debugLog(`Stall recovery attempt ${stallRecoveryAttempts}/${MAX_STALL_RECOVERY}`, "warn");
@@ -584,22 +861,57 @@
     });
   }
 
-  // Stalled event - network/buffer issue
+  // Stalled event - network/buffer issue (don't auto-recover, just show status)
+  // Buffering indicator timeout
+  let bufferingTimeout = null;
+
+  function showBufferingIndicator() {
+    if (bufferingTimeout) clearTimeout(bufferingTimeout);
+    bufferingTimeout = setTimeout(() => {
+      bufferingIndicator.classList.add("show");
+    }, 500);
+  }
+
+  function hideBufferingIndicator() {
+    if (bufferingTimeout) clearTimeout(bufferingTimeout);
+    bufferingIndicator.classList.remove("show");
+    const bufferText = bufferingIndicator.querySelector('.text');
+    if (bufferText) bufferText.textContent = 'Buffering...';
+  }
+
   player.addEventListener("stalled", () => {
-    debugLog("Video stalled - network issue", "warn");
+    debugLog("Video stalled - buffering", "warn");
     setSyncStatus("syncing", "Buffering...");
-    // Give it a moment then try to recover
-    setTimeout(() => {
-      if (!player.paused && player.readyState < 3) {
-        tryRecoverPlayback();
+    showBufferingIndicator();
+    bufferingCount++;
+    smoothPlaybackStart = 0; // Reset smooth playback timer
+
+    // Drop quality after 2 buffering events
+    if (bufferingCount >= 2) {
+      if (dropQuality()) {
+        bufferingCount = 0;
+        const bufferText = bufferingIndicator.querySelector('.text');
+        if (bufferText) bufferText.textContent = `Buffering... (${getTargetQuality()}p)`;
       }
-    }, 3000);
+    }
   });
 
   // Waiting event - waiting for data
   player.addEventListener("waiting", () => {
     debugLog("Video waiting for data", "warn");
     setSyncStatus("syncing", "Buffering...");
+    showBufferingIndicator();
+    bufferingCount++;
+    smoothPlaybackStart = 0;
+
+    // Drop quality after 2 buffering events
+    if (bufferingCount >= 2) {
+      if (dropQuality()) {
+        bufferingCount = 0;
+        const bufferText = bufferingIndicator.querySelector('.text');
+        if (bufferText) bufferText.textContent = `Buffering... (${getTargetQuality()}p)`;
+      }
+    }
   });
 
   // Playing event - recovered from waiting/stalled
@@ -607,26 +919,47 @@
     stallRecoveryAttempts = 0; // Reset on successful play
     lastPlaybackTime = player.currentTime;
     lastPlaybackCheck = Date.now();
+    hideBufferingIndicator();
+
+    // Start tracking smooth playback for quality recovery
+    if (smoothPlaybackStart === 0) {
+      smoothPlaybackStart = Date.now();
+    }
   });
 
-  // Periodic playback health check - catch silent freezes
+  // Periodic playback health check - catch silent freezes (balanced)
+  let consecutiveFreezeChecks = 0;
   setInterval(() => {
-    if (isSwitching || player.paused || player.ended) return;
+    if (isSwitching || player.paused || player.ended || player.seeking) return;
+    // Don't check if video is still loading
+    if (player.readyState < 3) return;
 
     const now = Date.now();
     const timeSinceCheck = (now - lastPlaybackCheck) / 1000;
-    const expectedProgress = timeSinceCheck * player.playbackRate;
     const actualProgress = player.currentTime - lastPlaybackTime;
 
-    // If video should have progressed but didn't (frozen)
-    if (timeSinceCheck > 2 && actualProgress < 0.5 && player.readyState >= 2) {
-      debugLog(`Frozen detected: expected ${expectedProgress.toFixed(1)}s, got ${actualProgress.toFixed(1)}s`, "warn");
-      tryRecoverPlayback();
+    // Consider frozen if fully loaded (readyState 4) and no progress for 5+ seconds
+    if (timeSinceCheck > 5 && actualProgress < 0.3 && player.readyState >= 4) {
+      consecutiveFreezeChecks++;
+      debugLog(`Freeze check ${consecutiveFreezeChecks}/2: no progress for ${timeSinceCheck.toFixed(1)}s`, "warn");
+
+      // Recover after 2 consecutive freeze detections (10+ seconds frozen)
+      if (consecutiveFreezeChecks >= 2) {
+        debugLog("Confirmed frozen - attempting recovery", "err");
+        consecutiveFreezeChecks = 0;
+        // Drop quality before trying to recover
+        dropQuality();
+        tryRecoverPlayback();
+      }
+    } else {
+      consecutiveFreezeChecks = 0;
+      // Try to recover quality if playing smoothly
+      tryRecoverQuality();
     }
 
     lastPlaybackTime = player.currentTime;
     lastPlaybackCheck = now;
-  }, 3000);
+  }, 5000);
 
   // HUD Position polling
   let currentHudPosition = null;
@@ -730,11 +1063,11 @@
     syncText.textContent = text;
   }
 
-  // GQL: Get MP4 URL
-  async function getMp4Url(clipId) {
+  // GQL: Get MP4 URL (adapts quality for slow connections)
+  async function getMp4Url(clipId, forceHighQuality = false) {
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 8000);
+      const timeout = setTimeout(() => controller.abort(), isSlowConnection ? 12000 : 8000);
 
       const res = await fetch(GQL_URL, {
         method: "POST",
@@ -758,12 +1091,68 @@
       const qualities = clip.videoQualities || [];
       if (!token || !sig || !qualities.length) return null;
 
-      const best = qualities.sort((a,b) => (parseInt(b.quality)||0) - (parseInt(a.quality)||0))[0];
-      const sep = best.sourceURL.includes("?") ? "&" : "?";
-      return `${best.sourceURL}${sep}sig=${encodeURIComponent(sig)}&token=${encodeURIComponent(token)}`;
+      // Sort by quality (highest first)
+      const sorted = qualities.sort((a,b) => (parseInt(b.quality)||0) - (parseInt(a.quality)||0));
+
+      // Choose quality based on adaptive quality level
+      let chosen;
+      if (!forceHighQuality && sorted.length > 1) {
+        // Use adaptive quality level (dynamically adjusted based on buffering)
+        const targetQuality = getTargetQuality();
+        // Find best match at or below target quality
+        chosen = sorted.find(q => parseInt(q.quality) <= targetQuality);
+        // If no match found (all qualities higher than target), use lowest available
+        if (!chosen) {
+          chosen = sorted[sorted.length - 1];
+        }
+        debugLog(`Using ${chosen.quality}p (target: ${targetQuality}p, level: ${currentQualityLevel})`);
+      } else {
+        chosen = sorted[0];
+      }
+
+      const sep = chosen.sourceURL.includes("?") ? "&" : "?";
+      return `${chosen.sourceURL}${sep}sig=${encodeURIComponent(sig)}&token=${encodeURIComponent(token)}`;
     } catch (e) {
       debugLog("GQL err: " + e.message, "err");
       return null;
+    }
+  }
+
+  // Preload next clip in background (for smoother transitions)
+  async function preloadNextClip() {
+    if (!clips.length || !isController) return;
+
+    const next = pickNextClip();
+    if (!next || next.id === currentClipId || next.id === preloadedClipId) return;
+
+    try {
+      const url = await getMp4Url(next.id);
+      if (url) {
+        preloadedClipId = next.id;
+        preloadedUrl = url;
+
+        // Actually preload the video data using a hidden video element
+        if (preloadVideo) {
+          preloadVideo.src = '';
+          preloadVideo.load();
+        }
+        preloadVideo = document.createElement('video');
+        preloadVideo.preload = 'auto';
+        preloadVideo.muted = true;
+        preloadVideo.playsInline = true;
+        preloadVideo.style.display = 'none';
+        preloadVideo.src = url;
+        preloadVideo.load();
+
+        debugLog(`Preloading video: ${next.id.substring(0,15)}`, "ok");
+
+        // Clean up after it's buffered enough
+        preloadVideo.oncanplaythrough = () => {
+          debugLog(`Preload ready: ${next.id.substring(0,15)}`, "ok");
+        };
+      }
+    } catch (e) {
+      // Silently fail - preloading is optional
     }
   }
 
@@ -797,13 +1186,21 @@
     }
   }
 
-  // Play a clip and seek to position - FAST START
+  // Play a clip and seek to position - FAST START with robust loading
   async function playClipAtPosition(clipId, mp4Url, position, duration, clipData) {
     if (isSwitching && clipId === currentClipId) return;
     isSwitching = true;
 
     debugLog(`Loading: ${clipId?.substring(0,20) || 'unknown'}...`);
-    setSyncStatus("syncing", "Loading...");
+    setSyncStatus("syncing", isSlowConnection ? "Buffering..." : "Loading...");
+
+    // Check if we have this preloaded
+    if (!mp4Url && clipId === preloadedClipId && preloadedUrl) {
+      mp4Url = preloadedUrl;
+      debugLog("Using preloaded URL", "ok");
+      preloadedClipId = null;
+      preloadedUrl = null;
+    }
 
     // If we don't have URL, fetch it
     if (!mp4Url) {
@@ -823,18 +1220,27 @@
     stallRecoveryAttempts = 0;
     lastPlaybackTime = 0;
     lastPlaybackCheck = Date.now();
+    bufferingCount = 0; // Reset buffering count for new clip
 
     // Clear old handlers
     player.oncanplay = null;
     player.oncanplaythrough = null;
     player.onerror = null;
     player.onloadedmetadata = null;
+    player.onloadeddata = null;
 
-    player.src = mp4Url;
+    // Track if we've started playing
+    let hasStarted = false;
 
-    // Start playing immediately when we have metadata (fastest possible start)
-    player.onloadedmetadata = () => {
+    function startPlayback() {
+      if (hasStarted) return;
+      hasStarted = true;
+
+      // Clear all load handlers
       player.onloadedmetadata = null;
+      player.oncanplay = null;
+      player.onloadeddata = null;
+      player.oncanplaythrough = null;
 
       // Seek to current position if joining mid-clip
       const seekTo = Math.min(position || 0, (duration || 30) - 0.5);
@@ -850,7 +1256,11 @@
         showControls();
         setSyncStatus("synced", "Synced");
         isSwitching = false;
+        clipStartTime = Date.now(); // Start grace period
         debugLog(`Playing!`, "ok");
+
+        // Start preloading next clip after a delay
+        if (isController) setTimeout(preloadNextClip, 5000);
       }).catch(err => {
         // Autoplay blocked - try muted and show unmute overlay
         debugLog(`Autoplay blocked, trying muted`, "warn");
@@ -863,30 +1273,120 @@
           showControls();
           setSyncStatus("synced", "Synced");
           isSwitching = false;
+          clipStartTime = Date.now(); // Start grace period
           // Show unmute overlay
           unmuteOverlay.classList.remove("hide");
+          // Start preloading next clip after a delay
+          if (isController) setTimeout(preloadNextClip, 5000);
         }).catch(e => {
           debugLog(`Play failed: ${e.message}`, "err");
           isSwitching = false;
         });
       });
-    };
+    }
+
+    // On slow/mobile connections, wait for more buffer before playing
+    if (isSlowConnection || isMobile) {
+      let bufferCheckInterval = null;
+
+      // Check if we have enough buffer to play smoothly
+      function hasEnoughBuffer() {
+        if (player.buffered.length === 0) return false;
+        const bufferedEnd = player.buffered.end(player.buffered.length - 1);
+        const currentPos = player.currentTime || 0;
+        const bufferedAhead = bufferedEnd - currentPos;
+        // Need at least 3 seconds buffered on slow, 2 on mobile
+        const minBuffer = isSlowConnection ? 3 : 2;
+        return bufferedAhead >= minBuffer;
+      }
+
+      player.oncanplaythrough = startPlayback;
+
+      player.oncanplay = () => {
+        // On slow connection, check buffer before starting
+        if (hasEnoughBuffer()) {
+          debugLog("Buffer sufficient, starting");
+          startPlayback();
+        } else {
+          debugLog("Can play but waiting for more buffer...");
+          setSyncStatus("syncing", "Buffering...");
+
+          // Poll buffer status
+          if (!bufferCheckInterval) {
+            bufferCheckInterval = setInterval(() => {
+              if (hasStarted) {
+                clearInterval(bufferCheckInterval);
+                return;
+              }
+              if (hasEnoughBuffer()) {
+                clearInterval(bufferCheckInterval);
+                debugLog("Buffer ready, starting");
+                startPlayback();
+              }
+            }, 500);
+          }
+        }
+      };
+
+      // Fallback if canplaythrough never fires
+      player.onloadedmetadata = () => {
+        // Longer timeout for slow connections
+        const fallbackTime = isSlowConnection ? 5000 : 3000;
+        setTimeout(() => {
+          if (!hasStarted && player.readyState >= 2) {
+            if (bufferCheckInterval) clearInterval(bufferCheckInterval);
+            debugLog("Buffer timeout, starting anyway", "warn");
+            startPlayback();
+          }
+        }, fallbackTime);
+      };
+    } else {
+      // Fast connection - start as soon as possible
+      player.onloadedmetadata = startPlayback;
+      player.oncanplay = startPlayback;
+      player.onloadeddata = startPlayback;
+    }
 
     player.onerror = () => {
+      if (hasStarted) return;
+      hasStarted = true;
       debugLog("Video error - trying next", "err");
       setSyncStatus("error", "Error");
       isSwitching = false;
       if (isController) setTimeout(controllerAdvance, 500);
     };
 
-    // Timeout - if nothing happens in 8 seconds, try next clip
+    // Set source and explicitly load
+    player.src = mp4Url;
+    player.load();
+
+    // Timeout - longer on slow connections
+    const loadTimeout = isSlowConnection ? 10000 : (isMobile ? 8000 : 6000);
     setTimeout(() => {
-      if (isSwitching && currentClipId === clipId) {
-        debugLog("Load timeout - trying next", "warn");
+      if (isSwitching && currentClipId === clipId && !hasStarted) {
+        debugLog("Load timeout - forcing recovery", "warn");
+        hasStarted = true;
         isSwitching = false;
-        if (isController) controllerAdvance();
+
+        // Try to force play anyway - sometimes video is ready but events didn't fire
+        if (player.readyState >= 2) {
+          debugLog("Video ready, forcing play", "warn");
+          player.play().then(() => {
+            loadingOverlay.classList.add("hide");
+            updateHud(clipData);
+            showControls();
+            setSyncStatus("synced", "Synced");
+            debugLog("Forced play succeeded", "ok");
+          }).catch(() => {
+            debugLog("Forced play failed, advancing", "err");
+            if (isController) controllerAdvance();
+          });
+        } else {
+          debugLog(`readyState only ${player.readyState}, advancing`, "err");
+          if (isController) controllerAdvance();
+        }
       }
-    }, 8000);
+    }, loadTimeout);
   }
 
   // Controller: pick next clip and broadcast
@@ -940,8 +1440,9 @@
 
       // Check if clip ended (server-side)
       if (data.clip_ended) {
-        if (isController) {
+        if (isController && canSkipClip()) {
           // Controller advances to next clip
+          debugLog("Server says clip ended, advancing");
           controllerAdvance();
         }
         // Non-controller will get new state on next poll
@@ -981,13 +1482,48 @@
 
   // Video ended - controller advances
   player.onended = () => {
-    debugLog("Video ended");
+    debugLog("Video ended event fired");
+
+    // Verify the video actually played for a reasonable time
+    if (!canSkipClip()) {
+      debugLog("Ignoring premature ended event", "warn");
+      return;
+    }
+
+    // Also verify we're near the end of the video
+    const duration = player.duration || 30;
+    const currentTime = player.currentTime || 0;
+    if (currentTime < duration - 2 && currentTime < 5) {
+      // Ended too early and haven't played much - likely a glitch
+      debugLog(`Ignoring ended at ${currentTime.toFixed(1)}s of ${duration.toFixed(1)}s`, "warn");
+      return;
+    }
+
+    debugLog("Video legitimately ended");
     if (isController) {
       controllerAdvance();
     }
   };
 
   // Init - FAST parallel loading
+  // Handle orientation changes
+  let currentOrientation = window.orientation || screen.orientation?.angle || 0;
+
+  function handleOrientationChange() {
+    const newOrientation = window.orientation || screen.orientation?.angle || 0;
+    if (newOrientation !== currentOrientation) {
+      debugLog(`Orientation changed: ${currentOrientation} -> ${newOrientation}`, "ok");
+      currentOrientation = newOrientation;
+      showControls();
+      updateViewportHeight();
+    }
+  }
+
+  window.addEventListener('orientationchange', () => setTimeout(handleOrientationChange, 200));
+  if (screen.orientation) {
+    screen.orientation.addEventListener('change', () => setTimeout(handleOrientationChange, 200));
+  }
+
   async function init() {
     debugLog("Init...");
 
@@ -1027,8 +1563,10 @@
       controllerAdvance();
     }
 
-    // Start sync polling
-    syncInterval = setInterval(pollSyncState, 2000);
+    // Start sync polling (slower on slow connections to save bandwidth)
+    const pollInterval = isSlowConnection ? 4000 : 2000;
+    syncInterval = setInterval(pollSyncState, pollInterval);
+    debugLog(`Sync poll: ${pollInterval}ms`);
   }
 
   init();
