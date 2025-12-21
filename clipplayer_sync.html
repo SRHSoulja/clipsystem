@@ -903,24 +903,25 @@
     hideTimeout = setTimeout(hideControls, 4000);
   }
 
-  // Handle tap to toggle controls on mobile
+  // Handle tap to show controls on mobile (single tap shows, auto-hides after 4s)
   function handleTap(e) {
-    // Ignore taps on interactive elements
+    // Ignore taps on interactive elements - let them handle their own events
     if (e.target.closest('#volumeControl, #volumeBtn, #volumeSlider, #unmuteOverlay, #skipBtn, #viewerControls')) {
+      // But still reset the hide timeout so controls stay visible while interacting
+      if (controlsVisible && hideTimeout) {
+        clearTimeout(hideTimeout);
+        hideTimeout = setTimeout(hideControls, 4000);
+      }
       return;
     }
-    // Toggle controls on tap
-    if (controlsVisible) {
-      hideControls();
-    } else {
-      showControls();
-    }
+    // Show controls on tap (they auto-hide after 4 seconds)
+    showControls();
   }
 
   // Use different handlers for touch vs mouse devices
   if ('ontouchstart' in window) {
-    document.addEventListener("touchend", handleTap);
-    document.addEventListener("touchstart", showControls);
+    // On touch devices: show controls on tap, auto-hide after 4s
+    document.addEventListener("touchend", handleTap, { passive: true });
   } else {
     document.addEventListener("mousemove", showControls);
     document.addEventListener("click", showControls);
@@ -1383,7 +1384,8 @@
         clipStartTime = Date.now(); // Start grace period
         debugLog(`Playing!`, "ok");
 
-        // Reset skip votes for new clip
+        // Reset skip votes and trigger flag for new clip
+        skipTriggered = false;
         if (isController) resetSkipVotes();
 
         // Start preloading next clip after a delay
@@ -1403,7 +1405,8 @@
           clipStartTime = Date.now(); // Start grace period
           // Show unmute overlay
           unmuteOverlay.classList.remove("hide");
-          // Reset skip votes for new clip
+          // Reset skip votes and trigger flag for new clip
+          skipTriggered = false;
           if (isController) resetSkipVotes();
           // Start preloading next clip after a delay
           if (isController) setTimeout(preloadNextClip, 5000);
@@ -1603,9 +1606,28 @@
         setTimeout(() => setSyncStatus("synced", "Synced"), 500);
       }
 
+      // Controller checks for skip commands from other viewers
+      if (isController && canSkipClip()) {
+        checkForSkipCommands();
+      }
+
     } catch (e) {
       debugLog("Poll error: " + e.message, "err");
       setSyncStatus("error", "Connection lost");
+    }
+  }
+
+  // Check for skip commands (controller only)
+  async function checkForSkipCommands() {
+    try {
+      const res = await fetch(`${API_BASE}/cliptv_command.php?login=${encodeURIComponent(login)}`, { cache: "no-store" });
+      const data = await res.json();
+      if (data.has_command && data.command_type === 'skip') {
+        debugLog("Skip command received from viewer", "ok");
+        controllerAdvance();
+      }
+    } catch (e) {
+      // Silently fail - not critical
     }
   }
 
@@ -1686,12 +1708,13 @@
         mySkipVote = data.my_skip_vote || false;
         updateViewerUI();
 
-        // Check if majority wants to skip
-        if (data.should_skip && isController && canSkipClip()) {
+        // Check if majority wants to skip - ANY viewer can trigger this
+        if (data.should_skip && canSkipClip()) {
           debugLog("Majority voted to skip!", "ok");
           skipBtn.classList.add('skipping');
           setTimeout(() => skipBtn.classList.remove('skipping'), 500);
-          controllerAdvance();
+          // Trigger skip by updating sync state - this notifies all viewers
+          triggerSkip();
         }
       }
     } catch (e) {
@@ -1715,8 +1738,39 @@
     }
   }
 
-  // Skip button click handler
-  skipBtn.addEventListener('click', () => {
+  // Skip triggered by any viewer when majority reached
+  let skipTriggered = false;
+  async function triggerSkip() {
+    // Prevent multiple skip triggers for same clip
+    if (skipTriggered) return;
+    skipTriggered = true;
+
+    if (isController) {
+      // Controller handles the skip directly
+      controllerAdvance();
+    } else {
+      // Non-controller: request a skip via server command
+      try {
+        const formData = new FormData();
+        formData.append('login', login);
+        formData.append('command_type', 'skip');
+        formData.append('nonce', Date.now().toString());
+        await fetch(`${API_BASE}/cliptv_command.php`, {
+          method: 'POST',
+          body: formData
+        });
+        debugLog("Skip command sent to server", "ok");
+      } catch (e) {
+        debugLog("Failed to send skip command: " + e.message, "err");
+      }
+    }
+  }
+
+  // Skip button handler - unified for touch and click
+  function handleSkipButton(e) {
+    e.preventDefault();
+    e.stopPropagation();
+
     if (!canSkipClip()) {
       debugLog("Skip blocked - clip just started", "warn");
       return;
@@ -1733,7 +1787,16 @@
 
     // Keep controls visible
     showControls();
-  });
+  }
+
+  // Use touchend for faster response on mobile, click for desktop
+  if ('ontouchstart' in window) {
+    skipBtn.addEventListener('touchend', handleSkipButton, { passive: false });
+    // Prevent ghost click after touch
+    skipBtn.addEventListener('click', (e) => e.preventDefault());
+  } else {
+    skipBtn.addEventListener('click', handleSkipButton);
+  }
 
   // Start heartbeat interval
   function startHeartbeat() {
