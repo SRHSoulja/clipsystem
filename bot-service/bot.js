@@ -474,35 +474,42 @@ const commands = {
     }
   },
 
-  // !cvote [seq] - Clear votes for a clip (mod only)
-  // If no seq provided, clears votes for currently playing clip
+  // !cvote [seq|clear] - Clear user's own votes
+  // !cvote - clear vote on currently playing clip
+  // !cvote 3 - clear vote on clip #3
+  // !cvote clear - clear ALL votes the user has ever made
   async cvote(channel, tags, args) {
-    if (!isMod(tags)) {
-      return null; // Silently ignore non-mods
-    }
-
     const login = getClipChannel(channel);
-    const seq = parseInt(args[0]) || 0;
+    const user = tags.username || 'anonymous';
+    const arg = (args[0] || '').toLowerCase();
 
     try {
-      let url = `${config.apiBaseUrl}/cvote.php?login=${encodeURIComponent(login)}&key=${encodeURIComponent(config.adminKey)}`;
-      if (seq > 0) {
-        url += `&seq=${seq}`;
+      let url = `${config.apiBaseUrl}/cvote.php?login=${encodeURIComponent(login)}&user=${encodeURIComponent(user)}`;
+
+      if (arg === 'clear') {
+        // Clear all votes
+        url += '&clear=all';
+      } else {
+        const seq = parseInt(arg) || 0;
+        if (seq > 0) {
+          url += `&seq=${seq}`;
+        }
       }
+
       const res = await fetchWithTimeout(url);
       return await res.text();
     } catch (err) {
       console.error('!cvote error:', err.message);
-      return 'Could not clear votes.';
+      return 'Could not clear vote.';
     }
   },
 
   // !chelp - Show available clip commands
   async chelp(channel, tags, args) {
     if (isMod(tags)) {
-      return 'Mod: !cplay <#>, !cskip, !cprev, !ccat <game>, !ctop [#], !cvote [#], !chud <pos>, !cremove/!cadd <#> | All: !cclip, !cfind, !like/!dislike [#]';
+      return 'Mod: !cplay <#>, !cskip, !cprev, !ccat <game>, !ctop [#], !chud <pos>, !cremove/!cadd <#> | All: !cclip [#], !cfind [keywords/clipper/category], !like/!dislike [#], !cvote [#|clear]';
     }
-    return 'Clip commands: !cclip (current), !cfind (browse), !like [#] (upvote), !dislike [#] (downvote)';
+    return 'Clip commands: !cclip [#], !cfind [keywords/clipper/category], !like [#], !dislike [#], !cvote [#|clear]';
   },
 
   // !chud <position> - Move the HUD overlay (mod only)
