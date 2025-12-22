@@ -484,9 +484,9 @@
       opacity: 0;
       transform: translateY(10px);
       transition: opacity 300ms, transform 300ms;
-      pointer-events: none;
+      /* No pointer-events:none - allow clicks even when faded out */
     }
-    #viewerControls.show { opacity: 1; transform: translateY(0); pointer-events: auto; }
+    #viewerControls.show { opacity: 1; transform: translateY(0); }
 
     #viewerCount {
       display: flex;
@@ -515,7 +515,6 @@
       backdrop-filter: blur(12px);
       cursor: pointer;
       transition: all 200ms;
-      pointer-events: auto;
     }
     #skipBtn:hover { background: rgba(251, 191, 36, 0.2); border-color: #fbbf24; }
     #skipBtn:active { transform: scale(0.95); }
