@@ -411,7 +411,8 @@ $keyParam = "&key=" . urlencode($providedKey);
 $nextUrl = $needsContinue ? "clips_backfill.php?login=$login&years=$years&window=$nextWindow&maxwin=$maxWindows$freshParam$keyParam" : null;
 
 // URL to auto-migrate after backfill completes
-$migrateUrl = "migrate_clips_to_db.php?login=$login&key=" . urlencode($providedKey) . "&update=1&from_backfill=1";
+// Pass fresh=1 to migration if we're doing a fresh backfill (so it deletes existing DB clips too)
+$migrateUrl = "migrate_clips_to_db.php?login=$login&key=" . urlencode($providedKey) . "&update=1&from_backfill=1" . $freshParam;
 
 echo "=== Chunk Complete ===\n";
 echo "Windows processed: $windowsProcessed\n";
