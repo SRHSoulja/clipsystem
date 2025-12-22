@@ -114,12 +114,17 @@ try {
   if ($row) {
     // Calculate current position in clip
     $startedAt = strtotime($row['started_at']);
+    $updatedAt = strtotime($row['updated_at']);
     $now = time();
     $elapsed = $now - $startedAt;
+    $staleSeconds = $now - $updatedAt;
     $duration = floatval($row['clip_duration']);
 
     // Check if clip has ended
     $clipEnded = $elapsed >= $duration;
+
+    // Controller is stale if no update in 15+ seconds
+    $controllerStale = $staleSeconds > 15;
 
     echo json_encode([
       "login" => $login,
@@ -131,8 +136,11 @@ try {
       "clip_seq" => intval($row['clip_seq'] ?? 0),
       "created_at" => $row['clip_created_at'] ?? null,
       "started_at" => $row['started_at'],
+      "updated_at" => $row['updated_at'],
       "current_position" => min($elapsed, $duration),
       "clip_ended" => $clipEnded,
+      "controller_stale" => $controllerStale,
+      "stale_seconds" => $staleSeconds,
       "playlist_index" => intval($row['playlist_index']),
       "playlist_ids" => $row['playlist_ids'],
       "has_state" => true

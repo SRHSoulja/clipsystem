@@ -674,6 +674,7 @@
   let skipNeeded = 1;
   let mySkipVote = false;
   let heartbeatInterval = null;
+  let controllerHeartbeatInterval = null;
 
   // Hide unmute overlay initially
   unmuteOverlay.classList.add("hide");
@@ -1529,6 +1530,23 @@
         if (!isController) {
           isController = true;
           debugLog("Becoming controller", "ok");
+          startControllerHeartbeat();
+          controllerAdvance();
+        }
+        return;
+      }
+
+      // Check if controller is stale (hasn't updated in 15+ seconds)
+      // This means the controller left and we should take over
+      if (data.controller_stale && !isController) {
+        debugLog(`Controller stale (${data.stale_seconds}s) - taking over`, "warn");
+        isController = true;
+        startControllerHeartbeat();
+        // Continue playing current clip if it's still running
+        if (!data.clip_ended && data.clip_id === currentClipId) {
+          debugLog("Continuing current clip as new controller", "ok");
+          // Just start managing from here
+        } else {
           controllerAdvance();
         }
         return;
@@ -1780,9 +1798,37 @@
     heartbeatInterval = setInterval(() => sendHeartbeat(), 3000);
   }
 
+  // Controller heartbeat - keeps sync state updated_at fresh
+  // so other viewers know the controller is still active
+  function sendControllerHeartbeat() {
+    if (!isController) return;
+    const formData = new FormData();
+    formData.append("login", login);
+    fetch(`${API_BASE}/sync_state_heartbeat.php`, {
+      method: "POST",
+      body: formData
+    }).catch(() => {}); // Fire and forget
+  }
+
+  function startControllerHeartbeat() {
+    if (controllerHeartbeatInterval) clearInterval(controllerHeartbeatInterval);
+    // Send heartbeat every 5 seconds
+    sendControllerHeartbeat();
+    controllerHeartbeatInterval = setInterval(sendControllerHeartbeat, 5000);
+    debugLog("Controller heartbeat started", "ok");
+  }
+
+  function stopControllerHeartbeat() {
+    if (controllerHeartbeatInterval) {
+      clearInterval(controllerHeartbeatInterval);
+      controllerHeartbeatInterval = null;
+    }
+  }
+
   // Stop heartbeat on page unload
   window.addEventListener('beforeunload', () => {
     if (heartbeatInterval) clearInterval(heartbeatInterval);
+    if (controllerHeartbeatInterval) clearInterval(controllerHeartbeatInterval);
   });
 
   async function init() {
@@ -1807,9 +1853,21 @@
     // Process sync state
     const syncData = syncResult.status === 'fulfilled' ? syncResult.value : { has_state: false };
 
-    if (syncData.has_state && !syncData.clip_ended && syncData.clip_id) {
-      // Join existing stream immediately
+    if (syncData.has_state && !syncData.clip_ended && syncData.clip_id && !syncData.controller_stale) {
+      // Join existing stream immediately (and controller is still active)
       debugLog("Joining stream...", "ok");
+      playClipAtPosition(
+        syncData.clip_id,
+        syncData.clip_url,
+        syncData.current_position,
+        syncData.clip_duration,
+        syncData
+      );
+    } else if (syncData.has_state && syncData.controller_stale && !syncData.clip_ended && syncData.clip_id) {
+      // Controller is stale but clip is still valid - take over as controller
+      isController = true;
+      debugLog(`Taking over stale stream (${syncData.stale_seconds}s stale)`, "warn");
+      startControllerHeartbeat();
       playClipAtPosition(
         syncData.clip_id,
         syncData.clip_url,
@@ -1821,6 +1879,7 @@
       // No active stream - become controller
       isController = true;
       debugLog("Starting new stream", "ok");
+      startControllerHeartbeat();
       controllerAdvance();
     }
 
