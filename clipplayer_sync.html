@@ -759,8 +759,8 @@
   const QUALITY_LEVELS = [160, 360, 480, 720, 1080];
   let bufferingCount = 0; // Count buffering events per clip
   let lastQualityDropTime = 0;
-  const QUALITY_DROP_COOLDOWN = 30000; // Don't drop quality more than once per 30s
-  const QUALITY_RECOVER_TIME = 120000; // Try higher quality after 2 min of smooth playback
+  const QUALITY_DROP_COOLDOWN = 15000; // Don't drop quality more than once per 15s
+  const QUALITY_RECOVER_TIME = 60000; // Try higher quality after 1 min of smooth playback
   let smoothPlaybackStart = 0;
 
   function getTargetQuality() {
@@ -781,8 +781,9 @@
 
   function tryRecoverQuality() {
     if (currentQualityLevel >= QUALITY_LEVELS.length - 1) return; // Already at max
-    if (isMobile && currentQualityLevel >= 2) return; // Don't go above 480p on mobile
-    if (isSlowConnection && currentQualityLevel >= 1) return; // Don't go above 360p on slow
+    // Cap quality based on device/connection
+    const maxLevel = isSlowConnection ? 1 : (isMobile ? 2 : 3); // 360p slow, 480p mobile, 720p desktop
+    if (currentQualityLevel >= maxLevel) return;
 
     const now = Date.now();
     if (smoothPlaybackStart > 0 && (now - smoothPlaybackStart) > QUALITY_RECOVER_TIME) {
@@ -806,15 +807,15 @@
         (conn.downlink && conn.downlink < downlinkThreshold);
       prefersLowQuality = isSlowConnection || isMobile; // Always prefer low quality on mobile
 
-      // Set initial quality level based on connection
+      // Set initial quality level based on connection - be conservative
       if (conn.saveData || ['slow-2g', '2g'].includes(conn.effectiveType)) {
         currentQualityLevel = 0; // 160p for very slow
       } else if (isSlowConnection || conn.effectiveType === '3g') {
-        currentQualityLevel = 1; // 360p for slow
+        currentQualityLevel = 0; // 160p for slow - start low, upgrade if smooth
       } else if (isMobile) {
-        currentQualityLevel = 2; // 480p for mobile
+        currentQualityLevel = 1; // 360p for mobile - conservative start
       } else {
-        currentQualityLevel = 3; // 720p for fast desktop
+        currentQualityLevel = 2; // 480p for fast desktop
       }
 
       debugLog(`Connection: ${conn.effectiveType || 'unknown'}, ${conn.downlink || '?'}Mbps, mobile=${isMobile}, quality=${getTargetQuality()}p`);
@@ -836,11 +837,11 @@
         }
       });
     } else {
-      // No Network Information API - assume slow on mobile
+      // No Network Information API - be conservative
       isSlowConnection = isMobile;
       prefersLowQuality = isMobile;
-      // Conservative quality without connection info
-      currentQualityLevel = isMobile ? 1 : 2; // 360p mobile, 480p desktop
+      // Start with lowest quality on mobile, medium on desktop - can upgrade later
+      currentQualityLevel = isMobile ? 0 : 1; // 160p mobile, 360p desktop
       debugLog(`No connection API, mobile=${isMobile}, quality=${getTargetQuality()}p`);
     }
   }
@@ -1418,67 +1419,29 @@
       });
     }
 
-    // On slow/mobile connections, wait for more buffer before playing
-    if (isSlowConnection || isMobile) {
-      let bufferCheckInterval = null;
+    // Simplified loading: start as soon as we can play
+    // Let the browser's native buffering handle slow connections
+    // This is more reliable than manual buffer management
+    player.oncanplay = () => {
+      debugLog("Can play - starting");
+      startPlayback();
+    };
 
-      // Check if we have enough buffer to play smoothly
-      function hasEnoughBuffer() {
-        if (player.buffered.length === 0) return false;
-        const bufferedEnd = player.buffered.end(player.buffered.length - 1);
-        const currentPos = player.currentTime || 0;
-        const bufferedAhead = bufferedEnd - currentPos;
-        // Need at least 3 seconds buffered on slow, 2 on mobile
-        const minBuffer = isSlowConnection ? 3 : 2;
-        return bufferedAhead >= minBuffer;
+    // Also start on canplaythrough for extra reliability
+    player.oncanplaythrough = () => {
+      if (!hasStarted) {
+        debugLog("Can play through - starting");
+        startPlayback();
       }
+    };
 
-      player.oncanplaythrough = startPlayback;
-
-      player.oncanplay = () => {
-        // On slow connection, check buffer before starting
-        if (hasEnoughBuffer()) {
-          debugLog("Buffer sufficient, starting");
-          startPlayback();
-        } else {
-          debugLog("Can play but waiting for more buffer...");
-          setSyncStatus("syncing", "Buffering...");
-
-          // Poll buffer status
-          if (!bufferCheckInterval) {
-            bufferCheckInterval = setInterval(() => {
-              if (hasStarted) {
-                clearInterval(bufferCheckInterval);
-                return;
-              }
-              if (hasEnoughBuffer()) {
-                clearInterval(bufferCheckInterval);
-                debugLog("Buffer ready, starting");
-                startPlayback();
-              }
-            }, 500);
-          }
-        }
-      };
-
-      // Fallback if canplaythrough never fires
-      player.onloadedmetadata = () => {
-        // Longer timeout for slow connections
-        const fallbackTime = isSlowConnection ? 5000 : 3000;
-        setTimeout(() => {
-          if (!hasStarted && player.readyState >= 2) {
-            if (bufferCheckInterval) clearInterval(bufferCheckInterval);
-            debugLog("Buffer timeout, starting anyway", "warn");
-            startPlayback();
-          }
-        }, fallbackTime);
-      };
-    } else {
-      // Fast connection - start as soon as possible
-      player.onloadedmetadata = startPlayback;
-      player.oncanplay = startPlayback;
-      player.onloadeddata = startPlayback;
-    }
+    // Fallback: start on loadeddata if canplay doesn't fire
+    player.onloadeddata = () => {
+      if (!hasStarted && player.readyState >= 2) {
+        debugLog("Loaded data - starting");
+        startPlayback();
+      }
+    };
 
     player.onerror = () => {
       if (hasStarted) return;
