@@ -96,6 +96,10 @@ if ($action === 'my_channels') {
     }
 
     $username = strtolower($currentUser['login']);
+    $pdo = get_db_connection();
+    if (!$pdo) {
+        json_error("Database unavailable", 500);
+    }
 
     try {
         $stmt = $pdo->prepare("
@@ -150,6 +154,20 @@ try {
     $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS voting_enabled BOOLEAN DEFAULT TRUE");
     $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS vote_feedback BOOLEAN DEFAULT TRUE");
     $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS last_refresh TIMESTAMP");
+
+    // Ensure channel_mods table exists
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS channel_mods (
+            id SERIAL PRIMARY KEY,
+            channel_login VARCHAR(64) NOT NULL,
+            mod_username VARCHAR(64) NOT NULL,
+            added_by VARCHAR(64),
+            added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(channel_login, mod_username)
+        )
+    ");
+    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_channel_mods_channel ON channel_mods(channel_login)");
+    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_channel_mods_mod ON channel_mods(mod_username)");
 } catch (PDOException $e) {
     // Ignore - table might already be correct
 }
