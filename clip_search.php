@@ -327,26 +327,55 @@ if ($hasArchivedClips && $pdo) {
       }
       $games = array_values($gameIds);
 
-      // Try to get game names from Twitch API or cache
-      if ($pdo && !empty($games)) {
-        try {
-          $gameIdList = array_column($games, 'game_id');
-          $placeholders = implode(',', array_fill(0, count($gameIdList), '?'));
-          $stmt = $pdo->prepare("SELECT game_id, name FROM games_cache WHERE game_id IN ($placeholders)");
-          $stmt->execute($gameIdList);
-          $gameNames = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+      // Try to get game names from cache first, then Twitch API for missing ones
+      if (!empty($games)) {
+        $gameIdList = array_column($games, 'game_id');
+        $gameNames = [];
 
-          foreach ($games as &$g) {
-            if (isset($gameNames[$g['game_id']])) {
-              $g['name'] = $gameNames[$g['game_id']];
-            } else {
-              $g['name'] = "Game " . $g['game_id'];
+        // Try database cache first
+        if ($pdo) {
+          try {
+            $placeholders = implode(',', array_fill(0, count($gameIdList), '?'));
+            $stmt = $pdo->prepare("SELECT game_id, name FROM games_cache WHERE game_id IN ($placeholders)");
+            $stmt->execute($gameIdList);
+            $gameNames = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+          } catch (PDOException $e) {
+            // Ignore - will try API
+          }
+        }
+
+        // Find which game IDs are missing from cache
+        $missingIds = array_filter($gameIdList, function($id) use ($gameNames) {
+          return !isset($gameNames[$id]);
+        });
+
+        // Fetch missing game names from Twitch API
+        if (!empty($missingIds)) {
+          $apiGames = $twitchApi->getGamesByIds($missingIds);
+          foreach ($apiGames as $gid => $gameInfo) {
+            $gameNames[$gid] = $gameInfo['name'];
+
+            // Optionally cache to database for future use
+            if ($pdo) {
+              try {
+                $insertStmt = $pdo->prepare("INSERT INTO games_cache (game_id, name) VALUES (?, ?) ON CONFLICT (game_id) DO UPDATE SET name = EXCLUDED.name");
+                $insertStmt->execute([$gid, $gameInfo['name']]);
+              } catch (PDOException $e) {
+                // Ignore cache write errors
+              }
             }
           }
-          unset($g);
-        } catch (PDOException $e) {
-          // Ignore - just use game IDs
         }
+
+        // Apply names to games list
+        foreach ($games as &$g) {
+          if (isset($gameNames[$g['game_id']])) {
+            $g['name'] = $gameNames[$g['game_id']];
+          } else {
+            $g['name'] = "Unknown Game";
+          }
+        }
+        unset($g);
       }
 
       // Sort games by count
@@ -792,8 +821,8 @@ if ($hasArchivedClips && $pdo) {
       </div>
     </header>
 
-    <form class="filters" method="get">
-      <input type="hidden" name="login" value="<?= htmlspecialchars($login) ?>">
+    <form class="filters" method="get" action="/search/<?= htmlspecialchars(urlencode($login)) ?>">
+      <!-- login is captured from URL path by nginx -->
 
       <div class="filter-group">
         <label>Title Search</label>

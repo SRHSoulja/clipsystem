@@ -250,6 +250,36 @@ class TwitchAPI {
   }
 
   /**
+   * Get game information by IDs (up to 100 at a time)
+   */
+  public function getGamesByIds(array $gameIds): array {
+    if (empty($gameIds)) {
+      return [];
+    }
+
+    // Twitch API allows up to 100 game IDs per request
+    $gameIds = array_slice(array_unique($gameIds), 0, 100);
+    $params = array_map(function($id) { return 'id=' . urlencode($id); }, $gameIds);
+    $url = "https://api.twitch.tv/helix/games?" . implode('&', $params);
+
+    $data = $this->apiRequest($url);
+    if (!$data || empty($data['data'])) {
+      return [];
+    }
+
+    $results = [];
+    foreach ($data['data'] as $game) {
+      $results[$game['id']] = [
+        'game_id' => $game['id'],
+        'name' => $game['name'],
+        'box_art_url' => $game['box_art_url'] ?? '',
+      ];
+    }
+
+    return $results;
+  }
+
+  /**
    * Get clips for a streamer by username
    */
   public function getClipsForStreamer(string $username, int $limit = 500, ?string $gameName = null): array {
