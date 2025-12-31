@@ -4,6 +4,7 @@
  *
  * Web page that shows all clips matching a search query.
  * Supports category filtering and links directly to Twitch.
+ * Falls back to live Twitch API for non-archived streamers.
  */
 header("Access-Control-Allow-Origin: *");
 header("Content-Type: text/html; charset=utf-8");
@@ -12,6 +13,7 @@ header("Pragma: no-cache");
 header("Expires: 0");
 
 require_once __DIR__ . '/db_config.php';
+require_once __DIR__ . '/includes/twitch_api.php';
 
 function clean_login($s){
   $s = strtolower(trim((string)$s));
@@ -48,10 +50,25 @@ $totalCount = 0;
 $totalPages = 0;
 $games = [];
 $currentGameName = "";
+$isLiveMode = false;  // True if using live Twitch API instead of archive
+$liveError = "";
 
 $pdo = get_db_connection();
 
+// Check if this streamer has archived clips
+$hasArchivedClips = false;
 if ($pdo) {
+  try {
+    $checkStmt = $pdo->prepare("SELECT COUNT(*) FROM clips WHERE login = ?");
+    $checkStmt->execute([$login]);
+    $hasArchivedClips = (int)$checkStmt->fetchColumn() > 0;
+  } catch (PDOException $e) {
+    // Ignore - will fall through to live mode
+  }
+}
+
+// Use archived clips if available, otherwise fall back to live Twitch API
+if ($hasArchivedClips && $pdo) {
   try {
     // Fetch available games/categories for the dropdown
     $gamesStmt = $pdo->prepare("
@@ -221,6 +238,122 @@ if ($pdo) {
     $matches = $stmt->fetchAll(PDO::FETCH_ASSOC);
   } catch (PDOException $e) {
     error_log("clip_search db error: " . $e->getMessage());
+  }
+} else {
+  // Live mode - fetch from Twitch API
+  $isLiveMode = true;
+  $twitchApi = new TwitchAPI();
+
+  if (!$twitchApi->isConfigured()) {
+    $liveError = "Twitch API not configured";
+  } else {
+    // Fetch clips from Twitch API
+    $result = $twitchApi->getClipsForStreamer($login, 500, $gameName ?: null);
+
+    if (isset($result['error'])) {
+      $liveError = $result['error'];
+    } else {
+      $allLiveClips = $result['clips'];
+
+      // Apply title filter if query provided
+      if (!empty($queryWords)) {
+        $allLiveClips = array_filter($allLiveClips, function($clip) use ($queryWords) {
+          $title = strtolower($clip['title'] ?? '');
+          foreach ($queryWords as $word) {
+            if (stripos($title, $word) === false) {
+              return false;
+            }
+          }
+          return true;
+        });
+        $allLiveClips = array_values($allLiveClips);
+      }
+
+      // Apply clipper filter if provided (partial match)
+      if ($clipper) {
+        $allLiveClips = array_filter($allLiveClips, function($clip) use ($clipper) {
+          return stripos($clip['creator_name'] ?? '', $clipper) !== false;
+        });
+        $allLiveClips = array_values($allLiveClips);
+      }
+
+      // Sort clips
+      usort($allLiveClips, function($a, $b) use ($sort) {
+        switch ($sort) {
+          case 'date':
+            return strtotime($b['created_at'] ?? 0) - strtotime($a['created_at'] ?? 0);
+          case 'oldest':
+            return strtotime($a['created_at'] ?? 0) - strtotime($b['created_at'] ?? 0);
+          case 'title':
+            return strcasecmp($a['title'] ?? '', $b['title'] ?? '');
+          case 'titlez':
+            return strcasecmp($b['title'] ?? '', $a['title'] ?? '');
+          default: // views
+            return ($b['view_count'] ?? 0) - ($a['view_count'] ?? 0);
+        }
+      });
+
+      // Paginate
+      $totalCount = count($allLiveClips);
+      $totalPages = ceil($totalCount / $perPage);
+      $offset = ($page - 1) * $perPage;
+      $pagedClips = array_slice($allLiveClips, $offset, $perPage);
+
+      // Convert to matches format (similar to DB format)
+      foreach ($pagedClips as $clip) {
+        $matches[] = [
+          'seq' => 0, // No seq for live clips
+          'clip_id' => $clip['clip_id'],
+          'title' => $clip['title'],
+          'view_count' => $clip['view_count'],
+          'created_at' => $clip['created_at'],
+          'duration' => $clip['duration'],
+          'game_id' => $clip['game_id'],
+          'thumbnail_url' => $clip['thumbnail_url'],
+          'creator_name' => $clip['creator_name'],
+        ];
+      }
+
+      // Build games list from clips (for category dropdown)
+      $gameIds = [];
+      foreach ($allLiveClips as $clip) {
+        $gid = $clip['game_id'] ?? '';
+        if ($gid && !isset($gameIds[$gid])) {
+          $gameIds[$gid] = ['game_id' => $gid, 'name' => '', 'count' => 0];
+        }
+        if ($gid) {
+          $gameIds[$gid]['count']++;
+        }
+      }
+      $games = array_values($gameIds);
+
+      // Try to get game names from Twitch API or cache
+      if ($pdo && !empty($games)) {
+        try {
+          $gameIdList = array_column($games, 'game_id');
+          $placeholders = implode(',', array_fill(0, count($gameIdList), '?'));
+          $stmt = $pdo->prepare("SELECT game_id, name FROM games_cache WHERE game_id IN ($placeholders)");
+          $stmt->execute($gameIdList);
+          $gameNames = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+
+          foreach ($games as &$g) {
+            if (isset($gameNames[$g['game_id']])) {
+              $g['name'] = $gameNames[$g['game_id']];
+            } else {
+              $g['name'] = "Game " . $g['game_id'];
+            }
+          }
+          unset($g);
+        } catch (PDOException $e) {
+          // Ignore - just use game IDs
+        }
+      }
+
+      // Sort games by count
+      usort($games, function($a, $b) {
+        return $b['count'] - $a['count'];
+      });
+    }
   }
 }
 ?>
@@ -734,19 +867,40 @@ if ($pdo) {
     </div>
     <?php endif; ?>
 
+    <?php if ($isLiveMode && !$liveError): ?>
+    <div class="info-msg" style="background: linear-gradient(90deg, rgba(145,71,255,0.2), rgba(145,71,255,0.1)); border-color: #9147ff;">
+      <strong>Live from Twitch</strong> - Showing top clips fetched directly from Twitch API.
+      <span style="color: #adadb8; font-size: 12px; display: block; margin-top: 5px;">
+        Note: Limited to ~500 clips. Clipper search works but may miss some results. No voting or clip numbers in live mode.
+      </span>
+    </div>
+    <?php elseif ($liveError): ?>
+    <div class="info-msg" style="background: rgba(255,71,87,0.1); border-color: #ff4757;">
+      <strong>Error:</strong> <?= htmlspecialchars($liveError) ?>
+      <?php if ($liveError === 'Streamer not found'): ?>
+      <p style="margin-top: 10px; color: #adadb8;">Make sure you entered the correct Twitch username.</p>
+      <?php endif; ?>
+    </div>
+    <?php else: ?>
     <div class="info-msg">
       Click any clip to watch on Twitch. Search by title or clip number (e.g. "1234").
     </div>
+    <?php endif; ?>
 
-    <?php if (empty($matches) && ($query || $gameId || $gameName || $clipper)): ?>
+    <?php if ($liveError): ?>
+    <div class="no-results">
+      <h2>Could not load clips</h2>
+      <p><a href="/" style="color: #9147ff;">Go back home</a> and try another streamer</p>
+    </div>
+    <?php elseif (empty($matches) && ($query || $gameId || $gameName || $clipper)): ?>
     <div class="no-results">
       <h2>No clips found</h2>
       <p>Try a different search term or category</p>
     </div>
     <?php elseif (empty($matches)): ?>
     <div class="no-results">
-      <h2>Search for clips</h2>
-      <p>Enter a search term or select a category to find clips</p>
+      <h2><?= $isLiveMode ? 'No clips available' : 'Search for clips' ?></h2>
+      <p><?= $isLiveMode ? 'This streamer may not have any clips yet.' : 'Enter a search term or select a category to find clips' ?></p>
     </div>
     <?php else: ?>
     <div class="results-grid">
@@ -782,7 +936,7 @@ if ($pdo) {
         <a href="<?= htmlspecialchars($twitchUrl) ?>" target="_blank" class="clip-thumb">
           <img src="<?= htmlspecialchars($thumbUrl) ?>" alt="" loading="lazy"
                onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 480 272%22><rect fill=%22%2326262c%22 width=%22480%22 height=%22272%22/><text x=%22240%22 y=%22140%22 fill=%22%23666%22 text-anchor=%22middle%22>No Preview</text></svg>'">
-          <span class="clip-seq">#<?= $seq ?></span>
+          <?php if ($seq > 0): ?><span class="clip-seq">#<?= $seq ?></span><?php endif; ?>
           <?php if ($duration): ?>
           <span class="clip-duration"><?= $duration ?></span>
           <?php endif; ?>
