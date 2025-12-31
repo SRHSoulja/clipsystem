@@ -4,6 +4,7 @@
  *
  * GET /api/votes.php?streamer=xxx&seq=1,2,3
  * Returns vote counts and current user's vote for each clip.
+ * Uses existing votes and vote_ledger tables schema.
  */
 
 header('Content-Type: application/json');
@@ -38,11 +39,11 @@ $user = getCurrentUser();
 $username = $user ? $user['login'] : null;
 
 try {
-  // Get clip IDs for the given seq numbers
+  // Get clip_ids for the given seq numbers
   $placeholders = implode(',', array_fill(0, count($seqs), '?'));
-  $stmt = $pdo->prepare("SELECT id, seq FROM clips WHERE login = ? AND seq IN ($placeholders) AND blocked = FALSE");
+  $stmt = $pdo->prepare("SELECT seq, clip_id FROM clips WHERE login = ? AND seq IN ($placeholders) AND blocked = FALSE");
   $stmt->execute(array_merge([$streamer], $seqs));
-  $clips = $stmt->fetchAll(PDO::FETCH_KEY_PAIR); // seq => id
+  $clips = $stmt->fetchAll(PDO::FETCH_KEY_PAIR); // seq => clip_id
 
   if (empty($clips)) {
     echo json_encode(['votes' => []]);
@@ -50,34 +51,31 @@ try {
   }
 
   $clipIds = array_values($clips);
-  $placeholders = implode(',', array_fill(0, count($clipIds), '?'));
+  $clipPlaceholders = implode(',', array_fill(0, count($clipIds), '?'));
 
-  // Get vote counts
+  // Get vote counts from the votes table (uses up_votes/down_votes columns)
   $stmt = $pdo->prepare("
-    SELECT
-      clip_id,
-      SUM(CASE WHEN vote_type = 'like' THEN 1 ELSE 0 END) as likes,
-      SUM(CASE WHEN vote_type = 'dislike' THEN 1 ELSE 0 END) as dislikes
+    SELECT clip_id, up_votes, down_votes
     FROM votes
-    WHERE clip_id IN ($placeholders)
-    GROUP BY clip_id
+    WHERE login = ? AND clip_id IN ($clipPlaceholders)
   ");
-  $stmt->execute($clipIds);
+  $stmt->execute(array_merge([$streamer], $clipIds));
   $voteCounts = [];
   while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
     $voteCounts[$row['clip_id']] = [
-      'likes' => (int)$row['likes'],
-      'dislikes' => (int)$row['dislikes'],
+      'likes' => (int)$row['up_votes'],
+      'dislikes' => (int)$row['down_votes'],
     ];
   }
 
-  // Get user's votes (if logged in)
+  // Get user's votes from vote_ledger (if logged in)
   $userVotes = [];
   if ($username) {
-    $stmt = $pdo->prepare("SELECT clip_id, vote_type FROM votes WHERE clip_id IN ($placeholders) AND username = ?");
-    $stmt->execute(array_merge($clipIds, [$username]));
+    $stmt = $pdo->prepare("SELECT clip_id, vote_dir FROM vote_ledger WHERE login = ? AND clip_id IN ($clipPlaceholders) AND username = ?");
+    $stmt->execute(array_merge([$streamer], $clipIds, [$username]));
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-      $userVotes[$row['clip_id']] = $row['vote_type'];
+      // Map up/down to like/dislike
+      $userVotes[$row['clip_id']] = $row['vote_dir'] === 'up' ? 'like' : 'dislike';
     }
   }
 
