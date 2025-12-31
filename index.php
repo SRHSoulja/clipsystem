@@ -1,6 +1,7 @@
 <?php
 // Launch bot if not already running
 @include_once __DIR__ . '/bot_launcher.php';
+require_once __DIR__ . '/db_config.php';
 
 // Check if this is an API health check request
 if (isset($_GET['health']) || (isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'application/json') !== false)) {
@@ -8,6 +9,25 @@ if (isset($_GET['health']) || (isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER
   header("Access-Control-Allow-Origin: *");
   echo json_encode(["status" => "ok", "service" => "clipsystem"]);
   exit;
+}
+
+// Get list of archived streamers
+$archivedStreamers = [];
+$pdo = get_db_connection();
+if ($pdo) {
+  try {
+    $stmt = $pdo->query("
+      SELECT login, COUNT(*) as clip_count
+      FROM clips
+      WHERE blocked = FALSE
+      GROUP BY login
+      ORDER BY clip_count DESC
+      LIMIT 20
+    ");
+    $archivedStreamers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+  } catch (PDOException $e) {
+    // Ignore - just won't show archived streamers
+  }
 }
 
 // Otherwise show landing page
@@ -159,6 +179,53 @@ header("Content-Type: text/html; charset=utf-8");
       text-decoration: underline;
     }
 
+    .archived-section {
+      margin-top: 40px;
+      text-align: center;
+    }
+
+    .archived-section h2 {
+      font-size: 18px;
+      color: #adadb8;
+      margin-bottom: 15px;
+      font-weight: 500;
+    }
+
+    .streamer-list {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    .streamer-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      background: rgba(145, 71, 255, 0.15);
+      border: 1px solid rgba(145, 71, 255, 0.3);
+      border-radius: 20px;
+      color: #bf94ff;
+      text-decoration: none;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+
+    .streamer-chip:hover {
+      background: rgba(145, 71, 255, 0.3);
+      border-color: #9147ff;
+      color: #fff;
+    }
+
+    .streamer-chip .count {
+      font-size: 11px;
+      color: #adadb8;
+      background: rgba(0,0,0,0.3);
+      padding: 2px 6px;
+      border-radius: 10px;
+    }
+
     footer {
       margin-top: 60px;
       color: #53535f;
@@ -209,6 +276,20 @@ header("Content-Type: text/html; charset=utf-8");
       <a href="/chelp.php">Bot Commands</a>
       <a href="/about.php">About</a>
     </div>
+
+    <?php if (!empty($archivedStreamers)): ?>
+    <div class="archived-section">
+      <h2>Archived Streamers</h2>
+      <div class="streamer-list">
+        <?php foreach ($archivedStreamers as $streamer): ?>
+        <a href="/search/<?= htmlspecialchars(urlencode($streamer['login'])) ?>" class="streamer-chip">
+          <?= htmlspecialchars($streamer['login']) ?>
+          <span class="count"><?= number_format($streamer['clip_count']) ?></span>
+        </a>
+        <?php endforeach; ?>
+      </div>
+    </div>
+    <?php endif; ?>
   </div>
 
   <footer>

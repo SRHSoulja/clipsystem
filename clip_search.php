@@ -30,11 +30,18 @@ $clipper = trim((string)($_GET["clipper"] ?? ""));
 $sort   = $_GET["sort"] ?? "views"; // views, date, title
 $page   = max(1, (int)($_GET["page"] ?? 1));
 $perPage = 100;
+$dateRange = $_GET["range"] ?? "year"; // Date range for live mode
 
 // Validate sort option
 $validSorts = ['views', 'date', 'oldest', 'title', 'titlez'];
 if (!in_array($sort, $validSorts)) {
   $sort = 'views';
+}
+
+// Validate date range
+$validRanges = ['week', 'month', '3months', '6months', 'year', '2years', '3years', 'all'];
+if (!in_array($dateRange, $validRanges)) {
+  $dateRange = 'year';
 }
 
 // Split query into words for multi-word search
@@ -243,12 +250,15 @@ if ($hasArchivedClips && $pdo) {
   // Live mode - fetch from Twitch API
   $isLiveMode = true;
   $twitchApi = new TwitchAPI();
+  $liveCursor = null; // For progressive loading
+  $hasMoreClips = false;
 
   if (!$twitchApi->isConfigured()) {
     $liveError = "Twitch API not configured";
   } else {
-    // Fetch clips from Twitch API
-    $result = $twitchApi->getClipsForStreamer($login, 500, $gameName ?: null);
+    // Fetch clips from Twitch API with date range
+    // Start with 500 clips, user can load more via AJAX
+    $result = $twitchApi->getClipsForStreamer($login, 500, $gameName ?: null, $dateRange);
 
     if (isset($result['error'])) {
       $liveError = $result['error'];
@@ -806,7 +816,7 @@ if ($hasArchivedClips && $pdo) {
   <div class="container">
     <header>
       <div>
-        <h1><a href="?login=<?= htmlspecialchars($login) ?>">Clip Search</a></h1>
+        <h1><a href="/">ClipArchive</a></h1>
         <p class="subtitle"><?= htmlspecialchars($login) ?>'s Clips</p>
         <div class="nav-links">
           <a href="chelp.php">Bot Commands</a>
@@ -858,9 +868,25 @@ if ($hasArchivedClips && $pdo) {
         </select>
       </div>
 
+      <?php if ($isLiveMode): ?>
+      <div class="filter-group">
+        <label>Date Range</label>
+        <select name="range">
+          <option value="week" <?= $dateRange === 'week' ? 'selected' : '' ?>>Last Week</option>
+          <option value="month" <?= $dateRange === 'month' ? 'selected' : '' ?>>Last Month</option>
+          <option value="3months" <?= $dateRange === '3months' ? 'selected' : '' ?>>Last 3 Months</option>
+          <option value="6months" <?= $dateRange === '6months' ? 'selected' : '' ?>>Last 6 Months</option>
+          <option value="year" <?= $dateRange === 'year' ? 'selected' : '' ?>>Last Year</option>
+          <option value="2years" <?= $dateRange === '2years' ? 'selected' : '' ?>>Last 2 Years</option>
+          <option value="3years" <?= $dateRange === '3years' ? 'selected' : '' ?>>Last 3 Years</option>
+          <option value="all" <?= $dateRange === 'all' ? 'selected' : '' ?>>All Time</option>
+        </select>
+      </div>
+      <?php endif; ?>
+
       <button type="submit" class="filter-btn">Search</button>
       <?php if ($query || $gameId || $gameName || $clipper): ?>
-      <a href="?login=<?= htmlspecialchars($login) ?>" class="clear-btn">Clear All</a>
+      <a href="/search/<?= htmlspecialchars(urlencode($login)) ?>" class="clear-btn">Clear All</a>
       <?php endif; ?>
     </form>
 
@@ -872,25 +898,25 @@ if ($hasArchivedClips && $pdo) {
       <?php if ($query): ?>
       <span class="filter-tag">
         Search: "<?= htmlspecialchars($query) ?>"
-        <a href="?login=<?= htmlspecialchars($login) ?><?= $gameId ? '&game_id=' . htmlspecialchars($gameId) : '' ?><?= $gameName ? '&game=' . htmlspecialchars($gameName) : '' ?><?= $clipper ? '&clipper=' . htmlspecialchars($clipper) : '' ?><?= $sortParam ?>">&times;</a>
+        <a href="/search/<?= htmlspecialchars(urlencode($login)) ?>?<?= $gameId ? 'game_id=' . htmlspecialchars($gameId) . '&' : '' ?><?= $gameName ? 'game=' . htmlspecialchars($gameName) . '&' : '' ?><?= $clipper ? 'clipper=' . htmlspecialchars($clipper) . '&' : '' ?><?= $sortParam ? substr($sortParam, 1) : '' ?>">&times;</a>
       </span>
       <?php endif; ?>
       <?php if ($clipper): ?>
       <span class="filter-tag">
         Clipper: <?= htmlspecialchars($clipper) ?>
-        <a href="?login=<?= htmlspecialchars($login) ?><?= $query ? '&q=' . htmlspecialchars($query) : '' ?><?= $gameId ? '&game_id=' . htmlspecialchars($gameId) : '' ?><?= $gameName ? '&game=' . htmlspecialchars($gameName) : '' ?><?= $sortParam ?>">&times;</a>
+        <a href="/search/<?= htmlspecialchars(urlencode($login)) ?>?<?= $query ? 'q=' . htmlspecialchars($query) . '&' : '' ?><?= $gameId ? 'game_id=' . htmlspecialchars($gameId) . '&' : '' ?><?= $gameName ? 'game=' . htmlspecialchars($gameName) . '&' : '' ?><?= $sortParam ? substr($sortParam, 1) : '' ?>">&times;</a>
       </span>
       <?php endif; ?>
       <?php if ($gameId): ?>
       <span class="filter-tag">
         Category: <?= htmlspecialchars($currentGameName) ?>
-        <a href="?login=<?= htmlspecialchars($login) ?><?= $query ? '&q=' . htmlspecialchars($query) : '' ?><?= $clipper ? '&clipper=' . htmlspecialchars($clipper) : '' ?><?= $sortParam ?>">&times;</a>
+        <a href="/search/<?= htmlspecialchars(urlencode($login)) ?>?<?= $query ? 'q=' . htmlspecialchars($query) . '&' : '' ?><?= $clipper ? 'clipper=' . htmlspecialchars($clipper) . '&' : '' ?><?= $sortParam ? substr($sortParam, 1) : '' ?>">&times;</a>
       </span>
       <?php endif; ?>
       <?php if ($gameName && !$gameId): ?>
       <span class="filter-tag">
         Category: "<?= htmlspecialchars($gameName) ?>"
-        <a href="?login=<?= htmlspecialchars($login) ?><?= $query ? '&q=' . htmlspecialchars($query) : '' ?><?= $clipper ? '&clipper=' . htmlspecialchars($clipper) : '' ?><?= $sortParam ?>">&times;</a>
+        <a href="/search/<?= htmlspecialchars(urlencode($login)) ?>?<?= $query ? 'q=' . htmlspecialchars($query) . '&' : '' ?><?= $clipper ? 'clipper=' . htmlspecialchars($clipper) . '&' : '' ?><?= $sortParam ? substr($sortParam, 1) : '' ?>">&times;</a>
       </span>
       <?php endif; ?>
     </div>
@@ -898,9 +924,9 @@ if ($hasArchivedClips && $pdo) {
 
     <?php if ($isLiveMode && !$liveError): ?>
     <div class="info-msg" style="background: linear-gradient(90deg, rgba(145,71,255,0.2), rgba(145,71,255,0.1)); border-color: #9147ff;">
-      <strong>Live from Twitch</strong> - Showing top clips fetched directly from Twitch API.
+      <strong>Live from Twitch</strong> - Showing clips from <?= $dateRange === 'all' ? 'all time' : 'the last ' . str_replace(['week', 'month', '3months', '6months', 'year', '2years', '3years'], ['week', 'month', '3 months', '6 months', 'year', '2 years', '3 years'], $dateRange) ?>.
       <span style="color: #adadb8; font-size: 12px; display: block; margin-top: 5px;">
-        Note: Limited to ~500 clips. Clipper search works but may miss some results. No voting or clip numbers in live mode.
+        Fetched ~<?= $totalCount ?> clips. Use Date Range filter to search different time periods. No voting or clip numbers in live mode.
       </span>
     </div>
     <?php elseif ($liveError): ?>
@@ -984,7 +1010,7 @@ if ($hasArchivedClips && $pdo) {
           </div>
           <div class="clip-meta">
             <?php if (!empty($clip['creator_name'])): ?>
-            <a href="?login=<?= htmlspecialchars($login) ?>&clipper=<?= urlencode($clip['creator_name']) ?>" class="clip-clipper" title="View all clips by <?= htmlspecialchars($clip['creator_name']) ?>">&#9986; <?= htmlspecialchars($clip['creator_name']) ?></a>
+            <a href="/search/<?= htmlspecialchars(urlencode($login)) ?>?clipper=<?= urlencode($clip['creator_name']) ?>" class="clip-clipper" title="View all clips by <?= htmlspecialchars($clip['creator_name']) ?>">&#9986; <?= htmlspecialchars($clip['creator_name']) ?></a>
             <?php endif; ?>
           </div>
           <?php if ($gameName): ?>
@@ -1000,16 +1026,18 @@ if ($hasArchivedClips && $pdo) {
     <?php if ($totalPages > 1): ?>
     <div class="pagination">
       <?php
-        $baseParams = ['login' => $login];
+        $baseParams = [];
         if ($query) $baseParams['q'] = $query;
         if ($clipper) $baseParams['clipper'] = $clipper;
         if ($gameId) $baseParams['game_id'] = $gameId;
         if ($gameName) $baseParams['game'] = $gameName;
         if ($sort !== 'views') $baseParams['sort'] = $sort;
+        if ($isLiveMode && $dateRange !== 'year') $baseParams['range'] = $dateRange;
 
         function pageUrl($params, $pageNum) {
+          global $login;
           $params['page'] = $pageNum;
-          return '?' . http_build_query($params);
+          return '/search/' . htmlspecialchars(urlencode($login)) . '?' . http_build_query($params);
         }
       ?>
       <?php if ($page > 1): ?>

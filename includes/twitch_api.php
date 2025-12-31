@@ -172,9 +172,11 @@ class TwitchAPI {
    * @param int $limit Max clips to fetch (up to 100 per request, will paginate)
    * @param string|null $gameId Filter by game ID
    * @param string|null $cursor Pagination cursor
+   * @param string|null $startedAt ISO 8601 date - clips created after this
+   * @param string|null $endedAt ISO 8601 date - clips created before this
    * @return array ['clips' => [...], 'cursor' => '...']
    */
-  public function getClips(string $broadcasterId, int $limit = 100, ?string $gameId = null, ?string $cursor = null): array {
+  public function getClips(string $broadcasterId, int $limit = 100, ?string $gameId = null, ?string $cursor = null, ?string $startedAt = null, ?string $endedAt = null): array {
     $params = [
       'broadcaster_id' => $broadcasterId,
       'first' => min($limit, 100)
@@ -186,6 +188,14 @@ class TwitchAPI {
 
     if ($cursor) {
       $params['after'] = $cursor;
+    }
+
+    if ($startedAt) {
+      $params['started_at'] = $startedAt;
+    }
+
+    if ($endedAt) {
+      $params['ended_at'] = $endedAt;
     }
 
     $url = "https://api.twitch.tv/helix/clips?" . http_build_query($params);
@@ -220,15 +230,22 @@ class TwitchAPI {
 
   /**
    * Fetch all clips for a broadcaster (paginated, up to limit)
+   *
+   * @param string $broadcasterId Twitch broadcaster ID
+   * @param int $limit Max clips to fetch
+   * @param string|null $gameId Filter by game ID
+   * @param string|null $startedAt ISO 8601 date - clips created after this
+   * @param string|null $endedAt ISO 8601 date - clips created before this
+   * @return array Array of clips
    */
-  public function getAllClips(string $broadcasterId, int $limit = 500, ?string $gameId = null): array {
+  public function getAllClips(string $broadcasterId, int $limit = 500, ?string $gameId = null, ?string $startedAt = null, ?string $endedAt = null): array {
     $allClips = [];
     $cursor = null;
     $fetched = 0;
 
     while ($fetched < $limit) {
       $batchSize = min(100, $limit - $fetched);
-      $result = $this->getClips($broadcasterId, $batchSize, $gameId, $cursor);
+      $result = $this->getClips($broadcasterId, $batchSize, $gameId, $cursor, $startedAt, $endedAt);
 
       if (empty($result['clips'])) {
         break;
@@ -281,8 +298,14 @@ class TwitchAPI {
 
   /**
    * Get clips for a streamer by username
+   *
+   * @param string $username Twitch username
+   * @param int $limit Max clips to fetch
+   * @param string|null $gameName Filter by game name
+   * @param string|null $dateRange Date range: 'week', 'month', '3months', '6months', 'year', '2years', '3years', 'all'
+   * @return array ['broadcaster_id' => ..., 'clips' => [...], 'count' => ...]
    */
-  public function getClipsForStreamer(string $username, int $limit = 500, ?string $gameName = null): array {
+  public function getClipsForStreamer(string $username, int $limit = 500, ?string $gameName = null, ?string $dateRange = 'year'): array {
     $broadcasterId = $this->getBroadcasterId($username);
     if (!$broadcasterId) {
       return ['error' => 'Streamer not found', 'clips' => []];
@@ -293,12 +316,105 @@ class TwitchAPI {
       $gameId = $this->getGameId($gameName);
     }
 
-    $clips = $this->getAllClips($broadcasterId, $limit, $gameId);
+    // Calculate date range
+    $startedAt = null;
+    $endedAt = null;
+    $now = new DateTime('now', new DateTimeZone('UTC'));
+
+    switch ($dateRange) {
+      case 'week':
+        $startedAt = (clone $now)->modify('-1 week')->format('Y-m-d\TH:i:s\Z');
+        break;
+      case 'month':
+        $startedAt = (clone $now)->modify('-1 month')->format('Y-m-d\TH:i:s\Z');
+        break;
+      case '3months':
+        $startedAt = (clone $now)->modify('-3 months')->format('Y-m-d\TH:i:s\Z');
+        break;
+      case '6months':
+        $startedAt = (clone $now)->modify('-6 months')->format('Y-m-d\TH:i:s\Z');
+        break;
+      case 'year':
+        $startedAt = (clone $now)->modify('-1 year')->format('Y-m-d\TH:i:s\Z');
+        break;
+      case '2years':
+        $startedAt = (clone $now)->modify('-2 years')->format('Y-m-d\TH:i:s\Z');
+        break;
+      case '3years':
+        $startedAt = (clone $now)->modify('-3 years')->format('Y-m-d\TH:i:s\Z');
+        break;
+      case 'all':
+      default:
+        // No date filter - get all available clips
+        $startedAt = null;
+        break;
+    }
+
+    $clips = $this->getAllClips($broadcasterId, $limit, $gameId, $startedAt, $endedAt);
 
     return [
       'broadcaster_id' => $broadcasterId,
       'clips' => $clips,
-      'count' => count($clips)
+      'count' => count($clips),
+      'date_range' => $dateRange,
+      'started_at' => $startedAt
+    ];
+  }
+
+  /**
+   * Get clips with pagination cursor support (for AJAX deep search)
+   *
+   * @param string $username Twitch username
+   * @param string|null $cursor Pagination cursor to continue from
+   * @param int $batchSize Number of clips per batch
+   * @param string|null $dateRange Date range filter
+   * @return array ['clips' => [...], 'cursor' => ..., 'broadcaster_id' => ...]
+   */
+  public function getClipsBatch(string $username, ?string $cursor = null, int $batchSize = 100, ?string $dateRange = 'year'): array {
+    $broadcasterId = $this->getBroadcasterId($username);
+    if (!$broadcasterId) {
+      return ['error' => 'Streamer not found', 'clips' => [], 'cursor' => null];
+    }
+
+    // Calculate date range
+    $startedAt = null;
+    $now = new DateTime('now', new DateTimeZone('UTC'));
+
+    switch ($dateRange) {
+      case 'week':
+        $startedAt = (clone $now)->modify('-1 week')->format('Y-m-d\TH:i:s\Z');
+        break;
+      case 'month':
+        $startedAt = (clone $now)->modify('-1 month')->format('Y-m-d\TH:i:s\Z');
+        break;
+      case '3months':
+        $startedAt = (clone $now)->modify('-3 months')->format('Y-m-d\TH:i:s\Z');
+        break;
+      case '6months':
+        $startedAt = (clone $now)->modify('-6 months')->format('Y-m-d\TH:i:s\Z');
+        break;
+      case 'year':
+        $startedAt = (clone $now)->modify('-1 year')->format('Y-m-d\TH:i:s\Z');
+        break;
+      case '2years':
+        $startedAt = (clone $now)->modify('-2 years')->format('Y-m-d\TH:i:s\Z');
+        break;
+      case '3years':
+        $startedAt = (clone $now)->modify('-3 years')->format('Y-m-d\TH:i:s\Z');
+        break;
+      case 'all':
+      default:
+        $startedAt = null;
+        break;
+    }
+
+    $result = $this->getClips($broadcasterId, $batchSize, null, $cursor, $startedAt, null);
+
+    return [
+      'broadcaster_id' => $broadcasterId,
+      'clips' => $result['clips'],
+      'cursor' => $result['cursor'],
+      'has_more' => !empty($result['cursor'])
     ];
   }
 }
