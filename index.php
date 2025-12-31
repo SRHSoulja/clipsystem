@@ -18,7 +18,7 @@ header("Content-Type: text/html; charset=utf-8");
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ClipTV - Twitch Clip Archive System</title>
+  <title>ClipArchive - Twitch Clip Archive System</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -174,7 +174,7 @@ header("Content-Type: text/html; charset=utf-8");
 <body>
   <div class="container">
     <div class="logo">📺</div>
-    <h1>ClipTV</h1>
+    <h1>ClipArchive</h1>
     <p class="tagline">Twitch Clip Archive & Playback System</p>
 
     <form class="search-box" onsubmit="goToSearch(event)">
