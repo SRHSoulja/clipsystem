@@ -61,6 +61,7 @@ class TwitchOAuth {
       'response_type' => 'code',
       'scope' => self::SCOPES,
       'state' => $state,
+      'force_verify' => 'true', // Always show auth screen so users can switch accounts
     ];
 
     return 'https://id.twitch.tv/oauth2/authorize?' . http_build_query($params);
@@ -256,11 +257,26 @@ function getCurrentUser(): ?array {
     return null;
   }
 
-  // Check if token is still valid (cached check - full validation done periodically)
+  // Check if token is still valid (cached check)
   if (isset($_SESSION['token_expires']) && $_SESSION['token_expires'] < time()) {
     // Token expired, clear session
     logout();
     return null;
+  }
+
+  // Periodically validate token with Twitch (every 15 minutes)
+  $lastValidated = $_SESSION['last_validated'] ?? 0;
+  if (time() - $lastValidated > 900 && !empty($_SESSION['access_token'])) {
+    $oauth = new TwitchOAuth();
+    $validation = $oauth->validateToken($_SESSION['access_token']);
+
+    if (!$validation) {
+      // Token is no longer valid with Twitch
+      logout();
+      return null;
+    }
+
+    $_SESSION['last_validated'] = time();
   }
 
   return $_SESSION['twitch_user'];
@@ -273,6 +289,9 @@ function isLoggedIn(): bool {
 function login(array $userInfo, string $accessToken, int $expiresIn) {
   initSession();
 
+  // Regenerate session ID to prevent session fixation attacks
+  session_regenerate_id(true);
+
   $_SESSION['twitch_user'] = [
     'id' => $userInfo['id'],
     'login' => strtolower($userInfo['login']),
@@ -281,6 +300,7 @@ function login(array $userInfo, string $accessToken, int $expiresIn) {
   ];
   $_SESSION['access_token'] = $accessToken;
   $_SESSION['token_expires'] = time() + $expiresIn - 60; // 1 min buffer
+  $_SESSION['last_validated'] = time(); // Track when we last validated with Twitch
 }
 
 function logout() {
