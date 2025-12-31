@@ -290,8 +290,10 @@ const commands = {
     try {
       const user = tags.username || 'anonymous';
       const url = `${config.apiBaseUrl}/vote_submit.php?login=${login}&user=${user}&seq=${seq}&vote=like`;
+      console.log(`!like: Calling ${url}`);
       const res = await fetchWithTimeout(url);
       const text = await res.text();
+      console.log(`!like: Response status=${res.status}, text="${text}"`);
       // API already respects vote_feedback setting, but text might be empty
       return text || null;
     } catch (err) {
@@ -329,8 +331,10 @@ const commands = {
     try {
       const user = tags.username || 'anonymous';
       const url = `${config.apiBaseUrl}/vote_submit.php?login=${login}&user=${user}&seq=${seq}&vote=dislike`;
+      console.log(`!dislike: Calling ${url}`);
       const res = await fetchWithTimeout(url);
       const text = await res.text();
+      console.log(`!dislike: Response status=${res.status}, text="${text}"`);
       // API already respects vote_feedback setting, but text might be empty
       return text || null;
     } catch (err) {
