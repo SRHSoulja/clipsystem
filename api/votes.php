@@ -71,11 +71,25 @@ try {
   // Get user's votes from vote_ledger (if logged in)
   $userVotes = [];
   if ($username) {
+    // Debug: log what we're looking for
+    error_log("votes.php: Looking for user votes - login=$streamer, username=$username, clipIds=" . implode(',', $clipIds));
+
+    // Debug: see what's actually in the ledger for these clips
+    $debugStmt = $pdo->prepare("SELECT clip_id, username, vote_dir FROM vote_ledger WHERE login = ? AND clip_id IN ($clipPlaceholders)");
+    $debugStmt->execute(array_merge([$streamer], $clipIds));
+    $allVotes = $debugStmt->fetchAll(PDO::FETCH_ASSOC);
+    error_log("votes.php: All votes in ledger for these clips: " . json_encode($allVotes));
+
     $stmt = $pdo->prepare("SELECT clip_id, vote_dir FROM vote_ledger WHERE login = ? AND clip_id IN ($clipPlaceholders) AND username = ?");
     $stmt->execute(array_merge([$streamer], $clipIds, [$username]));
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
       // Map up/down to like/dislike
       $userVotes[$row['clip_id']] = $row['vote_dir'] === 'up' ? 'like' : 'dislike';
+      error_log("votes.php: Found vote for current user - clip_id={$row['clip_id']}, vote_dir={$row['vote_dir']}");
+    }
+
+    if (empty($userVotes)) {
+      error_log("votes.php: No votes found for user $username (looking for exact match)");
     }
   }
 

@@ -41,6 +41,9 @@ function clean_seq($s){
 $login = clean_login($_REQUEST["login"] ?? "");
 $user  = clean_user($_REQUEST["user"] ?? "");
 
+// Debug logging
+error_log("vote_submit.php: login=$login, user=$user (lowercase=" . strtolower($user) . ")");
+
 // Require a number (no generic !like)
 $seq = clean_seq($_REQUEST["seq"] ?? "");
 if ($seq <= 0) {

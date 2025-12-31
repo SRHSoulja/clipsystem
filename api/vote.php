@@ -96,6 +96,9 @@ try {
   $clipTitle = $clip['title'];
   $username = $user['login'];
 
+  // Debug logging
+  error_log("vote.php: Voting - streamer=$streamer, seq=$seq, clipId=$clipId, username=$username, vote=$vote");
+
   $response = ['success' => true];
 
   // Check for existing vote in ledger
