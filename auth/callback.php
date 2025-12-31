@@ -30,8 +30,15 @@ $stateParts = explode('|', $state);
 $stateToken = $stateParts[0];
 $returnTo = isset($stateParts[1]) ? base64_decode($stateParts[1]) : '/';
 
+// Debug logging for CSRF issues
+error_log("OAuth callback - Session ID: " . session_id());
+error_log("OAuth callback - State from URL: " . $stateToken);
+error_log("OAuth callback - State from session: " . ($_SESSION['oauth_state'] ?? 'NOT SET'));
+
 if (empty($_SESSION['oauth_state']) || $stateToken !== $_SESSION['oauth_state']) {
-  die('Invalid state token - possible CSRF attack');
+  // Provide more debug info
+  error_log("OAuth CSRF failure - URL state: $stateToken, Session state: " . ($_SESSION['oauth_state'] ?? 'empty'));
+  die('Invalid state token - possible CSRF attack. Session may have expired. Please try again.');
 }
 unset($_SESSION['oauth_state']);
 

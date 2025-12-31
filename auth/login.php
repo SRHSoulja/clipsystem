@@ -8,6 +8,9 @@
 
 require_once __DIR__ . '/../includes/twitch_oauth.php';
 
+// Initialize session with proper settings BEFORE generating state
+initSession();
+
 $oauth = new TwitchOAuth();
 
 if (!$oauth->isConfigured()) {

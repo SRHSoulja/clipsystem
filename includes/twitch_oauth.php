@@ -48,10 +48,12 @@ class TwitchOAuth {
     }
 
     // Store state in session for verification
-    if (session_status() === PHP_SESSION_NONE) {
-      session_start();
-    }
+    initSession();
     $_SESSION['oauth_state'] = explode('|', $state)[0];
+
+    // Debug logging
+    error_log("OAuth login - Session ID: " . session_id());
+    error_log("OAuth login - State stored: " . $_SESSION['oauth_state']);
 
     $params = [
       'client_id' => $this->clientId,
