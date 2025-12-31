@@ -33,10 +33,18 @@ if (!$user) {
   exit;
 }
 
-// Get parameters
-$streamer = strtolower(trim($_POST['streamer'] ?? $_GET['streamer'] ?? ''));
-$seq = (int)($_POST['seq'] ?? $_GET['seq'] ?? 0);
-$vote = strtolower(trim($_POST['vote'] ?? $_GET['vote'] ?? ''));
+// Parse JSON body if content type is application/json
+$jsonInput = [];
+$contentType = $_SERVER['CONTENT_TYPE'] ?? '';
+if (strpos($contentType, 'application/json') !== false) {
+  $rawInput = file_get_contents('php://input');
+  $jsonInput = json_decode($rawInput, true) ?: [];
+}
+
+// Get parameters (from JSON body, POST, or GET)
+$streamer = strtolower(trim($jsonInput['streamer'] ?? $_POST['streamer'] ?? $_GET['streamer'] ?? ''));
+$seq = (int)($jsonInput['seq'] ?? $_POST['seq'] ?? $_GET['seq'] ?? 0);
+$vote = strtolower(trim($jsonInput['vote'] ?? $_POST['vote'] ?? $_GET['vote'] ?? ''));
 
 // Validate
 if (!$streamer) {
@@ -80,16 +88,14 @@ try {
   $clipId = $clip['id'];
   $username = $user['login'];
 
+  $response = ['success' => true];
+
   if ($vote === 'clear') {
     // Remove vote
     $stmt = $pdo->prepare("DELETE FROM votes WHERE clip_id = ? AND username = ?");
     $stmt->execute([$clipId, $username]);
-
-    echo json_encode([
-      'success' => true,
-      'action' => 'cleared',
-      'message' => "Vote cleared on #{$seq}"
-    ]);
+    $response['action'] = 'cleared';
+    $response['message'] = "Vote cleared on #{$seq}";
   } else {
     // Check for existing vote
     $stmt = $pdo->prepare("SELECT vote_type FROM votes WHERE clip_id = ? AND username = ?");
@@ -98,11 +104,8 @@ try {
 
     if ($existingVote === $vote) {
       // Same vote - inform user
-      echo json_encode([
-        'success' => true,
-        'action' => 'unchanged',
-        'message' => "You already {$vote}d #{$seq}"
-      ]);
+      $response['action'] = 'unchanged';
+      $response['message'] = "You already {$vote}d #{$seq}";
     } else {
       // Upsert vote
       $stmt = $pdo->prepare("
@@ -113,13 +116,9 @@ try {
       ");
       $stmt->execute([$clipId, $username, $vote]);
 
-      $action = $existingVote ? 'changed' : 'recorded';
-      echo json_encode([
-        'success' => true,
-        'action' => $action,
-        'vote' => $vote,
-        'message' => ucfirst($vote) . "d #{$seq}!"
-      ]);
+      $response['action'] = $existingVote ? 'changed' : 'recorded';
+      $response['vote'] = $vote;
+      $response['message'] = ucfirst($vote) . "d #{$seq}!";
     }
   }
 
@@ -140,13 +139,8 @@ try {
   $userVote = $stmt->fetchColumn() ?: null;
 
   // Add counts to response
-  $response = json_decode(ob_get_contents() ?: '{}', true);
-  ob_clean();
-
-  $response['counts'] = [
-    'likes' => (int)($counts['likes'] ?? 0),
-    'dislikes' => (int)($counts['dislikes'] ?? 0),
-  ];
+  $response['likes'] = (int)($counts['likes'] ?? 0);
+  $response['dislikes'] = (int)($counts['dislikes'] ?? 0);
   $response['user_vote'] = $userVote;
 
   echo json_encode($response);
