@@ -626,14 +626,16 @@ if ($currentUser) {
                 loadMods();
             }
 
-            // Update Clip Browser and Mod Dashboard links with login/key
+            // Update Clip Browser and Mod Dashboard links
+            // These pages use OAuth directly from session - key only needed for non-OAuth access
             const clipBrowserLink = document.getElementById('clipBrowserLink');
             const modDashboardLink = document.getElementById('modDashboardLink');
+            const authSuffix = authKey ? `&key=${encodeURIComponent(authKey)}` : '';
             if (clipBrowserLink) {
-                clipBrowserLink.href = `clip_search.php?login=${encodeURIComponent(authLogin)}&key=${encodeURIComponent(authKey)}`;
+                clipBrowserLink.href = `clip_search.php?login=${encodeURIComponent(authLogin)}${authSuffix}`;
             }
             if (modDashboardLink) {
-                modDashboardLink.href = `mod_dashboard.php?login=${encodeURIComponent(authLogin)}&key=${encodeURIComponent(authKey)}`;
+                modDashboardLink.href = `mod_dashboard.php?login=${encodeURIComponent(authLogin)}${authSuffix}`;
             }
 
             // Player URL will be set after loading settings (when we have the instance)
