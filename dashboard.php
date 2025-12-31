@@ -354,8 +354,21 @@ if ($currentUser) {
             <div class="user-info">
                 <span id="channelName"></span>
                 <span class="role-badge" id="roleBadge">MOD</span>
+                <?php if ($isSuperAdmin): ?>
+                <span class="role-badge" style="background: #eb0400;">SUPER ADMIN</span>
+                <?php endif; ?>
             </div>
         </div>
+
+        <?php if ($isSuperAdmin): ?>
+        <div class="admin-bar" style="background: linear-gradient(90deg, #eb0400, #9147ff); padding: 12px 24px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+            <span style="font-weight: bold;">Quick Access:</span>
+            <input type="text" id="adminChannelInput" placeholder="Enter channel name..." style="padding: 8px 12px; border-radius: 4px; border: none; background: rgba(0,0,0,0.3); color: white; width: 200px;">
+            <button onclick="goToChannel()" style="padding: 8px 16px; background: rgba(0,0,0,0.3); border: none; color: white; border-radius: 4px; cursor: pointer;">Go to Dashboard</button>
+            <button onclick="goToModDashboard()" style="padding: 8px 16px; background: rgba(0,0,0,0.3); border: none; color: white; border-radius: 4px; cursor: pointer;">Go to Mod Dashboard</button>
+            <a href="/auth/logout.php" style="margin-left: auto; color: white; text-decoration: none; opacity: 0.8;">Logout</a>
+        </div>
+        <?php endif; ?>
 
         <div class="tabs">
             <div class="tab active" data-tab="settings">Settings</div>
@@ -557,6 +570,24 @@ if ($currentUser) {
             const password = document.getElementById('modPassword').value;
             if (password) checkAuth('', password);
         }
+
+        // Super admin quick access functions
+        function goToChannel() {
+            const channel = document.getElementById('adminChannelInput')?.value.trim().toLowerCase();
+            if (channel) {
+                window.location.href = `/dashboard.php?login=${encodeURIComponent(channel)}`;
+            }
+        }
+
+        function goToModDashboard() {
+            const channel = document.getElementById('adminChannelInput')?.value.trim().toLowerCase() || authLogin;
+            window.location.href = `/mod_dashboard.php?login=${encodeURIComponent(channel)}`;
+        }
+
+        // Allow Enter key in admin channel input
+        document.getElementById('adminChannelInput')?.addEventListener('keypress', e => {
+            if (e.key === 'Enter') goToChannel();
+        });
 
         document.querySelectorAll('#dashboardKey, #modPassword').forEach(el => {
             if (el) el.addEventListener('keypress', e => {

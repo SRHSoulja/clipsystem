@@ -666,8 +666,23 @@ if ($currentUser) {
         <a href="#" id="searchClipsLink" class="nav-link" style="display:none;">Search Clips</a>
         <button class="mobile-toggle" onclick="toggleSidebar()">Playlists</button>
       </div>
-      <div class="user"><?php echo htmlspecialchars($login); ?></div>
+      <div class="user">
+        <?php echo htmlspecialchars($login); ?>
+        <?php if ($isSuperAdmin): ?>
+        <span style="background: #eb0400; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 8px;">SUPER ADMIN</span>
+        <?php endif; ?>
+      </div>
     </div>
+
+    <?php if ($isSuperAdmin): ?>
+    <div class="admin-bar" style="background: linear-gradient(90deg, #eb0400, #9147ff); padding: 10px 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 14px;">
+      <span style="font-weight: bold;">Quick Access:</span>
+      <input type="text" id="adminChannelInput" placeholder="Channel name..." style="padding: 6px 10px; border-radius: 4px; border: none; background: rgba(0,0,0,0.3); color: white; width: 150px; font-size: 14px;">
+      <button onclick="window.location.href='/mod_dashboard.php?login='+encodeURIComponent(document.getElementById('adminChannelInput').value.trim().toLowerCase())" style="padding: 6px 12px; background: rgba(0,0,0,0.3); border: none; color: white; border-radius: 4px; cursor: pointer; font-size: 14px;">Go</button>
+      <a href="/dashboard.php?login=<?php echo urlencode($login); ?>" style="color: white; text-decoration: none; padding: 6px 12px; background: rgba(0,0,0,0.2); border-radius: 4px;">Streamer Dashboard</a>
+      <a href="/auth/logout.php" style="margin-left: auto; color: white; text-decoration: none; opacity: 0.8;">Logout</a>
+    </div>
+    <?php endif; ?>
 
     <div class="main">
       <div class="sidebar" id="sidebar">
