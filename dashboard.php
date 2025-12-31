@@ -4,11 +4,13 @@
  *
  * Self-service dashboard for streamers to manage their clip reel.
  * Access: dashboard.php?key=STREAMER_KEY or dashboard.php?login=username (+ mod password)
+ * Super admins (thearsondragon, cliparchive) can access any channel via OAuth
  */
 header("Content-Type: text/html; charset=utf-8");
 header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
 
 require_once __DIR__ . '/db_config.php';
+require_once __DIR__ . '/includes/twitch_oauth.php';
 
 function clean_login($s) {
     $s = strtolower(trim((string)$s));
@@ -18,6 +20,26 @@ function clean_login($s) {
 
 $key = $_GET['key'] ?? '';
 $login = clean_login($_GET['login'] ?? '');
+
+// Check for OAuth super admin access
+$currentUser = getCurrentUser();
+$oauthAuthorized = false;
+$isSuperAdmin = false;
+
+if ($currentUser) {
+    $isSuperAdmin = isSuperAdmin();
+    if ($isSuperAdmin) {
+        $oauthAuthorized = true;
+        // Super admins can specify any login, or default to their own
+        if (!$login) {
+            $login = strtolower($currentUser['login']);
+        }
+    } elseif (!$login || $login === strtolower($currentUser['login'])) {
+        // Regular users can access their own channel
+        $oauthAuthorized = true;
+        $login = strtolower($currentUser['login']);
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -307,14 +329,21 @@ $login = clean_login($_GET['login'] ?? '');
         <div class="login-box">
             <h1>Streamer Dashboard</h1>
             <div class="error" id="loginError"></div>
-            <?php if ($login): ?>
+            <?php if ($oauthAuthorized): ?>
+                <!-- OAuth user is logged in - auto-redirect handled by JS -->
+                <p style="color: #adadb8; margin-bottom: 16px;">Loading dashboard for <strong><?= htmlspecialchars($login) ?></strong>...</p>
+            <?php elseif ($login): ?>
                 <p style="color: #adadb8; margin-bottom: 16px;">Channel: <strong><?= htmlspecialchars($login) ?></strong></p>
                 <input type="password" id="modPassword" placeholder="Mod Password" autofocus>
                 <button onclick="loginWithPassword()">Enter</button>
+                <div style="text-align: center; margin: 16px 0; color: #666;">— or —</div>
+                <a href="/auth/login.php?return=<?= urlencode('/dashboard.php?login=' . urlencode($login)) ?>" style="display: block; text-align: center; padding: 12px; background: #9147ff; color: white; border-radius: 4px; text-decoration: none;">Login with Twitch</a>
             <?php else: ?>
-                <p style="color: #adadb8; margin-bottom: 16px;">Enter your dashboard key or use ?login=username for mod access.</p>
+                <p style="color: #adadb8; margin-bottom: 16px;">Enter your dashboard key or login with Twitch.</p>
                 <input type="text" id="dashboardKey" placeholder="Dashboard Key" autofocus>
                 <button onclick="loginWithKey()">Enter</button>
+                <div style="text-align: center; margin: 16px 0; color: #666;">— or —</div>
+                <a href="/auth/login.php?return=<?= urlencode('/dashboard.php') ?>" style="display: block; text-align: center; padding: 12px; background: #9147ff; color: white; border-radius: 4px; text-decoration: none;">Login with Twitch</a>
             <?php endif; ?>
         </div>
     </div>
@@ -456,6 +485,8 @@ $login = clean_login($_GET['login'] ?? '');
         const API_BASE = '';
         const INITIAL_KEY = <?= json_encode($key) ?>;
         const INITIAL_LOGIN = <?= json_encode($login) ?>;
+        const OAUTH_AUTHORIZED = <?= json_encode($oauthAuthorized) ?>;
+        const IS_SUPER_ADMIN = <?= json_encode($isSuperAdmin) ?>;
 
         let authKey = INITIAL_KEY;
         let authLogin = INITIAL_LOGIN;
@@ -463,9 +494,12 @@ $login = clean_login($_GET['login'] ?? '');
         let authInstance = '';
         let settings = {};
 
-        // Auto-login if key provided
+        // Auto-login if key provided or OAuth authorized
         if (INITIAL_KEY) {
             checkAuth(INITIAL_KEY, '');
+        } else if (OAUTH_AUTHORIZED && INITIAL_LOGIN) {
+            // OAuth user - check auth without key (server will validate OAuth session)
+            checkAuth('', '');
         }
 
         // Tab switching

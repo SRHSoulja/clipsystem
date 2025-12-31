@@ -14,6 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { exit(0); }
 
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/includes/dashboard_auth.php';
+require_once __DIR__ . '/includes/twitch_oauth.php';
 
 function json_response($data) {
     echo json_encode($data, JSON_UNESCAPED_SLASHES);
@@ -39,8 +40,21 @@ $password = $_GET['password'] ?? $_POST['password'] ?? '';
 $auth = new DashboardAuth();
 $authenticated = false;
 
-// Try key authentication first
-if ($key) {
+// Try OAuth super admin authentication first
+$currentUser = getCurrentUser();
+if ($currentUser && isSuperAdmin()) {
+    // Super admin via OAuth - grant admin role
+    $authenticated = true;
+    // If login is specified in request, use that; otherwise use super admin's own channel
+    if (!$login) {
+        $login = strtolower($currentUser['login']);
+    }
+    // Manually set admin role in auth object for permission checks
+    $auth->authenticateWithKey(getenv('ADMIN_KEY') ?: 'oauth-super-admin', $login);
+}
+
+// Try key authentication
+if (!$authenticated && $key) {
     $result = $auth->authenticateWithKey($key, $login);
     if ($result) {
         $authenticated = true;
@@ -53,6 +67,15 @@ if (!$authenticated && $login && $password) {
     $result = $auth->authenticateWithPassword($login, $password);
     if ($result) {
         $authenticated = true;
+    }
+}
+
+// Try OAuth for own channel (non-super-admin)
+if (!$authenticated && $currentUser && $login) {
+    if (strtolower($currentUser['login']) === strtolower($login)) {
+        $authenticated = true;
+        // Set streamer role for own channel access
+        $auth->authenticateWithKey($auth->getStreamerKey($login) ?: '', $login);
     }
 }
 

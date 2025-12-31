@@ -41,17 +41,18 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
 // Check if user is authorized via OAuth for a specific channel
 $oauthAuthorized = false;
 $oauthChannel = '';
+$isSuperAdmin = false;
 if ($currentUser) {
   $oauthChannel = strtolower($currentUser['login']);
+  $isSuperAdmin = isSuperAdmin();
+
   // If no login specified, default to user's own channel
   if (!$login || $login === 'default') {
     $login = $oauthChannel;
   }
-  // User is authorized if they're accessing their own channel
-  // In the future, we can add mod checks here
-  if ($login === $oauthChannel) {
-    $oauthAuthorized = true;
-  }
+
+  // User is authorized if they're a super admin or accessing their own channel
+  $oauthAuthorized = isAuthorizedForChannel($login);
 }
 ?>
 <!DOCTYPE html>

@@ -321,3 +321,32 @@ function getAccessToken(): ?string {
   initSession();
   return $_SESSION['access_token'] ?? null;
 }
+
+/**
+ * Check if the current user is a super admin
+ * Super admins can access any streamer's dashboard
+ */
+function isSuperAdmin(): bool {
+  $user = getCurrentUser();
+  if (!$user) return false;
+
+  $superAdmins = ['thearsondragon', 'cliparchive'];
+  return in_array(strtolower($user['login']), $superAdmins);
+}
+
+/**
+ * Check if the current user is authorized to access a specific channel
+ * Returns true if:
+ * - User is a super admin (thearsondragon, cliparchive)
+ * - User is accessing their own channel
+ */
+function isAuthorizedForChannel(string $targetChannel): bool {
+  $user = getCurrentUser();
+  if (!$user) return false;
+
+  // Super admins can access any channel
+  if (isSuperAdmin()) return true;
+
+  // Users can access their own channel
+  return strtolower($user['login']) === strtolower($targetChannel);
+}
