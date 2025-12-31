@@ -7,6 +7,7 @@
  */
 require_once __DIR__ . '/includes/helpers.php';
 require_once __DIR__ . '/includes/dashboard_auth.php';
+require_once __DIR__ . '/includes/twitch_oauth.php';
 require_once __DIR__ . '/db_config.php';
 
 set_cors_headers();
@@ -22,15 +23,28 @@ $runtimeDir = get_runtime_dir();
 $login = clean_login($_GET["login"] ?? "");
 $seq   = (int)($_GET["seq"] ?? 0);
 $key   = (string)($_GET["key"] ?? "");
+$useOAuth = isset($_GET["oauth"]) && $_GET["oauth"] === "1";
 
-// Auth: accept ADMIN_KEY, streamer_key, or mod_password
+// Auth: accept OAuth, ADMIN_KEY, streamer_key, or mod_password
 $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
 $isAuthorized = false;
 $auth = new DashboardAuth();
 
-if ($key === $ADMIN_KEY && $ADMIN_KEY !== '') {
+// Check OAuth first
+if ($useOAuth) {
+  $currentUser = getCurrentUser();
+  if ($currentUser && strtolower($currentUser['login']) === $login) {
+    $isAuthorized = true;
+  }
+}
+
+// Check ADMIN_KEY
+if (!$isAuthorized && $key === $ADMIN_KEY && $ADMIN_KEY !== '') {
   $isAuthorized = true;
-} else {
+}
+
+// Check streamer key or mod password
+if (!$isAuthorized && $key) {
   // Try as streamer key first
   $result = $auth->authenticateWithKey($key, $login);
   if ($result && $result['login'] === $login) {

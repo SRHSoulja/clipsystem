@@ -2,7 +2,7 @@
 /**
  * mod_dashboard.php - Mod Dashboard for Playlist Management
  *
- * Password protected page for mods to:
+ * OAuth or password protected page for mods to:
  * - Browse all clips with search/filter
  * - Create and manage playlists
  * - Queue playlists for playback
@@ -24,6 +24,10 @@ if (file_exists($envPath)) {
 }
 
 require_once __DIR__ . '/db_config.php';
+require_once __DIR__ . '/includes/twitch_oauth.php';
+
+// Get current OAuth user
+$currentUser = getCurrentUser();
 
 function clean_login($s){
   $s = strtolower(trim((string)$s));
@@ -31,8 +35,24 @@ function clean_login($s){
   return $s ?: "default";
 }
 
-$login = clean_login($_GET["login"] ?? "floppyjimmie");
+$login = clean_login($_GET["login"] ?? "");
 $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
+
+// Check if user is authorized via OAuth for a specific channel
+$oauthAuthorized = false;
+$oauthChannel = '';
+if ($currentUser) {
+  $oauthChannel = strtolower($currentUser['login']);
+  // If no login specified, default to user's own channel
+  if (!$login || $login === 'default') {
+    $login = $oauthChannel;
+  }
+  // User is authorized if they're accessing their own channel
+  // In the future, we can add mod checks here
+  if ($login === $oauthChannel) {
+    $oauthAuthorized = true;
+  }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -97,6 +117,66 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
     }
     .login-box button:hover { background: #772ce8; }
     .error { color: #eb0400; margin-bottom: 16px; }
+
+    .login-divider {
+      display: flex;
+      align-items: center;
+      margin: 20px 0;
+      color: #adadb8;
+      font-size: 14px;
+    }
+    .login-divider::before,
+    .login-divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: #3a3a3d;
+    }
+    .login-divider span {
+      padding: 0 15px;
+    }
+    .oauth-btn {
+      width: 100%;
+      padding: 12px;
+      background: #9147ff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      text-decoration: none;
+      margin-bottom: 16px;
+    }
+    .oauth-btn:hover { background: #772ce8; }
+    .oauth-btn svg { width: 20px; height: 20px; }
+    .oauth-user {
+      background: #26262c;
+      padding: 12px;
+      border-radius: 4px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .oauth-user-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .oauth-user-name {
+      color: #bf94ff;
+      font-weight: 500;
+    }
+    .oauth-logout {
+      color: #adadb8;
+      text-decoration: none;
+      font-size: 12px;
+    }
+    .oauth-logout:hover { color: #ff4757; }
 
     .dashboard { display: none; }
     .dashboard.active { display: flex; flex-direction: column; height: 100vh; }
@@ -539,9 +619,41 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
     <div class="login-box">
       <h1>Mod Dashboard</h1>
       <div class="error" id="loginError" style="display:none;"></div>
-      <input type="text" id="channelInput" placeholder="Channel Name" value="<?php echo htmlspecialchars($login !== 'default' ? $login : ''); ?>" autofocus>
+
+      <?php if ($currentUser): ?>
+      <!-- User is logged in via OAuth -->
+      <div class="oauth-user">
+        <div class="oauth-user-info">
+          <span>Logged in as</span>
+          <span class="oauth-user-name"><?= htmlspecialchars($currentUser['display_name'] ?? $currentUser['login']) ?></span>
+        </div>
+        <a href="/auth/logout.php?return=<?= urlencode($_SERVER['REQUEST_URI']) ?>" class="oauth-logout">Logout</a>
+      </div>
+
+      <?php if ($oauthAuthorized): ?>
+      <!-- Auto-enter for own channel -->
+      <p style="color:#adadb8;margin-bottom:16px;">Accessing your channel dashboard...</p>
+      <?php else: ?>
+      <!-- Accessing another channel - need password -->
+      <p style="color:#adadb8;margin-bottom:16px;">To access <?= htmlspecialchars($login) ?>'s dashboard, enter their mod password:</p>
+      <input type="hidden" id="channelInput" value="<?= htmlspecialchars($login) ?>">
+      <input type="password" id="keyInput" placeholder="Mod Password" autofocus>
+      <button onclick="login()">Enter</button>
+      <?php endif; ?>
+
+      <?php else: ?>
+      <!-- Not logged in - show OAuth button and password option -->
+      <a href="/auth/login.php?return=<?= urlencode($_SERVER['REQUEST_URI']) ?>" class="oauth-btn">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.64 5.93h1.43v4.28h-1.43m3.93-4.28H17v4.28h-1.43M7 2L3.43 5.57v12.86h4.28V22l3.58-3.57h2.85L20.57 12V2m-1.43 9.29l-2.85 2.85h-2.86l-2.5 2.5v-2.5H7.71V3.43h11.43z"/></svg>
+        Login with Twitch
+      </a>
+
+      <div class="login-divider"><span>or use password</span></div>
+
+      <input type="text" id="channelInput" placeholder="Channel Name" value="<?= htmlspecialchars($login && $login !== 'default' ? $login : '') ?>" autofocus>
       <input type="password" id="keyInput" placeholder="Streamer Key or Mod Password">
       <button onclick="login()">Enter</button>
+      <?php endif; ?>
     </div>
   </div>
 
@@ -651,14 +763,41 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
     let perPage = 200;
     let isLoading = false;
 
-    // Check for auto-login from URL parameters
+    // OAuth state from PHP
+    const oauthAuthorized = <?= $oauthAuthorized ? 'true' : 'false' ?>;
+    const oauthChannel = <?= json_encode($oauthChannel) ?>;
+    const oauthLogin = <?= json_encode($login) ?>;
+
+    // Check for auto-login from URL parameters or OAuth
     const urlParams = new URLSearchParams(window.location.search);
     const urlLogin = urlParams.get('login');
     const urlKey = urlParams.get('key');
 
-    if (urlLogin && urlKey) {
-      // Auto-login with provided credentials
-      document.addEventListener('DOMContentLoaded', async () => {
+    document.addEventListener('DOMContentLoaded', async () => {
+      // OAuth auto-login for own channel
+      if (oauthAuthorized && oauthChannel) {
+        try {
+          // For OAuth users accessing their own channel, use 'oauth' as the key
+          // The backend will need to recognize this and validate the session
+          const res = await fetch(`${API_BASE}/playlist_api.php?action=list&login=${encodeURIComponent(oauthChannel)}&oauth=1`);
+          const data = await res.json();
+
+          if (!data.error) {
+            LOGIN = oauthChannel;
+            adminKey = 'oauth';  // Special marker for OAuth auth
+            document.querySelector('.header .user').textContent = LOGIN;
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('dashboard').classList.add('active');
+            loadDashboard();
+            return;
+          }
+        } catch (err) {
+          console.error('OAuth auto-login failed:', err);
+        }
+      }
+
+      // URL parameter auto-login (legacy)
+      if (urlLogin && urlKey) {
         try {
           const res = await fetch(`${API_BASE}/playlist_api.php?action=list&login=${encodeURIComponent(urlLogin)}&key=${encodeURIComponent(urlKey)}`);
           const data = await res.json();
@@ -674,8 +813,8 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
         } catch (err) {
           console.error('Auto-login failed:', err);
         }
-      });
-    }
+      }
+    });
 
     // Mobile sidebar toggle
     function toggleSidebar() {
@@ -730,9 +869,13 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
         // Show and configure navigation links
         const manageLink = document.getElementById('manageClipsLink');
         const searchLink = document.getElementById('searchClipsLink');
-        manageLink.href = `clip_manage.php?login=${encodeURIComponent(LOGIN)}&key=${encodeURIComponent(adminKey)}`;
+        if (adminKey === 'oauth') {
+          manageLink.href = `clip_manage.php?login=${encodeURIComponent(LOGIN)}&oauth=1`;
+        } else {
+          manageLink.href = `clip_manage.php?login=${encodeURIComponent(LOGIN)}&key=${encodeURIComponent(adminKey)}`;
+        }
         manageLink.style.display = 'inline-block';
-        searchLink.href = `clip_search.php?login=${encodeURIComponent(LOGIN)}`;
+        searchLink.href = `/search/${encodeURIComponent(LOGIN)}`;
         searchLink.style.display = 'inline-block';
 
         loadDashboard();
@@ -746,6 +889,14 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
       await Promise.all([loadClips(), loadPlaylists(), loadGames()]);
     }
 
+    // Helper to build auth params for API calls
+    function getAuthParams() {
+      if (adminKey === 'oauth') {
+        return `oauth=1`;
+      }
+      return `key=${encodeURIComponent(adminKey)}`;
+    }
+
     async function loadClips(page = 1) {
       if (isLoading) return;
       isLoading = true;
@@ -756,7 +907,7 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
 
       try {
         // Build query params
-        let url = `${API_BASE}/clips_api.php?action=list&login=${LOGIN}&key=${encodeURIComponent(adminKey)}&page=${page}&per_page=${perPage}`;
+        let url = `${API_BASE}/clips_api.php?action=list&login=${LOGIN}&${getAuthParams()}&page=${page}&per_page=${perPage}`;
         if (search) url += `&q=${encodeURIComponent(search)}`;
         if (creator) url += `&creator=${encodeURIComponent(creator)}`;
         if (gameId) url += `&game_id=${encodeURIComponent(gameId)}`;
@@ -785,7 +936,7 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
 
     async function loadGames() {
       try {
-        const res = await fetch(`${API_BASE}/clips_api.php?action=games&login=${LOGIN}&key=${encodeURIComponent(adminKey)}`);
+        const res = await fetch(`${API_BASE}/clips_api.php?action=games&login=${LOGIN}&${getAuthParams()}`);
         const data = await res.json();
 
         const gameFilter = document.getElementById('gameFilter');
@@ -807,7 +958,7 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
 
     async function loadPlaylists() {
       try {
-        const res = await fetch(`${API_BASE}/playlist_api.php?action=list&login=${LOGIN}&key=${encodeURIComponent(adminKey)}`);
+        const res = await fetch(`${API_BASE}/playlist_api.php?action=list&login=${LOGIN}&${getAuthParams()}`);
         const data = await res.json();
         playlists = data.playlists || [];
         renderPlaylists();
@@ -934,7 +1085,7 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
 
     async function selectPlaylist(id) {
       try {
-        const res = await fetch(`${API_BASE}/playlist_api.php?action=get&login=${LOGIN}&key=${encodeURIComponent(adminKey)}&id=${id}`);
+        const res = await fetch(`${API_BASE}/playlist_api.php?action=get&login=${LOGIN}&${getAuthParams()}&id=${id}`);
         const data = await res.json();
         currentPlaylist = data.playlist;
 
@@ -998,7 +1149,7 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
 
       const seqs = Array.from(selectedClips);
       try {
-        const res = await fetch(`${API_BASE}/playlist_api.php?action=add_clips&login=${LOGIN}&key=${encodeURIComponent(adminKey)}&id=${currentPlaylist.id}&seqs=${seqs.join(',')}`);
+        const res = await fetch(`${API_BASE}/playlist_api.php?action=add_clips&login=${LOGIN}&${getAuthParams()}&id=${currentPlaylist.id}&seqs=${seqs.join(',')}`);
         const data = await res.json();
 
         if (data.success) {
@@ -1017,7 +1168,7 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
       if (!currentPlaylist) return;
 
       try {
-        const res = await fetch(`${API_BASE}/playlist_api.php?action=remove_clip&login=${LOGIN}&key=${encodeURIComponent(adminKey)}&id=${currentPlaylist.id}&seq=${seq}`);
+        const res = await fetch(`${API_BASE}/playlist_api.php?action=remove_clip&login=${LOGIN}&${getAuthParams()}&id=${currentPlaylist.id}&seq=${seq}`);
         const data = await res.json();
 
         if (data.success) {
@@ -1031,7 +1182,7 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
 
     async function playClip(seq) {
       try {
-        const url = `${API_BASE}/pclip.php?login=${LOGIN}&key=${encodeURIComponent(adminKey)}&seq=${seq}`;
+        const url = `${API_BASE}/pclip.php?login=${LOGIN}&${getAuthParams()}&seq=${seq}`;
         console.log('Playing clip:', url);
         const res = await fetch(url);
         const text = await res.text();
@@ -1051,7 +1202,7 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
       if (!currentPlaylist) return;
 
       try {
-        const res = await fetch(`${API_BASE}/playlist_api.php?action=play&login=${LOGIN}&key=${encodeURIComponent(adminKey)}&id=${currentPlaylist.id}`);
+        const res = await fetch(`${API_BASE}/playlist_api.php?action=play&login=${LOGIN}&${getAuthParams()}&id=${currentPlaylist.id}`);
         const data = await res.json();
         console.log('Playlist play response:', data);
         if (data.error) {
@@ -1071,7 +1222,7 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
 
     async function stopPlaylist() {
       try {
-        const res = await fetch(`${API_BASE}/playlist_api.php?action=stop&login=${LOGIN}&key=${encodeURIComponent(adminKey)}`);
+        const res = await fetch(`${API_BASE}/playlist_api.php?action=stop&login=${LOGIN}&${getAuthParams()}`);
         const data = await res.json();
         console.log('Playlist stop response:', data);
         if (data.error) {
@@ -1100,7 +1251,7 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
       if (!name) return;
 
       try {
-        const res = await fetch(`${API_BASE}/playlist_api.php?action=create&login=${LOGIN}&key=${encodeURIComponent(adminKey)}&name=${encodeURIComponent(name)}`);
+        const res = await fetch(`${API_BASE}/playlist_api.php?action=create&login=${LOGIN}&${getAuthParams()}&name=${encodeURIComponent(name)}`);
         const data = await res.json();
 
         if (data.success) {
@@ -1129,7 +1280,7 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
       if (!newName) return;
 
       try {
-        const res = await fetch(`${API_BASE}/playlist_api.php?action=rename&login=${LOGIN}&key=${encodeURIComponent(adminKey)}&id=${currentPlaylist.id}&name=${encodeURIComponent(newName)}`);
+        const res = await fetch(`${API_BASE}/playlist_api.php?action=rename&login=${LOGIN}&${getAuthParams()}&id=${currentPlaylist.id}&name=${encodeURIComponent(newName)}`);
         const data = await res.json();
 
         if (data.success) {
@@ -1155,7 +1306,7 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
       if (!currentPlaylist) return;
 
       try {
-        const res = await fetch(`${API_BASE}/playlist_api.php?action=delete&login=${LOGIN}&key=${encodeURIComponent(adminKey)}&id=${currentPlaylist.id}`);
+        const res = await fetch(`${API_BASE}/playlist_api.php?action=delete&login=${LOGIN}&${getAuthParams()}&id=${currentPlaylist.id}`);
         const data = await res.json();
 
         if (data.success) {
@@ -1247,7 +1398,7 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
       if (!currentPlaylist) return;
 
       try {
-        const res = await fetch(`${API_BASE}/playlist_api.php?action=reorder&login=${LOGIN}&key=${encodeURIComponent(adminKey)}&id=${currentPlaylist.id}&from=${fromIndex}&to=${toIndex}`);
+        const res = await fetch(`${API_BASE}/playlist_api.php?action=reorder&login=${LOGIN}&${getAuthParams()}&id=${currentPlaylist.id}&from=${fromIndex}&to=${toIndex}`);
         const data = await res.json();
 
         if (!data.success) {
@@ -1272,7 +1423,7 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
       }
 
       try {
-        const res = await fetch(`${API_BASE}/playlist_api.php?action=shuffle&login=${LOGIN}&key=${encodeURIComponent(adminKey)}&id=${currentPlaylist.id}`);
+        const res = await fetch(`${API_BASE}/playlist_api.php?action=shuffle&login=${LOGIN}&${getAuthParams()}&id=${currentPlaylist.id}`);
         const data = await res.json();
         console.log('Shuffle response:', data);
 

@@ -14,6 +14,10 @@ header("Expires: 0");
 
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/includes/twitch_api.php';
+require_once __DIR__ . '/includes/twitch_oauth.php';
+
+// Get current user for voting
+$currentUser = getCurrentUser();
 
 function clean_login($s){
   $s = strtolower(trim((string)$s));
@@ -265,66 +269,7 @@ if ($hasArchivedClips && $pdo) {
     } else {
       $allLiveClips = $result['clips'];
 
-      // Apply title filter if query provided
-      if (!empty($queryWords)) {
-        $allLiveClips = array_filter($allLiveClips, function($clip) use ($queryWords) {
-          $title = strtolower($clip['title'] ?? '');
-          foreach ($queryWords as $word) {
-            if (stripos($title, $word) === false) {
-              return false;
-            }
-          }
-          return true;
-        });
-        $allLiveClips = array_values($allLiveClips);
-      }
-
-      // Apply clipper filter if provided (partial match)
-      if ($clipper) {
-        $allLiveClips = array_filter($allLiveClips, function($clip) use ($clipper) {
-          return stripos($clip['creator_name'] ?? '', $clipper) !== false;
-        });
-        $allLiveClips = array_values($allLiveClips);
-      }
-
-      // Sort clips
-      usort($allLiveClips, function($a, $b) use ($sort) {
-        switch ($sort) {
-          case 'date':
-            return strtotime($b['created_at'] ?? 0) - strtotime($a['created_at'] ?? 0);
-          case 'oldest':
-            return strtotime($a['created_at'] ?? 0) - strtotime($b['created_at'] ?? 0);
-          case 'title':
-            return strcasecmp($a['title'] ?? '', $b['title'] ?? '');
-          case 'titlez':
-            return strcasecmp($b['title'] ?? '', $a['title'] ?? '');
-          default: // views
-            return ($b['view_count'] ?? 0) - ($a['view_count'] ?? 0);
-        }
-      });
-
-      // Paginate
-      $totalCount = count($allLiveClips);
-      $totalPages = ceil($totalCount / $perPage);
-      $offset = ($page - 1) * $perPage;
-      $pagedClips = array_slice($allLiveClips, $offset, $perPage);
-
-      // Convert to matches format (similar to DB format)
-      foreach ($pagedClips as $clip) {
-        $matches[] = [
-          'seq' => 0, // No seq for live clips
-          'clip_id' => $clip['clip_id'],
-          'title' => $clip['title'],
-          'view_count' => $clip['view_count'],
-          'created_at' => $clip['created_at'],
-          'duration' => $clip['duration'],
-          'game_id' => $clip['game_id'],
-          'thumbnail_url' => $clip['thumbnail_url'],
-          'creator_name' => $clip['creator_name'],
-        ];
-      }
-
-      // Build games list from clips (for category dropdown)
+      // Build games list from ALL clips BEFORE filtering (for category dropdown)
       $gameIds = [];
       foreach ($allLiveClips as $clip) {
         $gid = $clip['game_id'] ?? '';
@@ -365,7 +310,7 @@ if ($hasArchivedClips && $pdo) {
           foreach ($apiGames as $gid => $gameInfo) {
             $gameNames[$gid] = $gameInfo['name'];
 
-            // Optionally cache to database for future use
+            // Cache to database for future use
             if ($pdo) {
               try {
                 $insertStmt = $pdo->prepare("INSERT INTO games_cache (game_id, name) VALUES (?, ?) ON CONFLICT (game_id) DO UPDATE SET name = EXCLUDED.name");
@@ -392,6 +337,83 @@ if ($hasArchivedClips && $pdo) {
       usort($games, function($a, $b) {
         return $b['count'] - $a['count'];
       });
+
+      // Set currentGameName for active filter display
+      if ($gameId) {
+        foreach ($games as $g) {
+          if ($g['game_id'] === $gameId) {
+            $currentGameName = $g['name'] ?: "Game $gameId";
+            break;
+          }
+        }
+      }
+
+      // Apply title filter if query provided
+      if (!empty($queryWords)) {
+        $allLiveClips = array_filter($allLiveClips, function($clip) use ($queryWords) {
+          $title = strtolower($clip['title'] ?? '');
+          foreach ($queryWords as $word) {
+            if (stripos($title, $word) === false) {
+              return false;
+            }
+          }
+          return true;
+        });
+        $allLiveClips = array_values($allLiveClips);
+      }
+
+      // Apply clipper filter if provided (partial match)
+      if ($clipper) {
+        $allLiveClips = array_filter($allLiveClips, function($clip) use ($clipper) {
+          return stripos($clip['creator_name'] ?? '', $clipper) !== false;
+        });
+        $allLiveClips = array_values($allLiveClips);
+      }
+
+      // Apply game_id filter if provided (for live mode category filtering)
+      if ($gameId) {
+        $allLiveClips = array_filter($allLiveClips, function($clip) use ($gameId) {
+          return ($clip['game_id'] ?? '') === $gameId;
+        });
+        $allLiveClips = array_values($allLiveClips);
+      }
+
+      // Sort clips
+      usort($allLiveClips, function($a, $b) use ($sort) {
+        switch ($sort) {
+          case 'date':
+            return strtotime($b['created_at'] ?? 0) - strtotime($a['created_at'] ?? 0);
+          case 'oldest':
+            return strtotime($a['created_at'] ?? 0) - strtotime($b['created_at'] ?? 0);
+          case 'title':
+            return strcasecmp($a['title'] ?? '', $b['title'] ?? '');
+          case 'titlez':
+            return strcasecmp($b['title'] ?? '', $a['title'] ?? '');
+          default: // views
+            return ($b['view_count'] ?? 0) - ($a['view_count'] ?? 0);
+        }
+      });
+
+      // Paginate
+      $totalCount = count($allLiveClips);
+      $totalPages = ceil($totalCount / $perPage);
+      $offset = ($page - 1) * $perPage;
+      $pagedClips = array_slice($allLiveClips, $offset, $perPage);
+
+      // Convert to matches format (similar to DB format)
+      foreach ($pagedClips as $clip) {
+        $matches[] = [
+          'seq' => 0, // No seq for live clips
+          'clip_id' => $clip['clip_id'],
+          'title' => $clip['title'],
+          'view_count' => $clip['view_count'],
+          'created_at' => $clip['created_at'],
+          'duration' => $clip['duration'],
+          'game_id' => $clip['game_id'],
+          'thumbnail_url' => $clip['thumbnail_url'],
+          'creator_name' => $clip['creator_name'],
+        ];
+      }
     }
   }
 }
@@ -476,6 +498,43 @@ if ($hasArchivedClips && $pdo) {
     }
     .total-count strong {
       color: #9147ff;
+    }
+
+    /* Login/User */
+    .login-btn {
+      padding: 8px 16px;
+      background: #9147ff;
+      color: white;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 14px;
+      transition: background 0.2s;
+    }
+    .login-btn:hover {
+      background: #772ce8;
+    }
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: #1f1f23;
+      padding: 6px 12px;
+      border-radius: 6px;
+    }
+    .user-name {
+      color: #bf94ff;
+      font-weight: 500;
+      font-size: 14px;
+    }
+    .logout-btn {
+      color: #adadb8;
+      text-decoration: none;
+      font-size: 12px;
+      transition: color 0.2s;
+    }
+    .logout-btn:hover {
+      color: #ff4757;
     }
 
     /* Filters */
@@ -716,6 +775,61 @@ if ($hasArchivedClips && $pdo) {
       display: inline-block;
     }
 
+    /* Vote buttons */
+    .clip-votes {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid #3d3d42;
+    }
+    .vote-btn {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      border: 1px solid #3d3d42;
+      border-radius: 4px;
+      background: transparent;
+      color: #adadb8;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .vote-btn:hover {
+      border-color: #9147ff;
+      color: #efeff1;
+    }
+    .vote-btn.active-like {
+      background: rgba(0, 200, 83, 0.15);
+      border-color: #00c853;
+      color: #00c853;
+    }
+    .vote-btn.active-dislike {
+      background: rgba(255, 71, 87, 0.15);
+      border-color: #ff4757;
+      color: #ff4757;
+    }
+    .vote-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .vote-btn svg {
+      width: 14px;
+      height: 14px;
+    }
+    .vote-count {
+      font-weight: 600;
+    }
+    .vote-login-prompt {
+      font-size: 11px;
+      color: #adadb8;
+    }
+    .vote-login-prompt a {
+      color: #9147ff;
+    }
+
     .no-results {
       text-align: center;
       padding: 60px 20px;
@@ -828,6 +942,14 @@ if ($hasArchivedClips && $pdo) {
           <strong><?= number_format($totalCount) ?></strong> result<?= $totalCount !== 1 ? 's' : '' ?>
           <?php if ($totalPages > 1): ?> &middot; Page <?= $page ?> of <?= $totalPages ?><?php endif; ?>
         </div>
+        <?php if ($currentUser): ?>
+        <div class="user-info">
+          <span class="user-name"><?= htmlspecialchars($currentUser['display_name'] ?? $currentUser['login']) ?></span>
+          <a href="/auth/logout.php" class="logout-btn">Logout</a>
+        </div>
+        <?php else: ?>
+        <a href="/auth/login.php?return=<?= urlencode($_SERVER['REQUEST_URI']) ?>" class="login-btn">Login with Twitch</a>
+        <?php endif; ?>
       </div>
     </header>
 
@@ -1018,6 +1140,21 @@ if ($hasArchivedClips && $pdo) {
             <span class="clip-game" title="<?= htmlspecialchars($gameName) ?>"><?= htmlspecialchars($gameName) ?></span>
           </div>
           <?php endif; ?>
+          <?php if ($seq > 0): // Only show votes for archived clips ?>
+          <div class="clip-votes" data-seq="<?= $seq ?>">
+            <button type="button" class="vote-btn like-btn" data-vote="like" title="Like this clip">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M2 20h2c.55 0 1-.45 1-1v-9c0-.55-.45-1-1-1H2v11zm19.83-7.12c.11-.25.17-.52.17-.8V11c0-1.1-.9-2-2-2h-5.5l.92-4.65c.05-.22.02-.46-.08-.66-.23-.45-.52-.86-.88-1.22L14 2 7.59 8.41C7.21 8.79 7 9.3 7 9.83v7.84C7 18.95 8.05 20 9.34 20h8.11c.7 0 1.36-.37 1.72-.97l2.66-6.15z"/></svg>
+              <span class="vote-count like-count">0</span>
+            </button>
+            <button type="button" class="vote-btn dislike-btn" data-vote="dislike" title="Dislike this clip">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M22 4h-2c-.55 0-1 .45-1 1v9c0 .55.45 1 1 1h2V4zM2.17 11.12c-.11.25-.17.52-.17.8V13c0 1.1.9 2 2 2h5.5l-.92 4.65c-.05.22-.02.46.08.66.23.45.52.86.88 1.22L10 22l6.41-6.41c.38-.38.59-.89.59-1.42V6.34C17 5.05 15.95 4 14.66 4H6.55c-.7 0-1.36.37-1.72.97l-2.66 6.15z"/></svg>
+              <span class="vote-count dislike-count">0</span>
+            </button>
+            <?php if (!$currentUser): ?>
+            <span class="vote-login-prompt"><a href="/auth/login.php?return=<?= urlencode($_SERVER['REQUEST_URI']) ?>">Login</a> to vote</span>
+            <?php endif; ?>
+          </div>
+          <?php endif; ?>
         </div>
       </div>
       <?php endforeach; ?>
@@ -1081,5 +1218,104 @@ if ($hasArchivedClips && $pdo) {
 
     <?php endif; ?>
   </div>
+
+  <?php if (!$isLiveMode && !empty($matches)): ?>
+  <script>
+    const streamer = <?= json_encode($login) ?>;
+    const isLoggedIn = <?= $currentUser ? 'true' : 'false' ?>;
+
+    // Fetch vote counts for all visible clips
+    async function loadVotes() {
+      const voteContainers = document.querySelectorAll('.clip-votes[data-seq]');
+      if (!voteContainers.length) return;
+
+      const seqs = Array.from(voteContainers).map(el => el.dataset.seq).join(',');
+      if (!seqs) return;
+
+      try {
+        const response = await fetch(`/api/votes.php?streamer=${encodeURIComponent(streamer)}&seq=${seqs}`);
+        const data = await response.json();
+
+        if (data.votes) {
+          for (const [seq, vote] of Object.entries(data.votes)) {
+            const container = document.querySelector(`.clip-votes[data-seq="${seq}"]`);
+            if (container) {
+              container.querySelector('.like-count').textContent = vote.likes || 0;
+              container.querySelector('.dislike-count').textContent = vote.dislikes || 0;
+
+              // Mark active vote if user has voted
+              if (vote.user_vote === 'like') {
+                container.querySelector('.like-btn').classList.add('active-like');
+              } else if (vote.user_vote === 'dislike') {
+                container.querySelector('.dislike-btn').classList.add('active-dislike');
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load votes:', e);
+      }
+    }
+
+    // Handle vote button clicks
+    async function handleVote(button, voteType) {
+      if (!isLoggedIn) {
+        window.location.href = '/auth/login.php?return=' + encodeURIComponent(window.location.href);
+        return;
+      }
+
+      const container = button.closest('.clip-votes');
+      const seq = container.dataset.seq;
+
+      // Determine if we're toggling off
+      const isActive = button.classList.contains('active-like') || button.classList.contains('active-dislike');
+      const newVote = isActive ? 'clear' : voteType;
+
+      // Disable buttons during request
+      const buttons = container.querySelectorAll('.vote-btn');
+      buttons.forEach(btn => btn.disabled = true);
+
+      try {
+        const response = await fetch('/api/vote.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ streamer, seq: parseInt(seq), vote: newVote })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          // Update counts
+          container.querySelector('.like-count').textContent = data.likes || 0;
+          container.querySelector('.dislike-count').textContent = data.dislikes || 0;
+
+          // Update active state
+          container.querySelector('.like-btn').classList.remove('active-like');
+          container.querySelector('.dislike-btn').classList.remove('active-dislike');
+
+          if (data.user_vote === 'like') {
+            container.querySelector('.like-btn').classList.add('active-like');
+          } else if (data.user_vote === 'dislike') {
+            container.querySelector('.dislike-btn').classList.add('active-dislike');
+          }
+        } else {
+          console.error('Vote failed:', data.error);
+        }
+      } catch (e) {
+        console.error('Vote request failed:', e);
+      } finally {
+        buttons.forEach(btn => btn.disabled = false);
+      }
+    }
+
+    // Attach click handlers
+    document.querySelectorAll('.vote-btn').forEach(btn => {
+      btn.addEventListener('click', () => handleVote(btn, btn.dataset.vote));
+    });
+
+    // Load initial votes
+    loadVotes();
+  </script>
+  <?php endif; ?>
 </body>
 </html>

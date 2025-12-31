@@ -2,6 +2,10 @@
 // Launch bot if not already running
 @include_once __DIR__ . '/bot_launcher.php';
 require_once __DIR__ . '/db_config.php';
+require_once __DIR__ . '/includes/twitch_oauth.php';
+
+// Get current user
+$currentUser = getCurrentUser();
 
 // Check if this is an API health check request
 if (isset($_GET['health']) || (isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'application/json') !== false)) {
@@ -236,9 +240,83 @@ header("Content-Type: text/html; charset=utf-8");
       color: #9147ff;
       text-decoration: none;
     }
+
+    /* User login/info */
+    .user-section {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+    }
+    .login-btn {
+      padding: 10px 20px;
+      background: #9147ff;
+      color: white;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 14px;
+      transition: background 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .login-btn:hover {
+      background: #772ce8;
+    }
+    .login-btn svg {
+      width: 18px;
+      height: 18px;
+    }
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: rgba(31, 31, 35, 0.9);
+      padding: 8px 16px;
+      border-radius: 6px;
+      border: 1px solid #3d3d42;
+    }
+    .user-name {
+      color: #bf94ff;
+      font-weight: 500;
+      font-size: 14px;
+    }
+    .user-links {
+      display: flex;
+      gap: 10px;
+    }
+    .user-links a {
+      color: #adadb8;
+      text-decoration: none;
+      font-size: 12px;
+      transition: color 0.2s;
+    }
+    .user-links a:hover {
+      color: #9147ff;
+    }
+    .logout-btn:hover {
+      color: #ff4757 !important;
+    }
   </style>
 </head>
 <body>
+  <div class="user-section">
+    <?php if ($currentUser): ?>
+    <div class="user-info">
+      <span class="user-name"><?= htmlspecialchars($currentUser['display_name'] ?? $currentUser['login']) ?></span>
+      <div class="user-links">
+        <a href="/mod_dashboard.php">Dashboard</a>
+        <a href="/auth/logout.php" class="logout-btn">Logout</a>
+      </div>
+    </div>
+    <?php else: ?>
+    <a href="/auth/login.php" class="login-btn">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.64 5.93h1.43v4.28h-1.43m3.93-4.28H17v4.28h-1.43M7 2L3.43 5.57v12.86h4.28V22l3.58-3.57h2.85L20.57 12V2m-1.43 9.29l-2.85 2.85h-2.86l-2.5 2.5v-2.5H7.71V3.43h11.43z"/></svg>
+      Login with Twitch
+    </a>
+    <?php endif; ?>
+  </div>
+
   <div class="container">
     <div class="logo">📺</div>
     <h1>ClipArchive</h1>

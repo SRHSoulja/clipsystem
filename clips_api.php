@@ -126,16 +126,30 @@ $perPage = min(500, max(50, (int)($_GET["per_page"] ?? 200)));
 $search  = trim((string)($_GET["q"] ?? ""));
 $gameId  = trim((string)($_GET["game_id"] ?? ""));
 $action  = $_GET["action"] ?? "list";
+$useOAuth = isset($_GET["oauth"]) && $_GET["oauth"] === "1";
 
-// Auth: accept ADMIN_KEY, streamer_key, or mod_password
+// Auth: accept OAuth, ADMIN_KEY, streamer_key, or mod_password
 require_once __DIR__ . '/includes/dashboard_auth.php';
+require_once __DIR__ . '/includes/twitch_oauth.php';
 
 $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
 $isAuthorized = false;
 
-if ($key === $ADMIN_KEY && $ADMIN_KEY !== '') {
+// Check OAuth first
+if ($useOAuth) {
+  $currentUser = getCurrentUser();
+  if ($currentUser && strtolower($currentUser['login']) === $login) {
+    $isAuthorized = true;
+  }
+}
+
+// Check ADMIN_KEY
+if (!$isAuthorized && $key === $ADMIN_KEY && $ADMIN_KEY !== '') {
   $isAuthorized = true;
-} else {
+}
+
+// Check streamer key or mod password
+if (!$isAuthorized && $key) {
   $auth = new DashboardAuth();
   // Try as streamer key first
   $result = $auth->authenticateWithKey($key, $login);
