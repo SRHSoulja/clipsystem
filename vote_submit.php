@@ -205,9 +205,11 @@ if ($pdo) {
     }
 
     // Record the vote
+    error_log("vote_submit: Recording new vote - login=$login, clipId=$clipId, user=$user, dir=$dir");
     $pdo->beginTransaction();
 
     // Insert or update votes aggregate (use CASE to avoid dynamic column names)
+    error_log("vote_submit: Inserting/updating votes aggregate");
     $stmt = $pdo->prepare("
       INSERT INTO votes (login, clip_id, seq, title, up_votes, down_votes, updated_at)
       VALUES (?, ?, ?, ?, CASE WHEN ? = 'up' THEN 1 ELSE 0 END, CASE WHEN ? = 'down' THEN 1 ELSE 0 END, CURRENT_TIMESTAMP)
@@ -217,12 +219,16 @@ if ($pdo) {
         updated_at = CURRENT_TIMESTAMP
     ");
     $stmt->execute([$login, $clipId, $seq, $clipTitle, $dir, $dir, $dir, $dir]);
+    error_log("vote_submit: Votes aggregate done, rows affected: " . $stmt->rowCount());
 
     // Record in ledger to prevent duplicate votes
+    error_log("vote_submit: Inserting into vote_ledger");
     $stmt = $pdo->prepare("INSERT INTO vote_ledger (login, clip_id, username, vote_dir) VALUES (?, ?, ?, ?)");
     $stmt->execute([$login, $clipId, strtolower($user), $dir]);
+    error_log("vote_submit: Ledger insert done, rows affected: " . $stmt->rowCount());
 
     $pdo->commit();
+    error_log("vote_submit: Transaction committed successfully");
 
     // Get final counts
     $stmt = $pdo->prepare("SELECT up_votes, down_votes FROM votes WHERE login = ? AND clip_id = ?");
@@ -236,7 +242,8 @@ if ($pdo) {
 
   } catch (PDOException $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();
-    error_log("Vote database error: " . $e->getMessage());
+    error_log("Vote database error for $login/$seq/$user: " . $e->getMessage());
+    error_log("Vote error trace: " . $e->getTraceAsString());
     // Fall through to file storage
   }
 }
