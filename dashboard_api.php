@@ -89,6 +89,36 @@ if ($action === 'check_login') {
     ]);
 }
 
+// Special case: get channels where user is a mod (requires OAuth login but not channel auth)
+if ($action === 'my_channels') {
+    if (!$currentUser) {
+        json_error("Must be logged in with Twitch", 401);
+    }
+
+    $username = strtolower($currentUser['login']);
+
+    try {
+        $stmt = $pdo->prepare("
+            SELECT cm.channel_login, cm.added_at, s.instance
+            FROM channel_mods cm
+            LEFT JOIN streamers s ON s.login = cm.channel_login
+            WHERE cm.mod_username = ?
+            ORDER BY cm.channel_login ASC
+        ");
+        $stmt->execute([$username]);
+        $channels = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        json_response([
+            "success" => true,
+            "username" => $username,
+            "is_super_admin" => isSuperAdmin(),
+            "channels" => $channels
+        ]);
+    } catch (PDOException $e) {
+        json_error("Database error: " . $e->getMessage(), 500);
+    }
+}
+
 if (!$authenticated) {
     json_error("Unauthorized", 401);
 }
@@ -248,6 +278,101 @@ switch ($action) {
             json_response(["success" => true, "message" => $newPassword ? "Mod password set" : "Mod password removed"]);
         } else {
             json_error("Failed to update password");
+        }
+        break;
+
+    case 'get_mods':
+        if (!$auth->canDo('change_mod_password')) {
+            json_error("Permission denied", 403);
+        }
+
+        try {
+            $stmt = $pdo->prepare("
+                SELECT mod_username, added_by, added_at
+                FROM channel_mods
+                WHERE channel_login = ?
+                ORDER BY added_at DESC
+            ");
+            $stmt->execute([$login]);
+            $mods = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            json_response(["success" => true, "mods" => $mods]);
+        } catch (PDOException $e) {
+            json_error("Database error: " . $e->getMessage(), 500);
+        }
+        break;
+
+    case 'add_mod':
+        if (!$auth->canDo('change_mod_password')) {
+            json_error("Permission denied", 403);
+        }
+
+        $modUsername = strtolower(trim($_GET['mod_username'] ?? $_POST['mod_username'] ?? ''));
+        $modUsername = preg_replace("/[^a-z0-9_]/", "", $modUsername);
+
+        if (!$modUsername) {
+            json_error("Invalid mod username");
+        }
+
+        // Can't add yourself as a mod
+        if ($modUsername === $login) {
+            json_error("Cannot add yourself as a mod");
+        }
+
+        try {
+            $addedBy = $currentUser ? $currentUser['login'] : $auth->getLogin();
+
+            $stmt = $pdo->prepare("
+                INSERT INTO channel_mods (channel_login, mod_username, added_by)
+                VALUES (?, ?, ?)
+                ON CONFLICT (channel_login, mod_username) DO NOTHING
+            ");
+            $stmt->execute([$login, $modUsername, $addedBy]);
+
+            // Return updated list
+            $stmt = $pdo->prepare("
+                SELECT mod_username, added_by, added_at
+                FROM channel_mods
+                WHERE channel_login = ?
+                ORDER BY added_at DESC
+            ");
+            $stmt->execute([$login]);
+            $mods = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            json_response(["success" => true, "message" => "Mod added: $modUsername", "mods" => $mods]);
+        } catch (PDOException $e) {
+            json_error("Database error: " . $e->getMessage(), 500);
+        }
+        break;
+
+    case 'remove_mod':
+        if (!$auth->canDo('change_mod_password')) {
+            json_error("Permission denied", 403);
+        }
+
+        $modUsername = strtolower(trim($_GET['mod_username'] ?? $_POST['mod_username'] ?? ''));
+
+        if (!$modUsername) {
+            json_error("Missing mod username");
+        }
+
+        try {
+            $stmt = $pdo->prepare("DELETE FROM channel_mods WHERE channel_login = ? AND mod_username = ?");
+            $stmt->execute([$login, $modUsername]);
+
+            // Return updated list
+            $stmt = $pdo->prepare("
+                SELECT mod_username, added_by, added_at
+                FROM channel_mods
+                WHERE channel_login = ?
+                ORDER BY added_at DESC
+            ");
+            $stmt->execute([$login]);
+            $mods = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            json_response(["success" => true, "message" => "Mod removed: $modUsername", "mods" => $mods]);
+        } catch (PDOException $e) {
+            json_error("Database error: " . $e->getMessage(), 500);
         }
         break;
 

@@ -149,6 +149,20 @@ function init_votes_tables($pdo) {
         // Optimized index for clips pagination with blocked filter
         $pdo->exec("CREATE INDEX IF NOT EXISTS idx_clips_active_seq ON clips(login, seq DESC) WHERE blocked = false");
 
+        // Channel mods table - stores authorized moderators per channel
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS channel_mods (
+                id SERIAL PRIMARY KEY,
+                channel_login VARCHAR(64) NOT NULL,
+                mod_username VARCHAR(64) NOT NULL,
+                added_by VARCHAR(64),
+                added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(channel_login, mod_username)
+            )
+        ");
+        $pdo->exec("CREATE INDEX IF NOT EXISTS idx_channel_mods_channel ON channel_mods(channel_login)");
+        $pdo->exec("CREATE INDEX IF NOT EXISTS idx_channel_mods_mod ON channel_mods(mod_username)");
+
         return true;
     } catch (PDOException $e) {
         error_log("Failed to create tables: " . $e->getMessage());

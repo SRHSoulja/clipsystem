@@ -427,13 +427,16 @@ if ($currentUser) {
                 <button class="btn btn-primary" onclick="refreshClips()">Get New Clips</button>
             </div>
 
-            <div class="card" id="modPasswordCard">
-                <h3>Mod Password</h3>
-                <p style="color: #adadb8; margin-bottom: 12px;">Set a password for mods to access this dashboard with limited permissions.</p>
+            <div class="card" id="modManagementCard">
+                <h3>Mod Access</h3>
+                <p style="color: #adadb8; margin-bottom: 12px;">Add Twitch users who can access your mod dashboard. They just login with their Twitch account - no password needed.</p>
                 <div class="form-group">
-                    <input type="password" id="newModPassword" placeholder="New mod password (leave empty to remove)">
+                    <input type="text" id="newModUsername" placeholder="Enter Twitch username" onkeypress="if(event.key==='Enter')addMod()">
+                    <button class="btn btn-primary" style="margin-top: 8px;" onclick="addMod()">Add Mod</button>
                 </div>
-                <button class="btn btn-secondary" onclick="saveModPassword()">Update Password</button>
+                <div id="modList" style="margin-top: 16px;">
+                    <p style="color: #666; font-size: 13px;">Loading mods...</p>
+                </div>
             </div>
 
             <div class="card">
@@ -618,7 +621,10 @@ if ($currentUser) {
                 document.getElementById('blockedWordsGroup').style.display = 'none';
                 document.getElementById('blockedClippersGroup').style.display = 'none';
                 document.getElementById('refreshCard').style.display = 'none';
-                document.getElementById('modPasswordCard').style.display = 'none';
+                document.getElementById('modManagementCard').style.display = 'none';
+            } else {
+                // Load mods list for streamers/admins
+                loadMods();
             }
 
             // Update Clip Browser and Mod Dashboard links with login/key
@@ -769,22 +775,71 @@ if ($currentUser) {
             renderTags('blockedClippersTags', clippers, removeBlockedClipper);
         }
 
-        async function saveModPassword() {
-            const password = document.getElementById('newModPassword').value;
+        async function loadMods() {
             try {
-                const res = await fetch(`${API_BASE}/dashboard_api.php?action=set_mod_password&key=${encodeURIComponent(authKey)}&login=${encodeURIComponent(authLogin)}&new_password=${encodeURIComponent(password)}`);
+                const res = await fetch(`${API_BASE}/dashboard_api.php?action=get_mods&key=${encodeURIComponent(authKey)}&login=${encodeURIComponent(authLogin)}`);
+                const data = await res.json();
+
+                if (data.success) {
+                    renderModList(data.mods || []);
+                } else {
+                    document.getElementById('modList').innerHTML = '<p style="color: #eb0400;">Error loading mods</p>';
+                }
+            } catch (e) {
+                console.error('Error loading mods:', e);
+            }
+        }
+
+        function renderModList(mods) {
+            const container = document.getElementById('modList');
+            if (mods.length === 0) {
+                container.innerHTML = '<p style="color: #666; font-size: 13px;">No mods added yet. Add Twitch usernames above.</p>';
+                return;
+            }
+
+            container.innerHTML = '<div class="tags">' + mods.map(mod => `
+                <span class="tag">
+                    ${escapeHtml(mod.mod_username)}
+                    <span class="remove" onclick="removeMod('${escapeHtml(mod.mod_username)}')">&times;</span>
+                </span>
+            `).join('') + '</div>';
+        }
+
+        async function addMod() {
+            const input = document.getElementById('newModUsername');
+            const username = input.value.trim().toLowerCase();
+            if (!username) return;
+
+            try {
+                const res = await fetch(`${API_BASE}/dashboard_api.php?action=add_mod&key=${encodeURIComponent(authKey)}&login=${encodeURIComponent(authLogin)}&mod_username=${encodeURIComponent(username)}`);
                 const data = await res.json();
 
                 const msgEl = document.getElementById('settingsMessage');
                 if (data.success) {
+                    renderModList(data.mods || []);
+                    input.value = '';
                     msgEl.innerHTML = '<div class="message success">' + data.message + '</div>';
-                    document.getElementById('newModPassword').value = '';
                 } else {
-                    msgEl.innerHTML = '<div class="message error">' + (data.error || 'Failed') + '</div>';
+                    msgEl.innerHTML = '<div class="message error">' + (data.error || 'Failed to add mod') + '</div>';
                 }
                 setTimeout(() => msgEl.innerHTML = '', 5000);
             } catch (e) {
-                console.error('Error:', e);
+                console.error('Error adding mod:', e);
+            }
+        }
+
+        async function removeMod(username) {
+            if (!confirm(`Remove ${username} as a mod?`)) return;
+
+            try {
+                const res = await fetch(`${API_BASE}/dashboard_api.php?action=remove_mod&key=${encodeURIComponent(authKey)}&login=${encodeURIComponent(authLogin)}&mod_username=${encodeURIComponent(username)}`);
+                const data = await res.json();
+
+                if (data.success) {
+                    renderModList(data.mods || []);
+                }
+            } catch (e) {
+                console.error('Error removing mod:', e);
             }
         }
 

@@ -138,8 +138,31 @@ $isAuthorized = false;
 // Check OAuth first
 if ($useOAuth) {
   $currentUser = getCurrentUser();
-  if ($currentUser && strtolower($currentUser['login']) === $login) {
-    $isAuthorized = true;
+  if ($currentUser) {
+    $oauthUsername = strtolower($currentUser['login']);
+    // Own channel access
+    if ($oauthUsername === $login) {
+      $isAuthorized = true;
+    }
+    // Super admin access
+    elseif (isSuperAdmin()) {
+      $isAuthorized = true;
+    }
+    // Check if user is in channel's mod list
+    else {
+      $pdoCheck = get_db_connection();
+      if ($pdoCheck) {
+        try {
+          $stmt = $pdoCheck->prepare("SELECT 1 FROM channel_mods WHERE channel_login = ? AND mod_username = ?");
+          $stmt->execute([$login, $oauthUsername]);
+          if ($stmt->fetch()) {
+            $isAuthorized = true;
+          }
+        } catch (PDOException $e) {
+          // Ignore - table might not exist
+        }
+      }
+    }
   }
 }
 

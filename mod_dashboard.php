@@ -42,6 +42,8 @@ $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
 $oauthAuthorized = false;
 $oauthChannel = '';
 $isSuperAdmin = false;
+$isChannelMod = false;
+
 if ($currentUser) {
   $oauthChannel = strtolower($currentUser['login']);
   $isSuperAdmin = isSuperAdmin();
@@ -53,6 +55,23 @@ if ($currentUser) {
 
   // User is authorized if they're a super admin or accessing their own channel
   $oauthAuthorized = isAuthorizedForChannel($login);
+
+  // Also check if user is in the channel's mod list
+  if (!$oauthAuthorized) {
+    $pdo = get_db_connection();
+    if ($pdo) {
+      try {
+        $stmt = $pdo->prepare("SELECT 1 FROM channel_mods WHERE channel_login = ? AND mod_username = ?");
+        $stmt->execute([$login, $oauthChannel]);
+        if ($stmt->fetch()) {
+          $oauthAuthorized = true;
+          $isChannelMod = true;
+        }
+      } catch (PDOException $e) {
+        // Ignore - table might not exist yet
+      }
+    }
+  }
 }
 ?>
 <!DOCTYPE html>
@@ -632,13 +651,20 @@ if ($currentUser) {
       </div>
 
       <?php if ($oauthAuthorized): ?>
-      <!-- Auto-enter for own channel -->
-      <p style="color:#adadb8;margin-bottom:16px;">Accessing your channel dashboard...</p>
+      <!-- Auto-enter for authorized user (own channel or mod list) -->
+      <?php if ($isChannelMod): ?>
+      <p style="color:#adadb8;margin-bottom:16px;">Accessing <strong><?= htmlspecialchars($login) ?></strong>'s dashboard as mod...</p>
       <?php else: ?>
-      <!-- Accessing another channel - need password -->
-      <p style="color:#adadb8;margin-bottom:16px;">To access <?= htmlspecialchars($login) ?>'s dashboard, enter their mod password:</p>
+      <p style="color:#adadb8;margin-bottom:16px;">Accessing your channel dashboard...</p>
+      <?php endif; ?>
+      <?php else: ?>
+      <!-- Not authorized - show channels they can access -->
+      <p style="color:#adadb8;margin-bottom:16px;">You don't have mod access to <strong><?= htmlspecialchars($login) ?></strong>.</p>
+      <p style="color:#666;font-size:13px;margin-bottom:16px;">The streamer needs to add your username to their mod list in their dashboard settings.</p>
+      <a href="/my_channels.php" style="display: block; text-align: center; padding: 12px; background: #3a3a3d; color: white; border-radius: 4px; text-decoration: none; margin-bottom: 12px;">View My Channels</a>
+      <div class="login-divider"><span>or use password</span></div>
       <input type="hidden" id="channelInput" value="<?= htmlspecialchars($login) ?>">
-      <input type="password" id="keyInput" placeholder="Mod Password" autofocus>
+      <input type="password" id="keyInput" placeholder="Streamer Key or Mod Password" autofocus>
       <button onclick="login()">Enter</button>
       <?php endif; ?>
 
