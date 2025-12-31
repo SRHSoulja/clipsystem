@@ -11,6 +11,7 @@ header("Content-Type: text/html; charset=utf-8");
 header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
 header("Pragma: no-cache");
 header("Expires: 0");
+header("Content-Security-Policy: upgrade-insecure-requests");
 
 // Load env file if exists
 $envPath = __DIR__ . '/.env';

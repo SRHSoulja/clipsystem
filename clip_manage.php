@@ -15,6 +15,7 @@ header("Content-Type: text/html; charset=utf-8");
 header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
 header("Pragma: no-cache");
 header("Expires: 0");
+header("Content-Security-Policy: upgrade-insecure-requests");
 
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/includes/dashboard_auth.php';
