@@ -83,7 +83,7 @@ if ($authenticated && $_SERVER['REQUEST_METHOD'] === 'POST') {
       $key = $auth->createStreamer($login);
 
       if ($key) {
-        $dashboardUrl = "https://clipsystem-production.up.railway.app/dashboard.php?key=" . urlencode($key);
+        $dashboardUrl = "https://clips.gmgnrepeat.com/dashboard.php?key=" . urlencode($key);
         $message = "Dashboard link generated for {$login}!";
         $messageType = 'success';
         $generatedDashboardUrl = $dashboardUrl;

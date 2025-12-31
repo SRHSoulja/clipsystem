@@ -308,7 +308,7 @@
   const forceMuted = qs.get("muted") === "1";
   const instance = qs.get("instance") || "";  // Optional instance ID for multi-player isolation
 
-  const API_BASE = "https://clipsystem-production.up.railway.app";
+  const API_BASE = "https://clips.gmgnrepeat.com";
   const apiUrl = `${API_BASE}/twitch_reel_api.php?login=${encodeURIComponent(login)}&days=${days}&pool=${pool}`;
 
   // Twitch GQL for MP4 URLs

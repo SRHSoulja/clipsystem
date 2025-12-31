@@ -19,7 +19,7 @@ const config = {
   botUsername: process.env.TWITCH_BOT_USERNAME || '',
   oauthToken: process.env.TWITCH_OAUTH_TOKEN || '',
   channel: process.env.TWITCH_CHANNEL || 'floppyjimmie',
-  apiBaseUrl: (process.env.API_BASE_URL || 'https://clipsystem-production.up.railway.app').trim().replace(/\/+$/, ''),
+  apiBaseUrl: (process.env.API_BASE_URL || 'https://clips.gmgnrepeat.com').trim().replace(/\/+$/, ''),
   adminKey: (process.env.ADMIN_KEY || '').trim()
 };
 
