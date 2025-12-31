@@ -334,10 +334,9 @@ if ($currentUser) {
                 <p style="color: #adadb8; margin-bottom: 16px;">Loading dashboard for <strong><?= htmlspecialchars($login) ?></strong>...</p>
             <?php elseif ($login): ?>
                 <p style="color: #adadb8; margin-bottom: 16px;">Channel: <strong><?= htmlspecialchars($login) ?></strong></p>
-                <input type="password" id="modPassword" placeholder="Mod Password" autofocus>
-                <button onclick="loginWithPassword()">Enter</button>
-                <div style="text-align: center; margin: 16px 0; color: #666;">— or —</div>
+                <p style="color: #666; font-size: 13px; margin-bottom: 16px;">Login with Twitch to access your dashboard.</p>
                 <a href="/auth/login.php?return=<?= urlencode('/dashboard.php?login=' . urlencode($login)) ?>" style="display: block; text-align: center; padding: 12px; background: #9147ff; color: white; border-radius: 4px; text-decoration: none;">Login with Twitch</a>
+                <p style="color: #666; font-size: 12px; margin-top: 16px; text-align: center;">Looking to moderate? Go to the <a href="/mod_dashboard.php?login=<?= urlencode($login) ?>" style="color: #9147ff;">Mod Dashboard</a> instead.</p>
             <?php else: ?>
                 <p style="color: #adadb8; margin-bottom: 16px;">Enter your dashboard key or login with Twitch.</p>
                 <input type="text" id="dashboardKey" placeholder="Dashboard Key" autofocus>
