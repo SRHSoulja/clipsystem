@@ -19,7 +19,8 @@ function clean_login($s){
   return $s ?: "default";
 }
 
-$login  = clean_login($_GET["login"] ?? "");
+// Accept both "streamer" and "login" parameters (streamer takes priority)
+$login  = clean_login($_GET["streamer"] ?? $_GET["login"] ?? "");
 $query  = trim((string)($_GET["q"] ?? ""));
 $gameId = trim((string)($_GET["game_id"] ?? ""));
 $gameName = trim((string)($_GET["game"] ?? "")); // Search by game name

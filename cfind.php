@@ -40,7 +40,7 @@ if ($key !== $ADMIN_KEY) { http_response_code(403); echo "forbidden"; exit; }
 // If no query provided, just return the search page link
 $baseUrl = getenv('API_BASE_URL') ?: 'https://clips.gmgnrepeat.com';
 if ($query === '' || strlen($query) < 2) {
-  echo "Search clips: {$baseUrl}/clip_search.php?login=" . urlencode($login);
+  echo "Search clips: {$baseUrl}/clip_search.php?streamer=" . urlencode($login);
   exit;
 }
 
@@ -51,7 +51,7 @@ $queryWords = array_values($queryWords); // Re-index to ensure sequential keys
 
 // If all words were filtered out (too short), return search page link
 if (empty($queryWords)) {
-  echo "Search clips: {$baseUrl}/clip_search.php?login=" . urlencode($login);
+  echo "Search clips: {$baseUrl}/clip_search.php?streamer=" . urlencode($login);
   exit;
 }
 
@@ -127,9 +127,9 @@ if ($titleCount === 0 && $clipperCount === 0 && $gameCount === 0) {
 
 // Build search URLs
 $baseUrl = getenv('API_BASE_URL') ?: 'https://clips.gmgnrepeat.com';
-$titleUrl = $baseUrl . '/clip_search.php?login=' . urlencode($login) . '&q=' . urlencode($query);
-$clipperUrl = $baseUrl . '/clip_search.php?login=' . urlencode($login) . '&clipper=' . urlencode($query);
-$gameUrl = $baseUrl . '/clip_search.php?login=' . urlencode($login) . '&game=' . urlencode($query);
+$titleUrl = $baseUrl . '/clip_search.php?streamer=' . urlencode($login) . '&q=' . urlencode($query);
+$clipperUrl = $baseUrl . '/clip_search.php?streamer=' . urlencode($login) . '&clipper=' . urlencode($query);
+$gameUrl = $baseUrl . '/clip_search.php?streamer=' . urlencode($login) . '&game=' . urlencode($query);
 
 // Build response - show title, clipper, and game results if applicable
 $parts = [];
