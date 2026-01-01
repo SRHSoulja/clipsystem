@@ -840,16 +840,15 @@ if ($isSuperAdmin || $isStreamerOfChannel) {
     const urlKey = urlParams.get('key');
 
     document.addEventListener('DOMContentLoaded', async () => {
-      // OAuth auto-login for own channel
-      if (oauthAuthorized && oauthChannel) {
+      // OAuth auto-login for authorized users (own channel, super admin, or mod)
+      if (oauthAuthorized && oauthLogin) {
         try {
-          // For OAuth users accessing their own channel, use 'oauth' as the key
-          // The backend will need to recognize this and validate the session
-          const res = await fetch(`${API_BASE}/playlist_api.php?action=list&login=${encodeURIComponent(oauthChannel)}&oauth=1`, { credentials: 'same-origin' });
+          // Use oauthLogin (the target channel from URL) not oauthChannel (the logged-in user's channel)
+          const res = await fetch(`${API_BASE}/playlist_api.php?action=list&login=${encodeURIComponent(oauthLogin)}&oauth=1`, { credentials: 'same-origin' });
           const data = await res.json();
 
           if (!data.error) {
-            LOGIN = oauthChannel;
+            LOGIN = oauthLogin;
             adminKey = 'oauth';  // Special marker for OAuth auth
             document.querySelector('.header .user').textContent = LOGIN;
             document.getElementById('loginScreen').style.display = 'none';
