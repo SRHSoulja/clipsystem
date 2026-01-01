@@ -95,32 +95,38 @@ if ($pdo) {
       }
     }
 
-    // If no profile image in DB, fetch from Twitch API and cache it
-    if (empty($streamerProfileImage) && $hasArchivedClips) {
+  } catch (PDOException $e) {
+    // Ignore - will fall through to live mode
+  }
+
+  // If no profile image in DB, fetch from Twitch API and cache it
+  if (empty($streamerProfileImage) && $hasArchivedClips) {
+    try {
       $twitchApi = new TwitchAPI();
       if ($twitchApi->isConfigured()) {
         $userInfo = $twitchApi->getUserInfo($login);
         if ($userInfo && !empty($userInfo['profile_image_url'])) {
           $streamerProfileImage = $userInfo['profile_image_url'];
           // Cache it in the database for next time
-          try {
-            $cacheStmt = $pdo->prepare("
-              INSERT INTO channel_settings (login, profile_image_url, profile_image_updated_at)
-              VALUES (?, ?, NOW())
-              ON CONFLICT (login) DO UPDATE SET
-                profile_image_url = EXCLUDED.profile_image_url,
-                profile_image_updated_at = EXCLUDED.profile_image_updated_at
-            ");
-            $cacheStmt->execute([$login, $streamerProfileImage]);
-          } catch (PDOException $e) {
-            // Non-critical - just log
-            error_log("Failed to cache profile image for $login: " . $e->getMessage());
+          if ($pdo) {
+            try {
+              $cacheStmt = $pdo->prepare("
+                INSERT INTO channel_settings (login, profile_image_url, profile_image_updated_at)
+                VALUES (?, ?, NOW())
+                ON CONFLICT (login) DO UPDATE SET
+                  profile_image_url = EXCLUDED.profile_image_url,
+                  profile_image_updated_at = EXCLUDED.profile_image_updated_at
+              ");
+              $cacheStmt->execute([$login, $streamerProfileImage]);
+            } catch (PDOException $e) {
+              error_log("Failed to cache profile image for $login: " . $e->getMessage());
+            }
           }
         }
       }
+    } catch (Exception $e) {
+      error_log("Failed to fetch profile image from Twitch for $login: " . $e->getMessage());
     }
-  } catch (PDOException $e) {
-    // Ignore - will fall through to live mode
   }
 }
 
@@ -516,6 +522,7 @@ if ($hasArchivedClips && $pdo) {
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <title>Clip Search<?= $query ? ': ' . htmlspecialchars($query) : '' ?> - <?= htmlspecialchars($login) ?></title>
   <style>
     * { box-sizing: border-box; }
