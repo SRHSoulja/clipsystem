@@ -2,7 +2,15 @@
 /**
  * chelp.php - Bot Commands Help Page
  */
+
+require_once __DIR__ . '/db_config.php';
+require_once __DIR__ . '/includes/twitch_oauth.php';
+
 header("Content-Type: text/html; charset=utf-8");
+
+// Get pdo and current user for nav
+$pdo = get_db_connection();
+$currentUser = getCurrentUser();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -97,12 +105,9 @@ header("Content-Type: text/html; charset=utf-8");
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="nav-links">
-      <a href="/search/floppyjimmie">Clip Search</a>
-      <a href="about.php">About</a>
-    </div>
+  <?php require_once __DIR__ . '/includes/nav.php'; ?>
 
+  <div class="container" style="padding-top: 20px;">
     <h1>Clip Bot Commands</h1>
 
     <div class="note">

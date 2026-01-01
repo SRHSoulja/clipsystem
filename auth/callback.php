@@ -7,6 +7,7 @@
  */
 
 require_once __DIR__ . '/../includes/twitch_oauth.php';
+require_once __DIR__ . '/../db_config.php';
 
 initSession();
 
@@ -59,6 +60,32 @@ if (!$userInfo) {
 
 // Create session
 login($userInfo, $accessToken, $expiresIn);
+
+// Save profile image to database for archived streamers
+// This allows displaying streamer avatars on browse/search pages
+$pdo = get_db_connection();
+if ($pdo && !empty($userInfo['profile_image_url'])) {
+  $userLogin = strtolower($userInfo['login']);
+  try {
+    // Check if this user is an archived streamer (has clips)
+    $stmt = $pdo->prepare("SELECT 1 FROM clips WHERE login = ? LIMIT 1");
+    $stmt->execute([$userLogin]);
+    if ($stmt->fetch()) {
+      // Update their profile image in channel_settings
+      $stmt = $pdo->prepare("
+        INSERT INTO channel_settings (login, profile_image_url, profile_image_updated_at)
+        VALUES (?, ?, NOW())
+        ON CONFLICT (login) DO UPDATE SET
+          profile_image_url = EXCLUDED.profile_image_url,
+          profile_image_updated_at = EXCLUDED.profile_image_updated_at
+      ");
+      $stmt->execute([$userLogin, $userInfo['profile_image_url']]);
+    }
+  } catch (PDOException $e) {
+    // Non-critical - just log and continue
+    error_log("Failed to save profile image for $userLogin: " . $e->getMessage());
+  }
+}
 
 // Validate return URL (must be relative or same domain)
 if (!preg_match('#^/[^/]#', $returnTo) && !preg_match('#^https?://' . preg_quote($_SERVER['HTTP_HOST']) . '#', $returnTo)) {

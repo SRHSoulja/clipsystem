@@ -8,9 +8,6 @@
  * - Mods: Access to channels they moderate
  * - Others: Helpful message about getting access
  */
-header("Content-Type: text/html; charset=utf-8");
-header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
-header("Content-Security-Policy: upgrade-insecure-requests");
 
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/includes/twitch_oauth.php';
@@ -18,6 +15,10 @@ require_once __DIR__ . '/includes/twitch_oauth.php';
 $currentUser = getCurrentUser();
 $isSuperAdmin = $currentUser ? isSuperAdmin() : false;
 $pdo = get_db_connection();
+
+header("Content-Type: text/html; charset=utf-8");
+header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+header("Content-Security-Policy: upgrade-insecure-requests");
 
 // Determine user's access rights
 $isArchivedStreamer = false;
@@ -74,6 +75,9 @@ if ($isSuperAdmin && $pdo) {
 }
 
 $hasAnyAccess = $isSuperAdmin || $isArchivedStreamer || count($modChannels) > 0;
+
+// Check if user was redirected from dashboard due to not being archived
+$notArchivedRedirect = isset($_GET['not_archived']) && $_GET['not_archived'] === '1';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -90,30 +94,21 @@ $hasAnyAccess = $isSuperAdmin || $isArchivedStreamer || count($modChannels) > 0;
             min-height: 100vh;
         }
 
-        .header {
-            background: #18181b;
-            padding: 16px 24px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid #3a3a3d;
+        .page-header {
+            padding: 24px 24px 0;
+            max-width: 900px;
+            margin: 0 auto;
         }
-        .header h1 {
-            font-size: 20px;
-            color: #9147ff;
-            display: flex;
-            align-items: center;
-            gap: 12px;
+        .page-header h1 {
+            font-size: 24px;
+            color: #efeff1;
+            margin-bottom: 8px;
         }
-        .header h1 a {
-            color: #9147ff;
-            text-decoration: none;
+        .page-header p {
+            color: #adadb8;
+            font-size: 14px;
         }
-        .header .user-info {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-        }
+
         .badge {
             background: #9147ff;
             padding: 4px 8px;
@@ -311,12 +306,6 @@ $hasAnyAccess = $isSuperAdmin || $isArchivedStreamer || count($modChannels) > 0;
             margin-bottom: 8px;
         }
 
-        .logout-link {
-            color: #adadb8;
-            text-decoration: none;
-        }
-        .logout-link:hover { color: #efeff1; }
-
         .streamer-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -344,15 +333,33 @@ $hasAnyAccess = $isSuperAdmin || $isArchivedStreamer || count($modChannels) > 0;
             color: #666;
         }
 
-        .home-link {
-            color: #adadb8;
-            text-decoration: none;
-            font-size: 14px;
+        .warning-banner {
+            background: linear-gradient(90deg, #eb0400, #ff6b35);
+            padding: 16px 24px;
+            text-align: center;
+            color: white;
         }
-        .home-link:hover { color: #9147ff; }
+        .warning-banner p {
+            color: white;
+            margin: 0;
+        }
+        .warning-banner strong {
+            display: block;
+            margin-bottom: 4px;
+        }
+
     </style>
 </head>
 <body>
+    <?php require_once __DIR__ . '/includes/nav.php'; ?>
+
+    <?php if ($notArchivedRedirect): ?>
+    <div class="warning-banner">
+        <p><strong>Channel Not Archived</strong>
+        Your channel doesn't have any clips archived yet. Contact the ClipArchive team to get started.</p>
+    </div>
+    <?php endif; ?>
+
     <?php if (!$currentUser): ?>
     <div class="login-prompt">
         <h2>Dashboard Hub</h2>
@@ -363,13 +370,11 @@ $hasAnyAccess = $isSuperAdmin || $isArchivedStreamer || count($modChannels) > 0;
         </a>
     </div>
     <?php else: ?>
-    <div class="header">
-        <h1>
-            <a href="/">ClipArchive</a>
-            <span style="color: #666; font-weight: normal;">/ Dashboard Hub</span>
-        </h1>
-        <div class="user-info">
-            <span>Logged in as <strong><?= htmlspecialchars($currentUser['display_name']) ?></strong></span>
+
+    <div class="page-header">
+        <h1>Dashboard Hub</h1>
+        <p>
+            Logged in as <strong><?= htmlspecialchars($currentUser['display_name']) ?></strong>
             <?php if ($isSuperAdmin): ?>
             <span class="badge admin">Super Admin</span>
             <?php elseif ($isArchivedStreamer): ?>
@@ -377,8 +382,7 @@ $hasAnyAccess = $isSuperAdmin || $isArchivedStreamer || count($modChannels) > 0;
             <?php elseif (count($modChannels) > 0): ?>
             <span class="badge mod">Mod</span>
             <?php endif; ?>
-            <a href="/auth/logout.php" class="logout-link">Logout</a>
-        </div>
+        </p>
     </div>
 
     <div class="container">
@@ -473,10 +477,6 @@ $hasAnyAccess = $isSuperAdmin || $isArchivedStreamer || count($modChannels) > 0;
             </div>
         </div>
         <?php endif; ?>
-
-        <div style="text-align: center; margin-top: 32px;">
-            <a href="/" class="home-link">&larr; Back to Home</a>
-        </div>
     </div>
 
     <script>

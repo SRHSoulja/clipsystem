@@ -5,11 +5,15 @@
  * Super admin page for managing the clip system.
  * Access via Twitch OAuth - only super admins (thearsondragon, cliparchive) allowed.
  */
-header("Content-Type: text/html; charset=utf-8");
 
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/includes/dashboard_auth.php';
 require_once __DIR__ . '/includes/twitch_oauth.php';
+
+header("Content-Type: text/html; charset=utf-8");
+
+// Get pdo for nav
+$pdo = get_db_connection();
 
 // Check OAuth authentication
 $currentUser = getCurrentUser();
@@ -332,7 +336,9 @@ if ($authenticated) {
   </style>
 </head>
 <body>
-  <div class="container">
+  <?php require_once __DIR__ . '/includes/nav.php'; ?>
+
+  <div class="container" style="padding-top: 20px;">
     <?php if (!$authenticated): ?>
     <!-- Login Form -->
     <div class="login-form">
@@ -342,7 +348,6 @@ if ($authenticated) {
         <p style="color: #adadb8; text-align: center; margin-top: 15px;">
           Logged in as: <?= htmlspecialchars($currentUser['display_name'] ?? $currentUser['login']) ?>
         </p>
-        <a href="?logout=1" class="btn btn-secondary" style="width: 100%; text-align: center; margin-top: 10px;">Logout</a>
       <?php else: ?>
         <p style="color: #adadb8; text-align: center; margin-bottom: 20px;">
           Sign in with Twitch to access the admin panel.
@@ -359,12 +364,6 @@ if ($authenticated) {
 
     <?php else: ?>
     <!-- Admin Panel -->
-    <div class="nav-links">
-      <a href="/search/floppyjimmie">Clip Search</a>
-      <a href="chelp.php">Bot Commands</a>
-      <a href="about.php">About</a>
-      <a href="?logout=1" class="logout">Logout</a>
-    </div>
 
     <h1>Admin Panel</h1>
 

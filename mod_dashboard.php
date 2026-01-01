@@ -7,11 +7,6 @@
  * - Create and manage playlists
  * - Queue playlists for playback
  */
-header("Content-Type: text/html; charset=utf-8");
-header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
-header("Pragma: no-cache");
-header("Expires: 0");
-header("Content-Security-Policy: upgrade-insecure-requests");
 
 // Load env file if exists
 $envPath = __DIR__ . '/.env';
@@ -27,6 +22,15 @@ if (file_exists($envPath)) {
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/includes/twitch_oauth.php';
 require_once __DIR__ . '/includes/dashboard_auth.php';
+
+header("Content-Type: text/html; charset=utf-8");
+header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+header("Pragma: no-cache");
+header("Expires: 0");
+header("Content-Security-Policy: upgrade-insecure-requests");
+
+// Get pdo for nav
+$pdo = get_db_connection();
 
 // Get current OAuth user
 $currentUser = getCurrentUser();
@@ -46,6 +50,7 @@ $isSuperAdmin = false;
 $isChannelMod = false;
 $modPermissions = [];
 $isStreamerOfChannel = false;
+$isInModListButNoViewPerm = false;
 
 $auth = new DashboardAuth();
 
@@ -58,32 +63,43 @@ if ($currentUser) {
     $login = $oauthChannel;
   }
 
-  // User is authorized if they're a super admin or accessing their own channel
-  $oauthAuthorized = isAuthorizedForChannel($login);
-
-  // Check if user is the streamer of this channel (for permission inheritance)
-  if ($login === $oauthChannel) {
-    $isStreamerOfChannel = true;
+  // Super admins are always authorized
+  if ($isSuperAdmin) {
+    $oauthAuthorized = true;
   }
 
-  // Also check if user is in the channel's mod list
-  if (!$oauthAuthorized) {
-    $pdo = get_db_connection();
-    if ($pdo) {
-      try {
-        $stmt = $pdo->prepare("SELECT 1 FROM channel_mods WHERE channel_login = ? AND mod_username = ?");
-        $stmt->execute([$login, $oauthChannel]);
-        if ($stmt->fetch()) {
-          // Check if mod has view_dashboard permission
-          $modPermissions = $auth->getModPermissions($login, $oauthChannel);
-          if (in_array('view_dashboard', $modPermissions)) {
-            $oauthAuthorized = true;
-            $isChannelMod = true;
-          }
-        }
-      } catch (PDOException $e) {
-        // Ignore - table might not exist yet
+  // Check if user is the streamer of this channel (must be archived to have access)
+  if ($login === $oauthChannel && $pdo) {
+    try {
+      $stmt = $pdo->prepare("SELECT 1 FROM clips WHERE login = ? LIMIT 1");
+      $stmt->execute([$login]);
+      if ($stmt->fetch()) {
+        $isStreamerOfChannel = true;
+        $oauthAuthorized = true;
       }
+    } catch (PDOException $e) {
+      // Ignore
+    }
+  }
+
+  // Check if user is in the channel's mod list (for other channels)
+  if (!$oauthAuthorized && $pdo) {
+    try {
+      $stmt = $pdo->prepare("SELECT 1 FROM channel_mods WHERE channel_login = ? AND mod_username = ?");
+      $stmt->execute([$login, $oauthChannel]);
+      if ($stmt->fetch()) {
+        // User is in mod list - check if they have view_dashboard permission
+        $modPermissions = $auth->getModPermissions($login, $oauthChannel);
+        if (in_array('view_dashboard', $modPermissions)) {
+          $oauthAuthorized = true;
+          $isChannelMod = true;
+        } else {
+          // They're in the mod list but don't have view_dashboard permission
+          $isInModListButNoViewPerm = true;
+        }
+      }
+    } catch (PDOException $e) {
+      // Ignore - table might not exist yet
     }
   }
 }
@@ -91,6 +107,12 @@ if ($currentUser) {
 // For admins and streamers, grant all permissions
 if ($isSuperAdmin || $isStreamerOfChannel) {
   $modPermissions = array_keys(DashboardAuth::ALL_PERMISSIONS);
+}
+
+// If user is accessing their own channel but not archived, redirect to hub
+if ($currentUser && $login === $oauthChannel && !$isStreamerOfChannel && !$isSuperAdmin) {
+  header('Location: /channels?not_archived=1');
+  exit;
 }
 ?>
 <!DOCTYPE html>
@@ -119,8 +141,7 @@ if ($isSuperAdmin || $isStreamerOfChannel) {
       display: flex;
       justify-content: center;
       align-items: center;
-      min-height: 100vh;
-      min-height: -webkit-fill-available;
+      min-height: calc(100vh - 56px);
       padding: 20px;
     }
     .login-box {
@@ -699,6 +720,8 @@ if ($isSuperAdmin || $isStreamerOfChannel) {
   </style>
 </head>
 <body>
+  <?php require_once __DIR__ . '/includes/nav.php'; ?>
+
   <div class="login-screen" id="loginScreen">
     <div class="login-box">
       <h1>Mod Dashboard</h1>
@@ -723,8 +746,13 @@ if ($isSuperAdmin || $isStreamerOfChannel) {
       <?php endif; ?>
       <?php else: ?>
       <!-- Not authorized - show channels they can access -->
+      <?php if ($isInModListButNoViewPerm): ?>
+      <p style="color:#adadb8;margin-bottom:16px;">You're a mod for <strong><?= htmlspecialchars($login) ?></strong>, but don't have dashboard access permission.</p>
+      <p style="color:#666;font-size:13px;margin-bottom:16px;">Ask the streamer to grant you the "Dashboard" permission in their settings.</p>
+      <?php else: ?>
       <p style="color:#adadb8;margin-bottom:16px;">You don't have mod access to <strong><?= htmlspecialchars($login) ?></strong>.</p>
       <p style="color:#666;font-size:13px;margin-bottom:16px;">The streamer needs to add your username to their mod list in their dashboard settings.</p>
+      <?php endif; ?>
       <a href="/channels" style="display: block; text-align: center; padding: 12px; background: #3a3a3d; color: white; border-radius: 4px; text-decoration: none; margin-bottom: 12px;">View My Channels</a>
       <input type="hidden" id="channelInput" value="<?= htmlspecialchars($login) ?>">
       <input type="hidden" id="keyInput" value="">
@@ -758,7 +786,6 @@ if ($isSuperAdmin || $isStreamerOfChannel) {
         <?php if ($isSuperAdmin): ?>
         <span style="background: #eb0400; padding: 2px 6px; border-radius: 4px; font-size: 10px;">SUPER ADMIN</span>
         <?php endif; ?>
-        <a href="/auth/logout.php" style="color: #adadb8; text-decoration: none; font-size: 12px;">Logout</a>
       </div>
     </div>
 

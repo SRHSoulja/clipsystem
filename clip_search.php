@@ -6,16 +6,17 @@
  * Supports category filtering and links directly to Twitch.
  * Falls back to live Twitch API for non-archived streamers.
  */
+
+require_once __DIR__ . '/db_config.php';
+require_once __DIR__ . '/includes/twitch_api.php';
+require_once __DIR__ . '/includes/twitch_oauth.php';
+
 header("Access-Control-Allow-Origin: *");
 header("Content-Type: text/html; charset=utf-8");
 header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
 header("Pragma: no-cache");
 header("Expires: 0");
 header("Content-Security-Policy: upgrade-insecure-requests");
-
-require_once __DIR__ . '/db_config.php';
-require_once __DIR__ . '/includes/twitch_api.php';
-require_once __DIR__ . '/includes/twitch_oauth.php';
 
 // Get current user for voting
 $currentUser = getCurrentUser();
@@ -75,13 +76,24 @@ $liveError = "";
 
 $pdo = get_db_connection();
 
-// Check if this streamer has archived clips
+// Check if this streamer has archived clips and get their profile image
 $hasArchivedClips = false;
+$streamerProfileImage = '';
 if ($pdo) {
   try {
     $checkStmt = $pdo->prepare("SELECT COUNT(*) FROM clips WHERE login = ?");
     $checkStmt->execute([$login]);
     $hasArchivedClips = (int)$checkStmt->fetchColumn() > 0;
+
+    // Get streamer's profile image if available
+    if ($hasArchivedClips) {
+      $imgStmt = $pdo->prepare("SELECT profile_image_url FROM channel_settings WHERE login = ?");
+      $imgStmt->execute([$login]);
+      $imgResult = $imgStmt->fetch();
+      if ($imgResult && !empty($imgResult['profile_image_url'])) {
+        $streamerProfileImage = $imgResult['profile_image_url'];
+      }
+    }
   } catch (PDOException $e) {
     // Ignore - will fall through to live mode
   }
@@ -491,9 +503,12 @@ if ($hasArchivedClips && $pdo) {
       background: #0e0e10;
       color: #efeff1;
       margin: 0;
-      padding: 20px;
+      padding: 0;
       min-height: 100vh;
       min-height: -webkit-fill-available;
+    }
+    .page-body {
+      padding: 20px;
     }
     .container {
       max-width: 1400px;
@@ -506,6 +521,28 @@ if ($hasArchivedClips && $pdo) {
       align-items: center;
       margin-bottom: 20px;
       gap: 15px;
+    }
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .streamer-avatar {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 3px solid #9147ff;
+      flex-shrink: 0;
+    }
+    .streamer-avatar-placeholder {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #9147ff, #772ce8);
+      color: white;
+      font-size: 24px;
+      font-weight: 700;
     }
     h1 {
       margin: 0;
@@ -551,43 +588,6 @@ if ($hasArchivedClips && $pdo) {
     }
     .total-count strong {
       color: #9147ff;
-    }
-
-    /* Login/User */
-    .login-btn {
-      padding: 8px 16px;
-      background: #9147ff;
-      color: white;
-      text-decoration: none;
-      border-radius: 6px;
-      font-weight: 600;
-      font-size: 14px;
-      transition: background 0.2s;
-    }
-    .login-btn:hover {
-      background: #772ce8;
-    }
-    .user-info {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      background: #1f1f23;
-      padding: 6px 12px;
-      border-radius: 6px;
-    }
-    .user-name {
-      color: #bf94ff;
-      font-weight: 500;
-      font-size: 14px;
-    }
-    .logout-btn {
-      color: #adadb8;
-      text-decoration: none;
-      font-size: 12px;
-      transition: color 0.2s;
-    }
-    .logout-btn:hover {
-      color: #ff4757;
     }
 
     /* Filters */
@@ -1011,14 +1011,19 @@ if ($hasArchivedClips && $pdo) {
   </style>
 </head>
 <body>
+  <?php require_once __DIR__ . '/includes/nav.php'; ?>
+  <div class="page-body">
   <div class="container">
     <header>
-      <div>
-        <h1><a href="/">ClipArchive</a></h1>
-        <p class="subtitle"><?= htmlspecialchars($login) ?>'s Clips</p>
-        <div class="nav-links">
-          <a href="chelp.php">Bot Commands</a>
-          <a href="about.php">About</a>
+      <div class="header-left">
+        <?php if ($streamerProfileImage): ?>
+        <img src="<?= htmlspecialchars($streamerProfileImage) ?>" alt="<?= htmlspecialchars($login) ?>" class="streamer-avatar">
+        <?php else: ?>
+        <div class="streamer-avatar streamer-avatar-placeholder"><?= strtoupper(substr($login, 0, 1)) ?></div>
+        <?php endif; ?>
+        <div>
+          <h1><?= htmlspecialchars($login) ?>'s Clips</h1>
+          <p class="subtitle"><?= $hasArchivedClips ? 'Archived' : 'Live from Twitch' ?></p>
         </div>
       </div>
       <div class="header-right">
@@ -1026,14 +1031,6 @@ if ($hasArchivedClips && $pdo) {
           <strong><?= number_format($totalCount) ?></strong> result<?= $totalCount !== 1 ? 's' : '' ?>
           <?php if ($totalPages > 1): ?> &middot; Page <?= $page ?> of <?= $totalPages ?><?php endif; ?>
         </div>
-        <?php if ($currentUser): ?>
-        <div class="user-info">
-          <span class="user-name"><?= htmlspecialchars($currentUser['display_name'] ?? $currentUser['login']) ?></span>
-          <a href="/auth/logout.php" class="logout-btn">Logout</a>
-        </div>
-        <?php else: ?>
-        <a href="/auth/login.php?return=<?= urlencode($_SERVER['REQUEST_URI']) ?>" class="login-btn">Login with Twitch</a>
-        <?php endif; ?>
       </div>
     </header>
 
@@ -1668,5 +1665,6 @@ if ($hasArchivedClips && $pdo) {
     }
   </script>
   <?php endif; ?>
+  </div>
 </body>
 </html>

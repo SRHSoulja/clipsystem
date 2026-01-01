@@ -6,12 +6,16 @@
  * Access: Twitch OAuth required. dashboard.php?login=username
  * Super admins (thearsondragon, cliparchive) can access any channel.
  */
+
+require_once __DIR__ . '/db_config.php';
+require_once __DIR__ . '/includes/twitch_oauth.php';
+
 header("Content-Type: text/html; charset=utf-8");
 header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
 header("Content-Security-Policy: upgrade-insecure-requests");
 
-require_once __DIR__ . '/db_config.php';
-require_once __DIR__ . '/includes/twitch_oauth.php';
+// Get pdo for nav
+$pdo = get_db_connection();
 
 function clean_login($s) {
     $s = strtolower(trim((string)$s));
@@ -26,6 +30,7 @@ $login = clean_login($_GET['login'] ?? '');
 $currentUser = getCurrentUser();
 $oauthAuthorized = false;
 $isSuperAdmin = false;
+$isArchivedStreamer = false;
 
 if ($currentUser) {
     $isSuperAdmin = isSuperAdmin();
@@ -36,9 +41,27 @@ if ($currentUser) {
             $login = strtolower($currentUser['login']);
         }
     } elseif (!$login || $login === strtolower($currentUser['login'])) {
-        // Regular users can access their own channel
-        $oauthAuthorized = true;
+        // Regular users can access their own channel - but only if they're archived
         $login = strtolower($currentUser['login']);
+
+        // Check if user is an archived streamer (has clips)
+        if ($pdo) {
+            try {
+                $stmt = $pdo->prepare("SELECT 1 FROM clips WHERE login = ? LIMIT 1");
+                $stmt->execute([$login]);
+                $isArchivedStreamer = (bool)$stmt->fetch();
+            } catch (PDOException $e) {
+                // Ignore - will deny access
+            }
+        }
+
+        if ($isArchivedStreamer) {
+            $oauthAuthorized = true;
+        } else {
+            // Not an archived streamer - redirect to dashboard hub with explanation
+            header('Location: /channels?not_archived=1');
+            exit;
+        }
     }
 }
 ?>
@@ -62,7 +85,7 @@ if ($currentUser) {
             display: flex;
             justify-content: center;
             align-items: center;
-            min-height: 100vh;
+            min-height: calc(100vh - 56px);
             padding: 20px;
         }
         .login-box {
@@ -727,6 +750,8 @@ if ($currentUser) {
     </style>
 </head>
 <body>
+    <?php require_once __DIR__ . '/includes/nav.php'; ?>
+
     <!-- Toast Notification Container -->
     <div class="toast-container" id="toastContainer"></div>
 
@@ -763,7 +788,6 @@ if ($currentUser) {
                 <?php if ($isSuperAdmin): ?>
                 <span class="role-badge" style="background: #eb0400;">SUPER ADMIN</span>
                 <?php endif; ?>
-                <a href="/auth/logout.php" style="color: #adadb8; text-decoration: none; font-size: 12px;">Logout</a>
             </div>
         </div>
 

@@ -2,7 +2,15 @@
 /**
  * about.php - About the Clip System
  */
+
+require_once __DIR__ . '/db_config.php';
+require_once __DIR__ . '/includes/twitch_oauth.php';
+
 header("Content-Type: text/html; charset=utf-8");
+
+// Get pdo and current user for nav
+$pdo = get_db_connection();
+$currentUser = getCurrentUser();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -80,12 +88,9 @@ header("Content-Type: text/html; charset=utf-8");
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="nav-links">
-      <a href="/search/floppyjimmie">Clip Search</a>
-      <a href="chelp.php">Bot Commands</a>
-    </div>
+  <?php require_once __DIR__ . '/includes/nav.php'; ?>
 
+  <div class="container" style="padding-top: 20px;">
     <h1>Clip Reel System</h1>
 
     <p>An automated clip playback system for Twitch streamers. Perfect for BRB screens, pre-stream entertainment, or showcasing your best moments.</p>

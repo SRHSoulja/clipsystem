@@ -164,6 +164,8 @@ try {
     $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS command_settings TEXT DEFAULT '{}'");
     $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS weighting_config TEXT DEFAULT '{}'");
     $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS silent_prefix BOOLEAN DEFAULT FALSE");
+    $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS profile_image_url TEXT");
+    $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS profile_image_updated_at TIMESTAMP");
 
     // Ensure channel_mods table exists
     $pdo->exec("

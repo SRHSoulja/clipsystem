@@ -15,9 +15,11 @@ if (isset($_GET['health']) || (isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER
   exit;
 }
 
+// Get database connection
+$pdo = get_db_connection();
+
 // Get list of archived streamers
 $archivedStreamers = [];
-$pdo = get_db_connection();
 if ($pdo) {
   try {
     $stmt = $pdo->query("
@@ -31,44 +33,6 @@ if ($pdo) {
     $archivedStreamers = $stmt->fetchAll(PDO::FETCH_ASSOC);
   } catch (PDOException $e) {
     // Ignore - just won't show archived streamers
-  }
-}
-
-// Check if current user should see a dashboard link
-$showDashboard = false;
-$dashboardChannels = [];
-if ($currentUser && $pdo) {
-  $userLogin = strtolower($currentUser['login']);
-
-  // Super admins always get dashboard access
-  if (isSuperAdmin()) {
-    $showDashboard = true;
-  }
-
-  // Check if user is an archived streamer
-  if (!$showDashboard) {
-    try {
-      $stmt = $pdo->prepare("SELECT 1 FROM clips WHERE login = ? LIMIT 1");
-      $stmt->execute([$userLogin]);
-      if ($stmt->fetch()) {
-        $showDashboard = true;
-        $dashboardChannels[] = $userLogin;
-      }
-    } catch (PDOException $e) {
-      // Ignore
-    }
-  }
-
-  // Check if user is a mod for any archived streamer
-  try {
-    $stmt = $pdo->prepare("SELECT channel_login FROM channel_mods WHERE mod_username = ?");
-    $stmt->execute([$userLogin]);
-    while ($row = $stmt->fetch()) {
-      $showDashboard = true;
-      $dashboardChannels[] = $row['channel_login'];
-    }
-  } catch (PDOException $e) {
-    // Ignore - table might not exist
   }
 }
 
@@ -89,10 +53,14 @@ header("Content-Type: text/html; charset=utf-8");
       background: linear-gradient(135deg, #0e0e10 0%, #18181b 50%, #1f1f23 100%);
       color: #efeff1;
       min-height: 100vh;
+    }
+
+    .page-content {
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
+      min-height: calc(100vh - 56px);
       padding: 20px;
     }
 
@@ -278,85 +246,12 @@ header("Content-Type: text/html; charset=utf-8");
       color: #9147ff;
       text-decoration: none;
     }
-
-    /* User login/info */
-    .user-section {
-      position: fixed;
-      top: 20px;
-      right: 20px;
-    }
-    .login-btn {
-      padding: 10px 20px;
-      background: #9147ff;
-      color: white;
-      text-decoration: none;
-      border-radius: 6px;
-      font-weight: 600;
-      font-size: 14px;
-      transition: background 0.2s;
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .login-btn:hover {
-      background: #772ce8;
-    }
-    .login-btn svg {
-      width: 18px;
-      height: 18px;
-    }
-    .user-info {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      background: rgba(31, 31, 35, 0.9);
-      padding: 8px 16px;
-      border-radius: 6px;
-      border: 1px solid #3d3d42;
-    }
-    .user-name {
-      color: #bf94ff;
-      font-weight: 500;
-      font-size: 14px;
-    }
-    .user-links {
-      display: flex;
-      gap: 10px;
-    }
-    .user-links a {
-      color: #adadb8;
-      text-decoration: none;
-      font-size: 12px;
-      transition: color 0.2s;
-    }
-    .user-links a:hover {
-      color: #9147ff;
-    }
-    .logout-btn:hover {
-      color: #ff4757 !important;
-    }
   </style>
 </head>
 <body>
-  <div class="user-section">
-    <?php if ($currentUser): ?>
-    <div class="user-info">
-      <span class="user-name"><?= htmlspecialchars($currentUser['display_name'] ?? $currentUser['login']) ?></span>
-      <div class="user-links">
-        <?php if ($showDashboard): ?>
-        <a href="/mod_dashboard.php">Dashboard</a>
-        <?php endif; ?>
-        <a href="/auth/logout.php" class="logout-btn">Logout</a>
-      </div>
-    </div>
-    <?php else: ?>
-    <a href="/auth/login.php" class="login-btn">
-      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.64 5.93h1.43v4.28h-1.43m3.93-4.28H17v4.28h-1.43M7 2L3.43 5.57v12.86h4.28V22l3.58-3.57h2.85L20.57 12V2m-1.43 9.29l-2.85 2.85h-2.86l-2.5 2.5v-2.5H7.71V3.43h11.43z"/></svg>
-      Login with Twitch
-    </a>
-    <?php endif; ?>
-  </div>
+  <?php require_once __DIR__ . '/includes/nav.php'; ?>
 
+  <div class="page-content">
   <div class="container">
     <div class="logo">📺</div>
     <h1>ClipArchive</h1>
@@ -413,6 +308,7 @@ header("Content-Type: text/html; charset=utf-8");
   <footer>
     Powered by <a href="https://gmgnrepeat.com">GMGN Repeat</a>
   </footer>
+  </div>
 
   <script>
     function goToSearch(e) {
