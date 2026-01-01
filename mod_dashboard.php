@@ -845,7 +845,7 @@ if ($isSuperAdmin || $isStreamerOfChannel) {
         try {
           // For OAuth users accessing their own channel, use 'oauth' as the key
           // The backend will need to recognize this and validate the session
-          const res = await fetch(`${API_BASE}/playlist_api.php?action=list&login=${encodeURIComponent(oauthChannel)}&oauth=1`);
+          const res = await fetch(`${API_BASE}/playlist_api.php?action=list&login=${encodeURIComponent(oauthChannel)}&oauth=1`, { credentials: 'same-origin' });
           const data = await res.json();
 
           if (!data.error) {
@@ -865,7 +865,7 @@ if ($isSuperAdmin || $isStreamerOfChannel) {
       // URL parameter auto-login (legacy)
       if (urlLogin && urlKey) {
         try {
-          const res = await fetch(`${API_BASE}/playlist_api.php?action=list&login=${encodeURIComponent(urlLogin)}&key=${encodeURIComponent(urlKey)}`);
+          const res = await fetch(`${API_BASE}/playlist_api.php?action=list&login=${encodeURIComponent(urlLogin)}&key=${encodeURIComponent(urlKey)}`, { credentials: 'same-origin' });
           const data = await res.json();
 
           if (!data.error) {
@@ -915,7 +915,7 @@ if ($isSuperAdmin || $isStreamerOfChannel) {
 
       try {
         // Test the key by fetching playlists for the entered channel
-        const res = await fetch(`${API_BASE}/playlist_api.php?action=list&login=${encodeURIComponent(channelInput)}&key=${encodeURIComponent(adminKey)}`);
+        const res = await fetch(`${API_BASE}/playlist_api.php?action=list&login=${encodeURIComponent(channelInput)}&key=${encodeURIComponent(adminKey)}`, { credentials: 'same-origin' });
         const data = await res.json();
 
         if (data.error) {
@@ -977,7 +977,7 @@ if ($isSuperAdmin || $isStreamerOfChannel) {
     // Load channels the user can access for the channel switcher
     async function loadAccessibleChannels() {
       try {
-        const res = await fetch(`${API_BASE}/dashboard_api.php?action=get_accessible_channels`);
+        const res = await fetch(`${API_BASE}/dashboard_api.php?action=get_accessible_channels`, { credentials: 'same-origin' });
         const data = await res.json();
 
         if (data.success && data.channels && data.channels.length > 0) {
@@ -1029,7 +1029,7 @@ if ($isSuperAdmin || $isStreamerOfChannel) {
         if (creator) url += `&creator=${encodeURIComponent(creator)}`;
         if (gameId) url += `&game_id=${encodeURIComponent(gameId)}`;
 
-        const res = await fetch(url);
+        const res = await fetch(url, { credentials: 'same-origin' });
         const data = await res.json();
 
         if (data.error) {
@@ -1053,7 +1053,7 @@ if ($isSuperAdmin || $isStreamerOfChannel) {
 
     async function loadGames() {
       try {
-        const res = await fetch(`${API_BASE}/clips_api.php?action=games&login=${LOGIN}&${getAuthParams()}`);
+        const res = await fetch(`${API_BASE}/clips_api.php?action=games&login=${LOGIN}&${getAuthParams()}`, { credentials: 'same-origin' });
         const data = await res.json();
 
         const gameFilter = document.getElementById('gameFilter');
@@ -1075,7 +1075,7 @@ if ($isSuperAdmin || $isStreamerOfChannel) {
 
     async function loadPlaylists() {
       try {
-        const res = await fetch(`${API_BASE}/playlist_api.php?action=list&login=${LOGIN}&${getAuthParams()}`);
+        const res = await fetch(`${API_BASE}/playlist_api.php?action=list&login=${LOGIN}&${getAuthParams()}`, { credentials: 'same-origin' });
         const data = await res.json();
         playlists = data.playlists || [];
         renderPlaylists();
@@ -1202,7 +1202,7 @@ if ($isSuperAdmin || $isStreamerOfChannel) {
 
     async function selectPlaylist(id) {
       try {
-        const res = await fetch(`${API_BASE}/playlist_api.php?action=get&login=${LOGIN}&${getAuthParams()}&id=${id}`);
+        const res = await fetch(`${API_BASE}/playlist_api.php?action=get&login=${LOGIN}&${getAuthParams()}&id=${id}`, { credentials: 'same-origin' });
         const data = await res.json();
         currentPlaylist = data.playlist;
 
@@ -1285,7 +1285,7 @@ if ($isSuperAdmin || $isStreamerOfChannel) {
 
       const seqs = Array.from(selectedClips);
       try {
-        const res = await fetch(`${API_BASE}/playlist_api.php?action=add_clips&login=${LOGIN}&${getAuthParams()}&id=${currentPlaylist.id}&seqs=${seqs.join(',')}`);
+        const res = await fetch(`${API_BASE}/playlist_api.php?action=add_clips&login=${LOGIN}&${getAuthParams()}&id=${currentPlaylist.id}&seqs=${seqs.join(',')}`, { credentials: 'same-origin' });
         const data = await res.json();
 
         if (data.success) {
@@ -1304,7 +1304,7 @@ if ($isSuperAdmin || $isStreamerOfChannel) {
       if (!currentPlaylist) return;
 
       try {
-        const res = await fetch(`${API_BASE}/playlist_api.php?action=remove_clip&login=${LOGIN}&${getAuthParams()}&id=${currentPlaylist.id}&seq=${seq}`);
+        const res = await fetch(`${API_BASE}/playlist_api.php?action=remove_clip&login=${LOGIN}&${getAuthParams()}&id=${currentPlaylist.id}&seq=${seq}`, { credentials: 'same-origin' });
         const data = await res.json();
 
         if (data.success) {
@@ -1320,7 +1320,7 @@ if ($isSuperAdmin || $isStreamerOfChannel) {
       try {
         const url = `${API_BASE}/pclip.php?login=${LOGIN}&${getAuthParams()}&seq=${seq}`;
         console.log('Playing clip:', url);
-        const res = await fetch(url);
+        const res = await fetch(url, { credentials: 'same-origin' });
         const text = await res.text();
         console.log('pclip response:', res.status, text);
       } catch (err) {
@@ -1338,7 +1338,7 @@ if ($isSuperAdmin || $isStreamerOfChannel) {
       if (!currentPlaylist) return;
 
       try {
-        const res = await fetch(`${API_BASE}/playlist_api.php?action=play&login=${LOGIN}&${getAuthParams()}&id=${currentPlaylist.id}`);
+        const res = await fetch(`${API_BASE}/playlist_api.php?action=play&login=${LOGIN}&${getAuthParams()}&id=${currentPlaylist.id}`, { credentials: 'same-origin' });
         const data = await res.json();
         console.log('Playlist play response:', data);
         if (data.error) {
@@ -1358,7 +1358,7 @@ if ($isSuperAdmin || $isStreamerOfChannel) {
 
     async function stopPlaylist() {
       try {
-        const res = await fetch(`${API_BASE}/playlist_api.php?action=stop&login=${LOGIN}&${getAuthParams()}`);
+        const res = await fetch(`${API_BASE}/playlist_api.php?action=stop&login=${LOGIN}&${getAuthParams()}`, { credentials: 'same-origin' });
         const data = await res.json();
         console.log('Playlist stop response:', data);
         if (data.error) {
@@ -1387,7 +1387,7 @@ if ($isSuperAdmin || $isStreamerOfChannel) {
       if (!name) return;
 
       try {
-        const res = await fetch(`${API_BASE}/playlist_api.php?action=create&login=${LOGIN}&${getAuthParams()}&name=${encodeURIComponent(name)}`);
+        const res = await fetch(`${API_BASE}/playlist_api.php?action=create&login=${LOGIN}&${getAuthParams()}&name=${encodeURIComponent(name)}`, { credentials: 'same-origin' });
         const data = await res.json();
 
         if (data.success) {
@@ -1416,7 +1416,7 @@ if ($isSuperAdmin || $isStreamerOfChannel) {
       if (!newName) return;
 
       try {
-        const res = await fetch(`${API_BASE}/playlist_api.php?action=rename&login=${LOGIN}&${getAuthParams()}&id=${currentPlaylist.id}&name=${encodeURIComponent(newName)}`);
+        const res = await fetch(`${API_BASE}/playlist_api.php?action=rename&login=${LOGIN}&${getAuthParams()}&id=${currentPlaylist.id}&name=${encodeURIComponent(newName)}`, { credentials: 'same-origin' });
         const data = await res.json();
 
         if (data.success) {
@@ -1442,7 +1442,7 @@ if ($isSuperAdmin || $isStreamerOfChannel) {
       if (!currentPlaylist) return;
 
       try {
-        const res = await fetch(`${API_BASE}/playlist_api.php?action=delete&login=${LOGIN}&${getAuthParams()}&id=${currentPlaylist.id}`);
+        const res = await fetch(`${API_BASE}/playlist_api.php?action=delete&login=${LOGIN}&${getAuthParams()}&id=${currentPlaylist.id}`, { credentials: 'same-origin' });
         const data = await res.json();
 
         if (data.success) {
@@ -1534,7 +1534,7 @@ if ($isSuperAdmin || $isStreamerOfChannel) {
       if (!currentPlaylist) return;
 
       try {
-        const res = await fetch(`${API_BASE}/playlist_api.php?action=reorder&login=${LOGIN}&${getAuthParams()}&id=${currentPlaylist.id}&from=${fromIndex}&to=${toIndex}`);
+        const res = await fetch(`${API_BASE}/playlist_api.php?action=reorder&login=${LOGIN}&${getAuthParams()}&id=${currentPlaylist.id}&from=${fromIndex}&to=${toIndex}`, { credentials: 'same-origin' });
         const data = await res.json();
 
         if (!data.success) {
@@ -1559,7 +1559,7 @@ if ($isSuperAdmin || $isStreamerOfChannel) {
       }
 
       try {
-        const res = await fetch(`${API_BASE}/playlist_api.php?action=shuffle&login=${LOGIN}&${getAuthParams()}&id=${currentPlaylist.id}`);
+        const res = await fetch(`${API_BASE}/playlist_api.php?action=shuffle&login=${LOGIN}&${getAuthParams()}&id=${currentPlaylist.id}`, { credentials: 'same-origin' });
         const data = await res.json();
         console.log('Shuffle response:', data);
 

@@ -1392,7 +1392,7 @@ if ($currentUser) {
                 if (authLogin) url += `&login=${encodeURIComponent(authLogin)}`;
                 if (password) url += `&password=${encodeURIComponent(password)}`;
 
-                const res = await fetch(url);
+                const res = await fetch(url, { credentials: 'same-origin' });
                 const data = await res.json();
 
                 if (data.authenticated) {
@@ -1444,7 +1444,7 @@ if ($currentUser) {
             select.appendChild(defaultOption);
 
             try {
-                const res = await fetch(`${API_BASE}/dashboard_api.php?action=get_accessible_channels`);
+                const res = await fetch(`${API_BASE}/dashboard_api.php?action=get_accessible_channels`, { credentials: 'same-origin' });
                 const data = await res.json();
 
                 if (data.success && data.channels && data.channels.length > 0) {
@@ -1538,7 +1538,7 @@ if ($currentUser) {
 
         async function loadSettings() {
             try {
-                const res = await fetch(`${API_BASE}/dashboard_api.php?action=get_settings&key=${encodeURIComponent(authKey)}&login=${encodeURIComponent(authLogin)}`);
+                const res = await fetch(`${API_BASE}/dashboard_api.php?action=get_settings&key=${encodeURIComponent(authKey)}&login=${encodeURIComponent(authLogin)}`, { credentials: 'same-origin' });
                 const data = await res.json();
 
                 if (data.error) {
@@ -1614,7 +1614,7 @@ if ($currentUser) {
 
             // Save to server
             try {
-                const res = await fetch(`${API_BASE}/dashboard_api.php?action=save_settings&key=${encodeURIComponent(authKey)}&login=${encodeURIComponent(authLogin)}&field=command_settings&value=${encodeURIComponent(JSON.stringify(commandSettings))}`);
+                const res = await fetch(`${API_BASE}/dashboard_api.php?action=save_settings&key=${encodeURIComponent(authKey)}&login=${encodeURIComponent(authLogin)}&field=command_settings&value=${encodeURIComponent(JSON.stringify(commandSettings))}`, { credentials: 'same-origin' });
                 const data = await res.json();
                 if (!data.success) {
                     console.error('Failed to save command setting:', data.error);
@@ -1654,7 +1654,7 @@ if ($currentUser) {
 
         async function saveSetting(field, value, showNotification = true) {
             try {
-                const res = await fetch(`${API_BASE}/dashboard_api.php?action=save_settings&key=${encodeURIComponent(authKey)}&login=${encodeURIComponent(authLogin)}&field=${field}&value=${encodeURIComponent(value)}`);
+                const res = await fetch(`${API_BASE}/dashboard_api.php?action=save_settings&key=${encodeURIComponent(authKey)}&login=${encodeURIComponent(authLogin)}&field=${field}&value=${encodeURIComponent(value)}`, { credentials: 'same-origin' });
                 const data = await res.json();
                 if (!data.success) {
                     console.error('Save failed:', data.error);
@@ -1906,7 +1906,7 @@ if ($currentUser) {
 
         async function loadMods() {
             try {
-                const res = await fetch(`${API_BASE}/dashboard_api.php?action=get_mods&key=${encodeURIComponent(authKey)}&login=${encodeURIComponent(authLogin)}`);
+                const res = await fetch(`${API_BASE}/dashboard_api.php?action=get_mods&key=${encodeURIComponent(authKey)}&login=${encodeURIComponent(authLogin)}`, { credentials: 'same-origin' });
                 const data = await res.json();
 
                 if (data.success) {
@@ -1971,7 +1971,7 @@ if ($currentUser) {
 
         async function toggleModPermission(modUsername, permission, granted) {
             try {
-                const res = await fetch(`${API_BASE}/dashboard_api.php?action=set_mod_permission&key=${encodeURIComponent(authKey)}&login=${encodeURIComponent(authLogin)}&mod_username=${encodeURIComponent(modUsername)}&permission=${encodeURIComponent(permission)}&granted=${granted ? '1' : '0'}`);
+                const res = await fetch(`${API_BASE}/dashboard_api.php?action=set_mod_permission&key=${encodeURIComponent(authKey)}&login=${encodeURIComponent(authLogin)}&mod_username=${encodeURIComponent(modUsername)}&permission=${encodeURIComponent(permission)}&granted=${granted ? '1' : '0'}`, { credentials: 'same-origin' });
                 const data = await res.json();
 
                 if (data.success) {
@@ -1997,7 +1997,7 @@ if ($currentUser) {
 
             setLoading(btn, true);
             try {
-                const res = await fetch(`${API_BASE}/dashboard_api.php?action=add_mod&key=${encodeURIComponent(authKey)}&login=${encodeURIComponent(authLogin)}&mod_username=${encodeURIComponent(username)}`);
+                const res = await fetch(`${API_BASE}/dashboard_api.php?action=add_mod&key=${encodeURIComponent(authKey)}&login=${encodeURIComponent(authLogin)}&mod_username=${encodeURIComponent(username)}`, { credentials: 'same-origin' });
                 const data = await res.json();
 
                 if (data.success) {
@@ -2019,7 +2019,7 @@ if ($currentUser) {
             if (!confirm(`Remove ${username} as a mod?`)) return;
 
             try {
-                const res = await fetch(`${API_BASE}/dashboard_api.php?action=remove_mod&key=${encodeURIComponent(authKey)}&login=${encodeURIComponent(authLogin)}&mod_username=${encodeURIComponent(username)}`);
+                const res = await fetch(`${API_BASE}/dashboard_api.php?action=remove_mod&key=${encodeURIComponent(authKey)}&login=${encodeURIComponent(authLogin)}&mod_username=${encodeURIComponent(username)}`, { credentials: 'same-origin' });
                 const data = await res.json();
 
                 if (data.success) {
@@ -2057,7 +2057,7 @@ if ($currentUser) {
         // Vote stats for Stats tab
         async function loadVoteStats() {
             try {
-                const res = await fetch(`${API_BASE}/dashboard_api.php?action=get_vote_stats&key=${encodeURIComponent(authKey)}&login=${encodeURIComponent(authLogin)}`);
+                const res = await fetch(`${API_BASE}/dashboard_api.php?action=get_vote_stats&key=${encodeURIComponent(authKey)}&login=${encodeURIComponent(authLogin)}`, { credentials: 'same-origin' });
                 const data = await res.json();
 
                 if (!data.success) {
@@ -2166,7 +2166,7 @@ if ($currentUser) {
 
         async function loadWeighting() {
             try {
-                const res = await fetch(`${API_BASE}/dashboard_api.php?action=get_weighting&key=${encodeURIComponent(authKey)}&login=${encodeURIComponent(authLogin)}`);
+                const res = await fetch(`${API_BASE}/dashboard_api.php?action=get_weighting&key=${encodeURIComponent(authKey)}&login=${encodeURIComponent(authLogin)}`, { credentials: 'same-origin' });
                 const data = await res.json();
 
                 if (data.success && data.config) {
@@ -2301,7 +2301,8 @@ if ($currentUser) {
                     const res = await fetch(`${API_BASE}/dashboard_api.php?action=save_weighting&key=${encodeURIComponent(authKey)}&login=${encodeURIComponent(authLogin)}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ config })
+                        body: JSON.stringify({ config }),
+                        credentials: 'same-origin'
                     });
                     const data = await res.json();
                     if (data.success) {
@@ -2388,7 +2389,8 @@ if ($currentUser) {
                 const res = await fetch(`${API_BASE}/dashboard_api.php?action=add_golden_clip&key=${encodeURIComponent(authKey)}&login=${encodeURIComponent(authLogin)}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ seq, boost })
+                    body: JSON.stringify({ seq, boost }),
+                    credentials: 'same-origin'
                 });
                 const data = await res.json();
                 if (data.success) {
@@ -2411,7 +2413,8 @@ if ($currentUser) {
                 const res = await fetch(`${API_BASE}/dashboard_api.php?action=remove_golden_clip&key=${encodeURIComponent(authKey)}&login=${encodeURIComponent(authLogin)}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ seq })
+                    body: JSON.stringify({ seq }),
+                    credentials: 'same-origin'
                 });
                 const data = await res.json();
                 if (data.success) {
@@ -2431,7 +2434,8 @@ if ($currentUser) {
 
             try {
                 const res = await fetch(`${API_BASE}/dashboard_api.php?action=reset_weighting&key=${encodeURIComponent(authKey)}&login=${encodeURIComponent(authLogin)}`, {
-                    method: 'POST'
+                    method: 'POST',
+                    credentials: 'same-origin'
                 });
                 const data = await res.json();
                 if (data.success) {
