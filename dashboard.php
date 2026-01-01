@@ -1392,8 +1392,13 @@ if ($currentUser) {
                 if (authLogin) url += `&login=${encodeURIComponent(authLogin)}`;
                 if (password) url += `&password=${encodeURIComponent(password)}`;
 
+                console.log('checkAuth - URL:', url);
+                console.log('checkAuth - authLogin:', authLogin);
+
                 const res = await fetch(url, { credentials: 'same-origin' });
                 const data = await res.json();
+
+                console.log('checkAuth - Response:', data);
 
                 if (data.authenticated) {
                     authKey = key;
@@ -1402,9 +1407,11 @@ if ($currentUser) {
                     showDashboard();
                     loadSettings();
                 } else {
+                    console.error('checkAuth - Authentication failed:', data);
                     showError('Invalid credentials');
                 }
             } catch (e) {
+                console.error('checkAuth - Exception:', e);
                 showError('Connection error');
             }
         }
