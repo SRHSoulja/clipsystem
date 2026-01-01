@@ -3,6 +3,18 @@
     RewriteEngine On
     RewriteCond %{HTTP:X-Forwarded-Proto} =http
     RewriteRule ^(.*)$ https://%{HTTP_HOST}/$1 [R=301,L]
+
+    # Clean URLs - /search/username -> clip_search.php?login=username
+    RewriteRule ^search/([a-zA-Z0-9_]+)/?$ clip_search.php?login=$1 [QSA,L]
+
+    # Clean URLs - /dashboard/username -> dashboard.php?login=username
+    RewriteRule ^dashboard/([a-zA-Z0-9_]+)/?$ dashboard.php?login=$1 [QSA,L]
+
+    # Clean URLs - /mod/username -> mod_dashboard.php?login=username
+    RewriteRule ^mod/([a-zA-Z0-9_]+)/?$ mod_dashboard.php?login=$1 [QSA,L]
+
+    # Clean URLs - /manage/username -> clip_manage.php?login=username
+    RewriteRule ^manage/([a-zA-Z0-9_]+)/?$ clip_manage.php?login=$1 [QSA,L]
 </IfModule>
 
 # Enable CORS for all origins and security headers

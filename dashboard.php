@@ -714,8 +714,8 @@ if ($currentUser) {
             <?php elseif ($login): ?>
                 <p style="color: #adadb8; margin-bottom: 16px;">Channel: <strong><?= htmlspecialchars($login) ?></strong></p>
                 <p style="color: #666; font-size: 13px; margin-bottom: 16px;">Login with Twitch to access your dashboard.</p>
-                <a href="/auth/login.php?return=<?= urlencode('/dashboard.php?login=' . urlencode($login)) ?>" style="display: block; text-align: center; padding: 12px; background: #9147ff; color: white; border-radius: 4px; text-decoration: none;">Login with Twitch</a>
-                <p style="color: #666; font-size: 12px; margin-top: 16px; text-align: center;">Looking to moderate? Go to the <a href="/mod_dashboard.php?login=<?= urlencode($login) ?>" style="color: #9147ff;">Mod Dashboard</a> instead.</p>
+                <a href="/auth/login.php?return=<?= urlencode('/dashboard/' . urlencode($login)) ?>" style="display: block; text-align: center; padding: 12px; background: #9147ff; color: white; border-radius: 4px; text-decoration: none;">Login with Twitch</a>
+                <p style="color: #666; font-size: 12px; margin-top: 16px; text-align: center;">Looking to moderate? Go to the <a href="/mod/<?= urlencode($login) ?>" style="color: #9147ff;">Mod Dashboard</a> instead.</p>
             <?php else: ?>
                 <p style="color: #adadb8; margin-bottom: 16px;">Enter your dashboard key or login with Twitch.</p>
                 <input type="text" id="dashboardKey" placeholder="Dashboard Key" autofocus>
@@ -1423,13 +1423,13 @@ if ($currentUser) {
         function goToChannel() {
             const channel = document.getElementById('adminChannelInput')?.value.trim().toLowerCase();
             if (channel) {
-                window.location.href = `/dashboard.php?login=${encodeURIComponent(channel)}`;
+                window.location.href = `/dashboard/${encodeURIComponent(channel)}`;
             }
         }
 
         function goToModDashboard() {
             const channel = document.getElementById('adminChannelInput')?.value.trim().toLowerCase() || authLogin;
-            window.location.href = `/mod_dashboard.php?login=${encodeURIComponent(channel)}`;
+            window.location.href = `/mod/${encodeURIComponent(channel)}`;
         }
 
         // Load channels the user can access for the channel switcher
@@ -1468,7 +1468,7 @@ if ($currentUser) {
         // Switch to a different channel
         function switchChannel(login) {
             if (login && login !== authLogin) {
-                window.location.href = `/dashboard.php?login=${encodeURIComponent(login)}`;
+                window.location.href = `/dashboard/${encodeURIComponent(login)}`;
             }
         }
 
@@ -1516,15 +1516,13 @@ if ($currentUser) {
             }
 
             // Update Clip Browser and Mod Dashboard links
-            // These pages use OAuth directly from session - key only needed for non-OAuth access
             const clipBrowserLink = document.getElementById('clipBrowserLink');
             const modDashboardLink = document.getElementById('modDashboardLink');
-            const authSuffix = authKey ? `&key=${encodeURIComponent(authKey)}` : '';
             if (clipBrowserLink) {
-                clipBrowserLink.href = `clip_search.php?login=${encodeURIComponent(authLogin)}${authSuffix}`;
+                clipBrowserLink.href = `/search/${encodeURIComponent(authLogin)}`;
             }
             if (modDashboardLink) {
-                modDashboardLink.href = `mod_dashboard.php?login=${encodeURIComponent(authLogin)}${authSuffix}`;
+                modDashboardLink.href = `/mod/${encodeURIComponent(authLogin)}`;
             }
 
             // Player URL will be set after loading settings (when we have the instance)

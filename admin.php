@@ -74,7 +74,7 @@ if ($authenticated && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
       if ($created || $auth->streamerExists($login)) {
         // OAuth-based URL - streamer logs in with Twitch to access their dashboard
-        $dashboardUrl = "https://clips.gmgnrepeat.com/dashboard.php?login=" . urlencode($login);
+        $dashboardUrl = "https://clips.gmgnrepeat.com/dashboard/" . urlencode($login);
         $message = "Dashboard enabled for {$login}! They can access it by logging in with Twitch.";
         $messageType = 'success';
         $generatedDashboardUrl = $dashboardUrl;
@@ -360,7 +360,7 @@ if ($authenticated) {
     <?php else: ?>
     <!-- Admin Panel -->
     <div class="nav-links">
-      <a href="clip_search.php?login=floppyjimmie">Clip Search</a>
+      <a href="/search/floppyjimmie">Clip Search</a>
       <a href="chelp.php">Bot Commands</a>
       <a href="about.php">About</a>
       <a href="?logout=1" class="logout">Logout</a>
@@ -451,7 +451,7 @@ if ($authenticated) {
           <?php foreach ($users as $user): ?>
           <tr>
             <td>
-              <a href="clip_search.php?login=<?= htmlspecialchars($user['login']) ?>" style="color: #9147ff; text-decoration: none;">
+              <a href="/search/<?= htmlspecialchars($user['login']) ?>" style="color: #9147ff; text-decoration: none;">
                 <?= htmlspecialchars($user['login']) ?>
               </a>
             </td>

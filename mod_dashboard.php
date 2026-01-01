@@ -721,8 +721,8 @@ if ($isSuperAdmin || $isStreamerOfChannel) {
     <div class="admin-bar" style="background: linear-gradient(90deg, #eb0400, #9147ff); padding: 10px 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 14px;">
       <span style="font-weight: bold;">Quick Access:</span>
       <input type="text" id="adminChannelInput" placeholder="Channel name..." style="padding: 6px 10px; border-radius: 4px; border: none; background: rgba(0,0,0,0.3); color: white; width: 150px; font-size: 14px;">
-      <button onclick="window.location.href='/mod_dashboard.php?login='+encodeURIComponent(document.getElementById('adminChannelInput').value.trim().toLowerCase())" style="padding: 6px 12px; background: rgba(0,0,0,0.3); border: none; color: white; border-radius: 4px; cursor: pointer; font-size: 14px;">Go</button>
-      <a href="/dashboard.php?login=<?php echo urlencode($login); ?>" style="color: white; text-decoration: none; padding: 6px 12px; background: rgba(0,0,0,0.2); border-radius: 4px;">Streamer Dashboard</a>
+      <button onclick="window.location.href='/mod/'+encodeURIComponent(document.getElementById('adminChannelInput').value.trim().toLowerCase())" style="padding: 6px 12px; background: rgba(0,0,0,0.3); border: none; color: white; border-radius: 4px; cursor: pointer; font-size: 14px;">Go</button>
+      <a href="/dashboard/<?php echo urlencode($login); ?>" style="color: white; text-decoration: none; padding: 6px 12px; background: rgba(0,0,0,0.2); border-radius: 4px;">Streamer Dashboard</a>
       <a href="/auth/logout.php" style="margin-left: auto; color: white; text-decoration: none; opacity: 0.8;">Logout</a>
     </div>
     <?php endif; ?>
@@ -935,11 +935,7 @@ if ($isSuperAdmin || $isStreamerOfChannel) {
         // Show and configure navigation links
         const manageLink = document.getElementById('manageClipsLink');
         const searchLink = document.getElementById('searchClipsLink');
-        if (adminKey === 'oauth') {
-          manageLink.href = `clip_manage.php?login=${encodeURIComponent(LOGIN)}&oauth=1`;
-        } else {
-          manageLink.href = `clip_manage.php?login=${encodeURIComponent(LOGIN)}&key=${encodeURIComponent(adminKey)}`;
-        }
+        manageLink.href = `/manage/${encodeURIComponent(LOGIN)}`;
         manageLink.style.display = 'inline-block';
         searchLink.href = `/search/${encodeURIComponent(LOGIN)}`;
         searchLink.style.display = 'inline-block';
@@ -1006,7 +1002,7 @@ if ($isSuperAdmin || $isStreamerOfChannel) {
     // Switch to a different channel
     function switchChannel(login) {
       if (login && login !== LOGIN) {
-        window.location.href = `/mod_dashboard.php?login=${encodeURIComponent(login)}`;
+        window.location.href = `/mod/${encodeURIComponent(login)}`;
       }
     }
 

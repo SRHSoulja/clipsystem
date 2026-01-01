@@ -401,7 +401,7 @@ $hasAnyAccess = $isSuperAdmin || $isArchivedStreamer || count($modChannels) > 0;
             <div class="streamer-grid">
                 <?php foreach ($allStreamers as $streamer): ?>
                 <div class="streamer-card">
-                    <a href="/dashboard.php?login=<?= urlencode($streamer['login']) ?>"><?= htmlspecialchars($streamer['login']) ?></a>
+                    <a href="/dashboard/<?= urlencode($streamer['login']) ?>"><?= htmlspecialchars($streamer['login']) ?></a>
                     <span class="clip-count"><?= number_format($streamer['clip_count']) ?> clips</span>
                 </div>
                 <?php endforeach; ?>
@@ -424,8 +424,8 @@ $hasAnyAccess = $isSuperAdmin || $isArchivedStreamer || count($modChannels) > 0;
                         </div>
                     </div>
                     <div class="channel-actions">
-                        <a href="/dashboard.php?login=<?= urlencode($currentUser['login']) ?>" class="btn btn-primary">Streamer Dashboard</a>
-                        <a href="/mod_dashboard.php?login=<?= urlencode($currentUser['login']) ?>" class="btn btn-secondary">Playlist Manager</a>
+                        <a href="/dashboard/<?= urlencode($currentUser['login']) ?>" class="btn btn-primary">Streamer Dashboard</a>
+                        <a href="/mod/<?= urlencode($currentUser['login']) ?>" class="btn btn-secondary">Playlist Manager</a>
                     </div>
                 </div>
             </div>
@@ -451,7 +451,7 @@ $hasAnyAccess = $isSuperAdmin || $isArchivedStreamer || count($modChannels) > 0;
                         </div>
                     </div>
                     <div class="channel-actions">
-                        <a href="/mod_dashboard.php?login=<?= urlencode($ch['channel_login']) ?>" class="btn btn-primary">Mod Dashboard</a>
+                        <a href="/mod/<?= urlencode($ch['channel_login']) ?>" class="btn btn-primary">Mod Dashboard</a>
                     </div>
                 </div>
                 <?php endforeach; ?>
@@ -485,9 +485,9 @@ $hasAnyAccess = $isSuperAdmin || $isArchivedStreamer || count($modChannels) > 0;
             if (!channel) return;
 
             if (type === 'mod') {
-                window.location.href = `/mod_dashboard.php?login=${encodeURIComponent(channel)}`;
+                window.location.href = `/mod/${encodeURIComponent(channel)}`;
             } else {
-                window.location.href = `/dashboard.php?login=${encodeURIComponent(channel)}`;
+                window.location.href = `/dashboard/${encodeURIComponent(channel)}`;
             }
         }
 

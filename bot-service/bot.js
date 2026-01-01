@@ -558,7 +558,7 @@ const commands = {
       return await res.text();
     } catch (err) {
       console.error('!cfind error:', err.message);
-      return `Browse clips: ${config.apiBaseUrl}/clip_search.php?login=${login}`;
+      return `Browse clips: ${config.apiBaseUrl}/search/${login}`;
     }
   },
 

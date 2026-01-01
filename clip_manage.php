@@ -240,8 +240,8 @@ if ($pdo) {
   }
 }
 
-// Build base URL with key preserved
-$baseUrl = "clip_manage.php?login=" . urlencode($login) . "&key=" . urlencode($key);
+// Build base URL for pagination
+$baseUrl = "/manage/" . urlencode($login);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -555,8 +555,8 @@ $baseUrl = "clip_manage.php?login=" . urlencode($login) . "&key=" . urlencode($k
         <h1>Clip Manager</h1>
         <p class="subtitle"><?= htmlspecialchars($login) ?>'s Clips</p>
         <div class="nav-links">
-          <a href="mod_dashboard.php?login=<?= htmlspecialchars($login) ?>">Back to Dashboard</a>
-          <a href="clip_search.php?login=<?= htmlspecialchars($login) ?>">Public Search</a>
+          <a href="/mod/<?= htmlspecialchars($login) ?>">Back to Dashboard</a>
+          <a href="/search/<?= htmlspecialchars($login) ?>">Public Search</a>
         </div>
       </div>
       <div class="stats-bar">
@@ -579,9 +579,7 @@ $baseUrl = "clip_manage.php?login=" . urlencode($login) . "&key=" . urlencode($k
       <a href="<?= $baseUrl ?>&blocked=1" class="<?= $showBlocked ? 'active blocked-tab' : '' ?>">Blocked Clips (<?= $blockedCount ?>)</a>
     </div>
 
-    <form class="filters" method="get">
-      <input type="hidden" name="login" value="<?= htmlspecialchars($login) ?>">
-      <input type="hidden" name="key" value="<?= htmlspecialchars($key) ?>">
+    <form class="filters" method="get" action="/manage/<?= htmlspecialchars($login) ?>">
       <?php if ($showBlocked): ?><input type="hidden" name="blocked" value="1"><?php endif; ?>
 
       <div class="filter-group">
@@ -731,7 +729,7 @@ $baseUrl = "clip_manage.php?login=" . urlencode($login) . "&key=" . urlencode($k
     <?php if ($totalPages > 1): ?>
     <div class="pagination">
       <?php
-        $pageParams = ['login' => $login, 'key' => $key];
+        $pageParams = [];
         if ($query) $pageParams['q'] = $query;
         if ($clipper) $pageParams['clipper'] = $clipper;
         if ($gameId) $pageParams['game_id'] = $gameId;
@@ -739,8 +737,9 @@ $baseUrl = "clip_manage.php?login=" . urlencode($login) . "&key=" . urlencode($k
         if ($showBlocked) $pageParams['blocked'] = '1';
 
         function pageUrl($params, $pageNum) {
+          global $login;
           $params['page'] = $pageNum;
-          return '?' . http_build_query($params);
+          return '/manage/' . urlencode($login) . '?' . http_build_query($params);
         }
       ?>
       <?php if ($page > 1): ?>
@@ -768,7 +767,6 @@ $baseUrl = "clip_manage.php?login=" . urlencode($login) . "&key=" . urlencode($k
 
   <script>
     const login = <?= json_encode($login) ?>;
-    const key = <?= json_encode($key) ?>;
     const apiBase = 'dashboard_api.php';
 
     function showToast(message, type = 'success') {

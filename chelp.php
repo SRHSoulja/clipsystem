@@ -99,7 +99,7 @@ header("Content-Type: text/html; charset=utf-8");
 <body>
   <div class="container">
     <div class="nav-links">
-      <a href="clip_search.php?login=floppyjimmie">Clip Search</a>
+      <a href="/search/floppyjimmie">Clip Search</a>
       <a href="about.php">About</a>
     </div>
 
