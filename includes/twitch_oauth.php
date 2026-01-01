@@ -236,6 +236,7 @@ class TwitchOAuth {
  */
 
 function initSession() {
+  // Handle case where session was closed by session_write_close()
   if (session_status() === PHP_SESSION_NONE) {
     // Set secure session settings
     $secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
@@ -305,6 +306,7 @@ function login(array $userInfo, string $accessToken, int $expiresIn) {
   initSession();
 
   // Regenerate session ID to prevent session fixation attacks
+  // This also sends the new session cookie to the browser
   session_regenerate_id(true);
 
   $_SESSION['twitch_user'] = [
@@ -317,8 +319,8 @@ function login(array $userInfo, string $accessToken, int $expiresIn) {
   $_SESSION['token_expires'] = time() + $expiresIn - 60; // 1 min buffer
   $_SESSION['last_validated'] = time(); // Track when we last validated with Twitch
 
-  // Ensure session is written before redirect
-  session_write_close();
+  // Session is automatically written when script ends or header() redirect happens
+  // No need for session_write_close() here - it can cause issues with cookie delivery
 }
 
 function logout() {
