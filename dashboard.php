@@ -1589,7 +1589,7 @@ if ($currentUser) {
 
         async function checkBotStatus() {
             try {
-                const res = await fetch(`/bot_api.php?action=status&channel=${encodeURIComponent(streamerLogin)}`, {
+                const res = await fetch(`/bot_api.php?action=status&channel=${encodeURIComponent(authLogin)}`, {
                     credentials: 'same-origin'
                 });
                 const data = await res.json();
@@ -1633,7 +1633,7 @@ if ($currentUser) {
             btn.textContent = 'Inviting...';
 
             try {
-                const res = await fetch(`/bot_api.php?action=add&channel=${encodeURIComponent(streamerLogin)}`, {
+                const res = await fetch(`/bot_api.php?action=add&channel=${encodeURIComponent(authLogin)}`, {
                     credentials: 'same-origin'
                 });
                 const data = await res.json();
@@ -1663,7 +1663,7 @@ if ($currentUser) {
             btn.textContent = 'Removing...';
 
             try {
-                const res = await fetch(`/bot_api.php?action=remove&channel=${encodeURIComponent(streamerLogin)}`, {
+                const res = await fetch(`/bot_api.php?action=remove&channel=${encodeURIComponent(authLogin)}`, {
                     credentials: 'same-origin'
                 });
                 const data = await res.json();
