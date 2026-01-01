@@ -127,6 +127,32 @@ if ($currentUser) {
         .header .role-badge.mod { background: #00ad03; }
         .header .role-badge.admin { background: #eb0400; }
 
+        /* View As Mode Styles */
+        .view-as-banner {
+            background: linear-gradient(90deg, #ff9800, #ff5722);
+            color: white;
+            padding: 10px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .view-as-banner button {
+            background: rgba(0,0,0,0.3);
+            border: none;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .view-as-banner button:hover { background: rgba(0,0,0,0.5); }
+        body.view-as-active .admin-bar-wrapper { display: none !important; }
+        body.view-as-active #viewAsBanner { display: flex !important; }
+        body.view-as-active .admin-only { display: none !important; }
+
         /* Tabs */
         .tabs {
             display: flex;
@@ -741,13 +767,50 @@ if ($currentUser) {
             </div>
         </div>
 
+        <?php if ($isSuperAdmin || $oauthAuthorized): ?>
+        <!-- View As Mode Banner (shown when active) -->
+        <div class="view-as-banner" id="viewAsBanner" style="display: none;">
+            <svg viewBox="0 0 24 24" fill="currentColor" style="width:18px;height:18px;"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+            <span>Viewing as: <strong id="viewAsRoleName">Mod</strong></span>
+            <span style="opacity:0.8;" id="viewAsDescription">(You're seeing what a mod would see)</span>
+            <button onclick="exitViewAsMode()">Exit View Mode</button>
+        </div>
+        <?php endif; ?>
+
         <?php if ($isSuperAdmin): ?>
-        <div class="admin-bar" style="background: linear-gradient(90deg, #eb0400, #9147ff); padding: 12px 24px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
-            <span style="font-weight: bold;">Quick Access:</span>
-            <input type="text" id="adminChannelInput" placeholder="Enter channel name..." style="padding: 8px 12px; border-radius: 4px; border: none; background: rgba(0,0,0,0.3); color: white; width: 200px;">
-            <button onclick="goToChannel()" style="padding: 8px 16px; background: rgba(0,0,0,0.3); border: none; color: white; border-radius: 4px; cursor: pointer;">Go to Dashboard</button>
-            <button onclick="goToModDashboard()" style="padding: 8px 16px; background: rgba(0,0,0,0.3); border: none; color: white; border-radius: 4px; cursor: pointer;">Go to Mod Dashboard</button>
-            <a href="/admin.php" style="padding: 8px 16px; background: rgba(255,255,255,0.2); border: none; color: white; border-radius: 4px; text-decoration: none; font-weight: bold;">⚙️ Admin Dashboard</a>
+        <div class="admin-bar-wrapper admin-only">
+            <div class="admin-bar" style="background: linear-gradient(90deg, #eb0400, #9147ff); padding: 12px 24px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+                <span style="font-weight: bold;">Quick Access:</span>
+                <input type="text" id="adminChannelInput" placeholder="Enter channel name..." style="padding: 8px 12px; border-radius: 4px; border: none; background: rgba(0,0,0,0.3); color: white; width: 200px;">
+                <button onclick="goToChannel()" style="padding: 8px 16px; background: rgba(0,0,0,0.3); border: none; color: white; border-radius: 4px; cursor: pointer;">Go to Dashboard</button>
+                <button onclick="goToModDashboard()" style="padding: 8px 16px; background: rgba(0,0,0,0.3); border: none; color: white; border-radius: 4px; cursor: pointer;">Go to Mod Dashboard</button>
+                <a href="/admin.php" style="padding: 8px 16px; background: rgba(255,255,255,0.2); border: none; color: white; border-radius: 4px; text-decoration: none; font-weight: bold;">⚙️ Admin Dashboard</a>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <svg viewBox="0 0 24 24" fill="currentColor" style="width:14px;height:14px;opacity:0.8;"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+                    <select id="viewAsSelect" onchange="enterViewAsMode(this.value)" style="background: rgba(0,0,0,0.3); color: white; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; font-size: 13px; cursor: pointer;">
+                        <option value="">View As...</option>
+                        <option value="admin">Super Admin</option>
+                        <option value="streamer">Streamer</option>
+                        <option value="mod">Mod (default perms)</option>
+                        <option value="mod_limited">Mod (minimal perms)</option>
+                    </select>
+                </div>
+                <a href="/auth/logout.php" style="margin-left: auto; color: white; text-decoration: none; opacity: 0.8;">Logout</a>
+            </div>
+        </div>
+        <?php elseif ($oauthAuthorized): ?>
+        <div class="admin-bar-wrapper admin-only" style="background: linear-gradient(90deg, #9147ff, #772ce8); padding: 10px 24px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 14px;">
+            <span style="font-weight: bold;">Your Channel</span>
+            <a href="/mod/<?php echo urlencode($login); ?>" style="color: white; text-decoration: none; padding: 6px 12px; background: rgba(0,0,0,0.2); border-radius: 4px;">Mod Dashboard</a>
+            <div style="display: flex; align-items: center; gap: 6px;">
+                <svg viewBox="0 0 24 24" fill="currentColor" style="width:14px;height:14px;opacity:0.8;"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+                <select id="viewAsSelect" onchange="enterViewAsMode(this.value)" style="background: rgba(0,0,0,0.3); color: white; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; font-size: 13px; cursor: pointer;">
+                    <option value="">View As...</option>
+                    <option value="streamer">Streamer</option>
+                    <option value="mod">Mod (default perms)</option>
+                    <option value="mod_limited">Mod (minimal perms)</option>
+                </select>
+            </div>
             <a href="/auth/logout.php" style="margin-left: auto; color: white; text-decoration: none; opacity: 0.8;">Logout</a>
         </div>
         <?php endif; ?>
@@ -1283,6 +1346,91 @@ if ($currentUser) {
         let authRole = '';
         let authInstance = '';
         let settings = {};
+
+        // View As Mode state
+        let viewAsMode = null;
+        const defaultModPermissions = ['view_dashboard', 'manage_playlists', 'block_clips'];
+        const limitedModPermissions = ['view_dashboard'];
+        const allPermissions = ['view_dashboard', 'manage_playlists', 'block_clips', 'edit_hud', 'edit_voting', 'edit_weighting', 'edit_bot_settings', 'view_stats', 'toggle_commands', 'manage_mods', 'refresh_clips'];
+
+        // View As Mode functions
+        function enterViewAsMode(role) {
+            if (!role) {
+                exitViewAsMode();
+                return;
+            }
+
+            viewAsMode = role;
+            document.body.classList.add('view-as-active');
+
+            // Update banner
+            const banner = document.getElementById('viewAsBanner');
+            const roleName = document.getElementById('viewAsRoleName');
+            const description = document.getElementById('viewAsDescription');
+
+            const roleInfo = {
+                'admin': { name: 'Super Admin', desc: 'Full access to all features' },
+                'streamer': { name: 'Streamer', desc: 'Channel owner view' },
+                'mod': { name: 'Mod (default)', desc: 'Default mod permissions: playlists, block clips' },
+                'mod_limited': { name: 'Mod (minimal)', desc: 'Only view access, no editing' }
+            };
+
+            const info = roleInfo[role] || roleInfo['mod'];
+            roleName.textContent = info.name;
+            description.textContent = `(${info.desc})`;
+            banner.style.display = 'flex';
+
+            applyViewAsRestrictions(role);
+        }
+
+        function exitViewAsMode() {
+            viewAsMode = null;
+            document.body.classList.remove('view-as-active');
+
+            // Hide banner
+            const banner = document.getElementById('viewAsBanner');
+            if (banner) banner.style.display = 'none';
+
+            // Reset select
+            const select = document.getElementById('viewAsSelect');
+            if (select) select.value = '';
+
+            // Remove restrictions
+            removeViewAsRestrictions();
+        }
+
+        function applyViewAsRestrictions(role) {
+            // Hide tabs that mods shouldn't see
+            const restrictedTabs = {
+                'mod': ['weighting'],  // Default mods can't see weighting
+                'mod_limited': ['weighting', 'clips', 'stats']  // Limited mods only see settings and playlists
+            };
+
+            const hidden = restrictedTabs[role] || [];
+            document.querySelectorAll('.tab').forEach(tab => {
+                if (hidden.includes(tab.dataset.tab)) {
+                    tab.style.display = 'none';
+                }
+            });
+
+            // Also hide mod management section for non-admin/streamer views
+            if (role === 'mod' || role === 'mod_limited') {
+                document.querySelectorAll('.mod-management, #modAccessSection').forEach(el => {
+                    el.style.display = 'none';
+                });
+            }
+        }
+
+        function removeViewAsRestrictions() {
+            // Show all tabs
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.style.display = '';
+            });
+            // Show mod management
+            document.querySelectorAll('.mod-management, #modAccessSection').forEach(el => {
+                el.style.display = '';
+            });
+        }
 
         // Loading state helpers
         function setLoading(element, loading) {

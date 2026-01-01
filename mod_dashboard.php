@@ -217,6 +217,51 @@ if ($isSuperAdmin || $isStreamerOfChannel) {
     }
     .oauth-logout:hover { color: #ff4757; }
 
+    /* View As Mode Styles */
+    .view-as-banner {
+      background: linear-gradient(90deg, #ff9800, #ff5722);
+      color: white;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .view-as-banner button {
+      background: rgba(0,0,0,0.3);
+      border: none;
+      color: white;
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .view-as-banner button:hover { background: rgba(0,0,0,0.5); }
+    .view-as-toggle {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(0,0,0,0.2);
+      padding: 4px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+      color: white;
+      border: 1px solid rgba(255,255,255,0.2);
+      transition: all 0.2s;
+    }
+    .view-as-toggle:hover { background: rgba(0,0,0,0.4); }
+    .view-as-toggle.active {
+      background: #ff9800;
+      border-color: #ff9800;
+    }
+    .view-as-toggle svg { width: 14px; height: 14px; }
+    body.view-as-active .admin-only { display: none !important; }
+    body.view-as-active .admin-bar { display: none !important; }
+    body.view-as-active #viewAsBanner { display: flex !important; }
+
     .dashboard { display: none; }
     .dashboard.active { display: flex; flex-direction: column; height: 100vh; }
 
@@ -717,12 +762,47 @@ if ($isSuperAdmin || $isStreamerOfChannel) {
       </div>
     </div>
 
+    <?php if ($isSuperAdmin || $isStreamerOfChannel): ?>
+    <!-- View As Mode Banner (shown when active) -->
+    <div class="view-as-banner" id="viewAsBanner" style="display: none;">
+      <svg viewBox="0 0 24 24" fill="currentColor" style="width:18px;height:18px;"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+      <span>Viewing as: <strong id="viewAsRoleName">Mod</strong></span>
+      <span style="opacity:0.8;" id="viewAsDescription">(You're seeing what a mod would see)</span>
+      <button onclick="exitViewAsMode()">Exit View Mode</button>
+    </div>
+    <?php endif; ?>
+
     <?php if ($isSuperAdmin): ?>
-    <div class="admin-bar" style="background: linear-gradient(90deg, #eb0400, #9147ff); padding: 10px 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 14px;">
+    <div class="admin-bar admin-only" style="background: linear-gradient(90deg, #eb0400, #9147ff); padding: 10px 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 14px;">
       <span style="font-weight: bold;">Quick Access:</span>
       <input type="text" id="adminChannelInput" placeholder="Channel name..." style="padding: 6px 10px; border-radius: 4px; border: none; background: rgba(0,0,0,0.3); color: white; width: 150px; font-size: 14px;">
       <button onclick="window.location.href='/mod/'+encodeURIComponent(document.getElementById('adminChannelInput').value.trim().toLowerCase())" style="padding: 6px 12px; background: rgba(0,0,0,0.3); border: none; color: white; border-radius: 4px; cursor: pointer; font-size: 14px;">Go</button>
       <a href="/dashboard/<?php echo urlencode($login); ?>" style="color: white; text-decoration: none; padding: 6px 12px; background: rgba(0,0,0,0.2); border-radius: 4px;">Streamer Dashboard</a>
+      <div style="display: flex; align-items: center; gap: 6px;">
+        <svg viewBox="0 0 24 24" fill="currentColor" style="width:14px;height:14px;opacity:0.8;"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+        <select id="viewAsSelect" onchange="enterViewAsMode(this.value)" style="background: rgba(0,0,0,0.3); color: white; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; font-size: 13px; cursor: pointer;">
+          <option value="">View As...</option>
+          <option value="admin">Super Admin</option>
+          <option value="streamer">Streamer</option>
+          <option value="mod">Mod (default perms)</option>
+          <option value="mod_limited">Mod (minimal perms)</option>
+        </select>
+      </div>
+      <a href="/auth/logout.php" style="margin-left: auto; color: white; text-decoration: none; opacity: 0.8;">Logout</a>
+    </div>
+    <?php elseif ($isStreamerOfChannel): ?>
+    <div class="admin-bar admin-only" style="background: linear-gradient(90deg, #9147ff, #772ce8); padding: 10px 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 14px;">
+      <span style="font-weight: bold;">Your Channel</span>
+      <a href="/dashboard/<?php echo urlencode($login); ?>" style="color: white; text-decoration: none; padding: 6px 12px; background: rgba(0,0,0,0.2); border-radius: 4px;">Streamer Dashboard</a>
+      <div style="display: flex; align-items: center; gap: 6px;">
+        <svg viewBox="0 0 24 24" fill="currentColor" style="width:14px;height:14px;opacity:0.8;"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+        <select id="viewAsSelect" onchange="enterViewAsMode(this.value)" style="background: rgba(0,0,0,0.3); color: white; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; font-size: 13px; cursor: pointer;">
+          <option value="">View As...</option>
+          <option value="streamer">Streamer</option>
+          <option value="mod">Mod (default perms)</option>
+          <option value="mod_limited">Mod (minimal perms)</option>
+        </select>
+      </div>
       <a href="/auth/logout.php" style="margin-left: auto; color: white; text-decoration: none; opacity: 0.8;">Logout</a>
     </div>
     <?php endif; ?>
@@ -826,8 +906,98 @@ if ($isSuperAdmin || $isStreamerOfChannel) {
     const oauthAuthorized = <?= $oauthAuthorized ? 'true' : 'false' ?>;
     const oauthChannel = <?= json_encode($oauthChannel) ?>;
     const oauthLogin = <?= json_encode($login) ?>;
-    const userPermissions = <?= json_encode($modPermissions) ?>;
+    let userPermissions = <?= json_encode($modPermissions) ?>;
+    const actualPermissions = <?= json_encode($modPermissions) ?>; // Store original for restoring
     const isChannelMod = <?= $isChannelMod ? 'true' : 'false' ?>;
+    const isSuperAdmin = <?= $isSuperAdmin ? 'true' : 'false' ?>;
+    const isStreamerOfChannel = <?= $isStreamerOfChannel ? 'true' : 'false' ?>;
+
+    // View As Mode state
+    let viewAsMode = null;
+    const defaultModPermissions = ['view_dashboard', 'manage_playlists', 'block_clips'];
+    const limitedModPermissions = ['view_dashboard'];
+    const allPermissions = <?= json_encode(array_keys(DashboardAuth::ALL_PERMISSIONS)) ?>;
+
+    // View As Mode functions
+    function enterViewAsMode(role) {
+      if (!role) {
+        exitViewAsMode();
+        return;
+      }
+
+      viewAsMode = role;
+      document.body.classList.add('view-as-active');
+
+      // Update banner
+      const banner = document.getElementById('viewAsBanner');
+      const roleName = document.getElementById('viewAsRoleName');
+      const description = document.getElementById('viewAsDescription');
+
+      const roleInfo = {
+        'admin': { name: 'Super Admin', desc: 'Full access to all features', perms: allPermissions },
+        'streamer': { name: 'Streamer', desc: 'Channel owner view', perms: allPermissions },
+        'mod': { name: 'Mod (default)', desc: 'Default mod permissions: playlists, block clips', perms: defaultModPermissions },
+        'mod_limited': { name: 'Mod (minimal)', desc: 'Only view access, no editing', perms: limitedModPermissions }
+      };
+
+      const info = roleInfo[role] || roleInfo['mod'];
+      roleName.textContent = info.name;
+      description.textContent = `(${info.desc})`;
+      banner.style.display = 'flex';
+
+      // Hide admin bar when viewing as lesser role
+      if (role !== 'admin') {
+        document.querySelectorAll('.admin-bar').forEach(el => el.style.display = 'none');
+      }
+
+      // Apply permission restrictions
+      userPermissions = info.perms;
+      applyViewAsRestrictions();
+    }
+
+    function exitViewAsMode() {
+      viewAsMode = null;
+      document.body.classList.remove('view-as-active');
+
+      // Hide banner
+      document.getElementById('viewAsBanner').style.display = 'none';
+
+      // Show admin bar again
+      document.querySelectorAll('.admin-bar').forEach(el => el.style.display = 'flex');
+
+      // Restore original permissions
+      userPermissions = actualPermissions;
+
+      // Reset select
+      const select = document.getElementById('viewAsSelect');
+      if (select) select.value = '';
+
+      // Remove restrictions
+      removeViewAsRestrictions();
+    }
+
+    function applyViewAsRestrictions() {
+      // This function applies visual restrictions based on the simulated role
+      // For mod_dashboard, the main restriction is hiding admin-only elements
+      // which is already handled by CSS (.admin-only hidden when view-as-active)
+
+      // Show/hide elements based on permissions
+      document.querySelectorAll('[data-permission]').forEach(el => {
+        const perm = el.dataset.permission;
+        if (userPermissions.includes(perm)) {
+          el.style.display = '';
+        } else {
+          el.style.display = 'none';
+        }
+      });
+    }
+
+    function removeViewAsRestrictions() {
+      // Show all elements again
+      document.querySelectorAll('[data-permission]').forEach(el => {
+        el.style.display = '';
+      });
+    }
 
     // Permission checking helper
     function hasPermission(perm) {
