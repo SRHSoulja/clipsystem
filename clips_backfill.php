@@ -4,11 +4,11 @@
 // Usage (browser):  clips_backfill.php?login=floppyjimmie&years=5
 // Usage (cli):      php clips_backfill.php login=floppyjimmie years=5
 //
-// Fresh mode (re-fetch all clips with creator_name, ignoring cache):
+// Fresh mode (re-fetch all clips, delete existing DB entries):
 //   clips_backfill.php?login=floppyjimmie&years=5&fresh=1
 //
-// Note: Without fresh=1, existing clips keep their seq numbers.
-//       New clips get seq numbers starting from max+1.
+// This script now writes directly to the database as clips are fetched,
+// eliminating the need for a separate migration step.
 
 // Buffer output so we can add auto-redirect header
 ob_start();
@@ -94,6 +94,9 @@ if ($isWeb) {
   }
 }
 
+// Load database config
+require_once __DIR__ . '/db_config.php';
+
 $TWITCH_CLIENT_ID = getenv('TWITCH_CLIENT_ID') ?: '';
 $TWITCH_CLIENT_SECRET = getenv('TWITCH_CLIENT_SECRET') ?: '';
 if (!$TWITCH_CLIENT_ID || !$TWITCH_CLIENT_SECRET) {
@@ -112,41 +115,113 @@ $startWindow = (int) arg('window', 1);  // Which window to start from (1-indexed
 $maxWindows = (int) arg('maxwin', 5);   // Max windows per request
 if ($maxWindows < 1) $maxWindows = 1;
 if ($maxWindows > 20) $maxWindows = 20;
-$freshMode = arg('fresh', '0') === '1'; // Fresh mode: delete cache and re-fetch everything
+$freshMode = arg('fresh', '0') === '1'; // Fresh mode: delete everything and re-fetch
 $startTime = time();
 
-// On Railway, /app/cache is read-only, use /tmp for writable storage
-$cacheDir = is_writable('/tmp') ? '/tmp/clipsystem_cache' : __DIR__ . '/cache';
-if (!is_dir($cacheDir)) @mkdir($cacheDir, 0777, true);
-
-// Also check the static cache dir for existing data to resume from
-$staticCacheDir = __DIR__ . '/cache';
-
-$safeLogin = preg_replace('/[^a-z0-9_]/', '_', $login);
-$indexFile = $cacheDir . '/clips_index_' . $safeLogin . '.json';
-$metaFile  = $cacheDir . '/clips_index_' . $safeLogin . '.meta.json';
-
-// Check for existing index in static cache (deployed with app) as fallback
-$staticIndexFile = $staticCacheDir . '/clips_index_' . $safeLogin . '.json';
-
 echo "Backfill starting for login={$login}, years={$years}\n";
-echo "Index file: {$indexFile}\n";
-echo "Cache dir writable: " . (is_writable($cacheDir) ? "yes" : "no") . "\n";
+echo "Writing directly to database (no migration needed)\n\n";
 
-// Fresh mode: delete existing cache files on first window
-if ($freshMode && $startWindow === 1) {
-  echo "🔄 FRESH MODE: Deleting existing cache to re-fetch all clips with creator_name...\n";
-  if (file_exists($indexFile)) {
-    @unlink($indexFile);
-    echo "  Deleted: $indexFile\n";
-  }
-  if (file_exists($metaFile)) {
-    @unlink($metaFile);
-    echo "  Deleted: $metaFile\n";
-  }
-  // Note: static cache is read-only on Railway, can't delete it there
-  echo "  Starting fresh - all clips will be re-fetched from Twitch API\n";
+// Connect to database
+$pdo = get_db_connection();
+if (!$pdo) {
+  http_response_code(500);
+  echo "ERROR: Could not connect to database. Check DATABASE_URL.\n";
+  exit;
 }
+echo "Connected to PostgreSQL.\n";
+
+// Ensure clips table exists with all columns
+try {
+  $pdo->exec("
+    CREATE TABLE IF NOT EXISTS clips (
+      id SERIAL PRIMARY KEY,
+      login VARCHAR(64) NOT NULL,
+      clip_id VARCHAR(255) NOT NULL,
+      seq INTEGER NOT NULL,
+      title TEXT,
+      duration INTEGER,
+      created_at TIMESTAMP,
+      view_count INTEGER DEFAULT 0,
+      game_id VARCHAR(64),
+      video_id VARCHAR(64),
+      vod_offset INTEGER,
+      thumbnail_url TEXT,
+      creator_name VARCHAR(64),
+      blocked BOOLEAN DEFAULT FALSE,
+      imported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(login, clip_id),
+      UNIQUE(login, seq)
+    )
+  ");
+
+  // Add creator_name column if it doesn't exist (for existing databases)
+  try {
+    $pdo->exec("ALTER TABLE clips ADD COLUMN IF NOT EXISTS creator_name VARCHAR(64)");
+  } catch (PDOException $e) {}
+
+  // Indexes for fast lookups
+  $pdo->exec("CREATE INDEX IF NOT EXISTS idx_clips_login ON clips(login)");
+  $pdo->exec("CREATE INDEX IF NOT EXISTS idx_clips_seq ON clips(login, seq)");
+  $pdo->exec("CREATE INDEX IF NOT EXISTS idx_clips_clip_id ON clips(login, clip_id)");
+  $pdo->exec("CREATE INDEX IF NOT EXISTS idx_clips_created ON clips(login, created_at)");
+  $pdo->exec("CREATE INDEX IF NOT EXISTS idx_clips_game ON clips(login, game_id)");
+  $pdo->exec("CREATE INDEX IF NOT EXISTS idx_clips_blocked ON clips(login, blocked)");
+
+  echo "Database table ready.\n";
+} catch (PDOException $e) {
+  http_response_code(500);
+  echo "ERROR creating table: " . $e->getMessage() . "\n";
+  exit;
+}
+
+// Fresh mode: delete existing clips on first window
+if ($freshMode && $startWindow === 1) {
+  echo "🔄 FRESH MODE: Deleting existing clips for $login...\n";
+  try {
+    $deleteStmt = $pdo->prepare("DELETE FROM clips WHERE login = ?");
+    $deleteStmt->execute([$login]);
+    $deleted = $deleteStmt->rowCount();
+    echo "  Deleted $deleted existing clips.\n";
+  } catch (PDOException $e) {
+    echo "  Warning: Could not delete existing clips: " . $e->getMessage() . "\n";
+  }
+}
+
+// Get current max seq for this login (for incremental mode)
+$maxSeq = 0;
+if (!$freshMode || $startWindow > 1) {
+  try {
+    $stmt = $pdo->prepare("SELECT COALESCE(MAX(seq), 0) FROM clips WHERE login = ?");
+    $stmt->execute([$login]);
+    $maxSeq = (int)$stmt->fetchColumn();
+    echo "Current max seq: $maxSeq\n";
+  } catch (PDOException $e) {}
+}
+
+// Load existing clip IDs to avoid duplicates
+$existingClipIds = [];
+try {
+  $stmt = $pdo->prepare("SELECT clip_id FROM clips WHERE login = ?");
+  $stmt->execute([$login]);
+  while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+    $existingClipIds[$row['clip_id']] = true;
+  }
+  echo "Existing clips in DB: " . count($existingClipIds) . "\n";
+} catch (PDOException $e) {}
+
+// Load blocklist
+$blockedIds = [];
+try {
+  $blockStmt = $pdo->prepare("SELECT clip_id FROM blocklist WHERE login = ?");
+  $blockStmt->execute([$login]);
+  while ($row = $blockStmt->fetch()) {
+    $blockedIds[$row['clip_id']] = true;
+  }
+  if (count($blockedIds) > 0) {
+    echo "Loaded " . count($blockedIds) . " blocked clip IDs.\n";
+  }
+} catch (PDOException $e) {}
+
 echo "\n";
 
 // App token
@@ -190,54 +265,6 @@ if (!$broadcasterId) {
 $now = time();
 $startAll = $now - ($years * 365 * 24 * 60 * 60);
 
-// Load existing index if present (allows resume or rebuild)
-$seen = [];
-$clips = [];
-
-// In fresh mode, ONLY load from writable cache (which has fresh data from previous windows)
-// NEVER load from static cache in fresh mode - it has old data without creator_name
-if ($freshMode) {
-  if ($startWindow === 1) {
-    echo "Fresh mode: starting fresh, will fetch all clips from Twitch\n";
-  } else if (file_exists($indexFile)) {
-    // Window 2+: load from writable cache (has fresh data from window 1+)
-    echo "Fresh mode: loading from writable cache: $indexFile\n";
-    $existing = json_decode(file_get_contents($indexFile), true);
-    if (is_array($existing) && isset($existing['clips']) && is_array($existing['clips'])) {
-      foreach ($existing['clips'] as $c) {
-        if (!isset($c['id'])) continue;
-        $seen[$c['id']] = true;
-        $clips[] = $c;
-      }
-      echo "Loaded existing clips: " . count($clips) . "\n";
-    }
-  } else {
-    echo "Fresh mode window $startWindow: no writable cache found, starting empty\n";
-  }
-} else {
-  // Normal mode: try writable cache first, then fall back to static cache
-  $loadFrom = null;
-  if (file_exists($indexFile)) {
-    $loadFrom = $indexFile;
-    echo "Loading from writable cache: $indexFile\n";
-  } elseif (file_exists($staticIndexFile)) {
-    $loadFrom = $staticIndexFile;
-    echo "Loading from static cache: $staticIndexFile\n";
-  }
-
-  if ($loadFrom) {
-    $existing = json_decode(file_get_contents($loadFrom), true);
-    if (is_array($existing) && isset($existing['clips']) && is_array($existing['clips'])) {
-      foreach ($existing['clips'] as $c) {
-        if (!isset($c['id'])) continue;
-        $seen[$c['id']] = true;
-        $clips[] = $c;
-      }
-      echo "Loaded existing clips: " . count($clips) . "\n";
-    }
-  }
-}
-
 $windowDays = 30; // 30-day chunks
 $windowSec = $windowDays * 24 * 60 * 60;
 
@@ -251,6 +278,23 @@ echo "Processing windows $startWindow to $endWindow of $totalWindows\n\n";
 $windowStart = $startAll + (($startWindow - 1) * $windowSec);
 $windowsProcessed = 0;
 $stoppedEarly = false;
+$totalInserted = 0;
+$totalSkipped = 0;
+
+// Prepare batch insert statement
+$insertSql = "
+  INSERT INTO clips (login, clip_id, seq, title, duration, created_at, view_count, game_id, video_id, vod_offset, thumbnail_url, creator_name, blocked)
+  VALUES (:login, :clip_id, :seq, :title, :duration, :created_at, :view_count, :game_id, :video_id, :vod_offset, :thumbnail_url, :creator_name, :blocked)
+  ON CONFLICT (login, clip_id) DO UPDATE SET
+    title = EXCLUDED.title,
+    view_count = EXCLUDED.view_count,
+    creator_name = COALESCE(EXCLUDED.creator_name, clips.creator_name),
+    thumbnail_url = EXCLUDED.thumbnail_url
+";
+$insertStmt = $pdo->prepare($insertSql);
+
+// Collect clips for this chunk to assign seq numbers properly
+$newClips = [];
 
 for ($w = $startWindow; $w <= $endWindow; $w++) {
   // Check timeout for web requests (stop after 20 seconds to avoid 504)
@@ -305,23 +349,40 @@ for ($w = $startWindow; $w <= $endWindow; $w++) {
     if (!$data) break;
 
     foreach ($data as $c) {
-      $id = $c['id'] ?? '';
-      if (!$id) continue;
-      if (isset($seen[$id])) continue;
+      $clipId = $c['id'] ?? '';
+      if (!$clipId) continue;
 
-      $seen[$id] = true;
-      $clips[] = [
-        "id" => $id,
-        "title" => $c["title"] ?? "",
-        "duration" => $c["duration"] ?? 0,
-        "created_at" => $c["created_at"] ?? "",
-        "view_count" => $c["view_count"] ?? 0,
-        "game_id" => $c["game_id"] ?? "",
-        "video_id" => $c["video_id"] ?? "",
-        "vod_offset" => $c["vod_offset"] ?? null,
-        "thumbnail_url" => $c["thumbnail_url"] ?? "",
-        "creator_name" => $c["creator_name"] ?? "",
+      // Skip if already in DB
+      if (isset($existingClipIds[$clipId])) {
+        $totalSkipped++;
+        continue;
+      }
+
+      // Parse created_at timestamp
+      $createdAt = null;
+      if (!empty($c['created_at'])) {
+        $ts = strtotime($c['created_at']);
+        if ($ts) {
+          $createdAt = date('Y-m-d H:i:s', $ts);
+        }
+      }
+
+      $newClips[] = [
+        'clip_id' => $clipId,
+        'title' => $c['title'] ?? null,
+        'duration' => isset($c['duration']) ? (int)$c['duration'] : null,
+        'created_at' => $createdAt,
+        'created_at_raw' => $c['created_at'] ?? '',
+        'view_count' => isset($c['view_count']) ? (int)$c['view_count'] : 0,
+        'game_id' => !empty($c['game_id']) ? $c['game_id'] : null,
+        'video_id' => !empty($c['video_id']) ? $c['video_id'] : null,
+        'vod_offset' => isset($c['vod_offset']) && $c['vod_offset'] !== null ? (int)$c['vod_offset'] : null,
+        'thumbnail_url' => !empty($c['thumbnail_url']) ? $c['thumbnail_url'] : null,
+        'creator_name' => !empty($c['creator_name']) ? $c['creator_name'] : null,
+        'blocked' => isset($blockedIds[$clipId]),
       ];
+
+      $existingClipIds[$clipId] = true; // Mark as seen
       $addedThisWindow++;
     }
 
@@ -333,96 +394,127 @@ for ($w = $startWindow; $w <= $endWindow; $w++) {
     usleep(120000);
   }
 
-  echo "  Added this window: {$addedThisWindow}, total: " . count($clips) . "\n";
-
-  // Save progress after each window
-  // Sort oldest-first so seq=1 is oldest clip
-  usort($clips, function($a, $b) {
-    return strcmp($a['created_at'] ?? '', $b['created_at'] ?? '');
-  });
-
-  // Assign seq numbers - PRESERVE existing seq numbers, only assign to new clips
-  // In fresh mode: assign 1..N (full re-index)
-  // In normal mode: keep existing seq, assign new clips starting from max+1
-  if ($freshMode) {
-    // Fresh mode: re-assign all seq numbers (full rebuild)
-    foreach ($clips as $i => &$clip) {
-      $clip['seq'] = $i + 1;
-    }
-    unset($clip);
-  } else {
-    // Incremental mode: preserve existing seq, assign new ones at end
-    // Find max existing seq
-    $maxExistingSeq = 0;
-    foreach ($clips as $clip) {
-      if (isset($clip['seq']) && $clip['seq'] > $maxExistingSeq) {
-        $maxExistingSeq = $clip['seq'];
-      }
-    }
-
-    // Assign seq to clips that don't have one (new clips)
-    $nextSeq = $maxExistingSeq + 1;
-    foreach ($clips as &$clip) {
-      if (!isset($clip['seq']) || $clip['seq'] <= 0) {
-        $clip['seq'] = $nextSeq++;
-      }
-    }
-    unset($clip);
-  }
-
-  $out = [
-    "login" => $login,
-    "broadcaster_id" => $broadcasterId,
-    "years" => $years,
-    "built_at" => gmdate('c'),
-    "count" => count($clips),
-    "max_seq" => count($clips),
-    "clips" => $clips,
-  ];
-  file_put_contents($indexFile, json_encode($out, JSON_UNESCAPED_SLASHES));
-
-  $meta = [
-    "login" => $login,
-    "broadcaster_id" => $broadcasterId,
-    "last_window_end" => $endedAt,
-    "updated_at" => gmdate('c'),
-    "count" => count($clips),
-  ];
-  file_put_contents($metaFile, json_encode($meta, JSON_UNESCAPED_SLASHES));
+  echo "  Fetched this window: {$addedThisWindow}\n";
 
   $windowStart = $windowEnd;
   $windowsProcessed++;
-  echo "\n";
+}
+
+// Sort new clips by created_at (oldest first) and assign seq numbers
+if (count($newClips) > 0) {
+  usort($newClips, function($a, $b) {
+    return strcmp($a['created_at_raw'], $b['created_at_raw']);
+  });
+
+  echo "\nInserting " . count($newClips) . " clips into database...\n";
+
+  $pdo->beginTransaction();
+  $nextSeq = $maxSeq + 1;
+  $batchCount = 0;
+
+  foreach ($newClips as $clip) {
+    try {
+      $insertStmt->execute([
+        ':login' => $login,
+        ':clip_id' => $clip['clip_id'],
+        ':seq' => $nextSeq,
+        ':title' => $clip['title'],
+        ':duration' => $clip['duration'],
+        ':created_at' => $clip['created_at'],
+        ':view_count' => $clip['view_count'],
+        ':game_id' => $clip['game_id'],
+        ':video_id' => $clip['video_id'],
+        ':vod_offset' => $clip['vod_offset'],
+        ':thumbnail_url' => $clip['thumbnail_url'],
+        ':creator_name' => $clip['creator_name'],
+        ':blocked' => $clip['blocked'] ? 't' : 'f',
+      ]);
+
+      if ($insertStmt->rowCount() > 0) {
+        $totalInserted++;
+        $nextSeq++;
+      }
+
+      $batchCount++;
+      if ($batchCount % 100 === 0) {
+        $pdo->commit();
+        $pdo->beginTransaction();
+        echo "  Progress: $batchCount/" . count($newClips) . " inserted\n";
+      }
+    } catch (PDOException $e) {
+      // Likely duplicate, skip
+      $totalSkipped++;
+    }
+  }
+
+  $pdo->commit();
+  echo "  Done! Inserted: $totalInserted, Skipped: $totalSkipped\n";
 }
 
 // Calculate next window for continuation
 $nextWindow = $stoppedEarly ? $w : ($w > $totalWindows ? 0 : $w);
 
-// Count clips with creator_name
-$withCreatorName = 0;
-foreach ($clips as $c) {
-  if (!empty($c['creator_name'])) $withCreatorName++;
-}
-
-// Determine if we need to continue and build next URL
+// Determine if we need to continue
 $needsContinue = $isWeb && $nextWindow > 0 && $nextWindow <= $totalWindows;
 $freshParam = $freshMode ? "&fresh=1" : "";
 $nextUrl = $needsContinue ? "clips_backfill.php?login=$login&years=$years&window=$nextWindow&maxwin=$maxWindows$freshParam" : null;
 
-// URL to auto-migrate after backfill completes
-// Pass fresh=1 to migration if we're doing a fresh backfill (so it deletes existing DB clips too)
-$migrateUrl = "migrate_clips_to_db.php?login=$login&update=1&from_backfill=1" . $freshParam;
+// Success URL - redirect to admin with success message
+$finalClipCount = 0;
+try {
+  $stmt = $pdo->prepare("SELECT COUNT(*) FROM clips WHERE login = ?");
+  $stmt->execute([$login]);
+  $finalClipCount = (int)$stmt->fetchColumn();
+} catch (PDOException $e) {}
 
-echo "=== Chunk Complete ===\n";
+$successUrl = "admin.php?success=" . urlencode($login) . "&clips=" . $finalClipCount;
+
+echo "\n=== Chunk Complete ===\n";
 echo "Windows processed: $windowsProcessed\n";
-echo "Total clips indexed: " . count($clips) . "\n";
-echo "Clips with creator_name: $withCreatorName\n";
+echo "Clips inserted this chunk: $totalInserted\n";
+echo "Total clips in database: $finalClipCount\n";
 
 if ($needsContinue) {
   echo "\n🔄 AUTO-CONTINUING in 2 seconds...\n";
   echo "Next: window $nextWindow to " . min($totalWindows, $nextWindow + $maxWindows - 1) . " of $totalWindows\n";
 } else {
-  echo "\n✅ All windows complete! Auto-migrating to database...\n";
+  echo "\n✅ Backfill complete!\n";
+
+  // Create streamer entry for dashboard access
+  echo "\n🔑 Setting up dashboard access...\n";
+  try {
+    require_once __DIR__ . '/includes/dashboard_auth.php';
+    $auth = new DashboardAuth();
+    if (!$auth->streamerExists($login)) {
+      if ($auth->createStreamer($login)) {
+        echo "  ✓ Dashboard access created for '$login'\n";
+      }
+    } else {
+      echo "  ✓ Dashboard access already exists\n";
+    }
+  } catch (Exception $e) {
+    echo "  Note: Could not setup dashboard: " . $e->getMessage() . "\n";
+  }
+
+  // Register channel for bot
+  echo "\n🤖 Registering channel for bot commands...\n";
+  try {
+    $stmt = $pdo->prepare("
+      INSERT INTO bot_channels (login, enabled, added_at)
+      VALUES (?, true, CURRENT_TIMESTAMP)
+      ON CONFLICT (login) DO NOTHING
+    ");
+    $stmt->execute([$login]);
+    if ($stmt->rowCount() > 0) {
+      echo "  ✓ Channel registered - bot can now respond to commands when invited\n";
+    } else {
+      echo "  ✓ Channel already registered for bot\n";
+    }
+  } catch (PDOException $e) {
+    echo "  Note: Could not register bot channel: " . $e->getMessage() . "\n";
+  }
+
+  echo "\n💡 Streamer can access their dashboard at /dashboard/$login\n";
 }
 
 // Get buffered output and send with proper headers
@@ -439,15 +531,15 @@ if ($isWeb && $needsContinue) {
   echo "<p><a href='" . htmlspecialchars($nextUrl) . "'>Click here if not redirected...</a></p>";
   echo "</body></html>";
 } elseif ($isWeb) {
-  // Backfill complete - auto-redirect to migration
+  // Backfill complete - redirect to admin
   header('Content-Type: text/html; charset=utf-8');
   echo "<!DOCTYPE html><html><head><meta charset='utf-8'>";
-  echo "<meta http-equiv='refresh' content='2;url=" . htmlspecialchars($migrateUrl) . "'>";
+  echo "<meta http-equiv='refresh' content='3;url=" . htmlspecialchars($successUrl) . "'>";
   echo "<title>Clips Backfill Complete</title>";
   echo "<style>body{background:#1a1a2e;color:#0f0;font-family:monospace;padding:20px;font-size:14px;line-height:1.4;} a{color:#0ff;}</style>";
   echo "</head><body><pre>" . htmlspecialchars($output) . "</pre>";
-  echo "<p>🔄 Auto-redirecting to database migration...</p>";
-  echo "<p><a href='" . htmlspecialchars($migrateUrl) . "'>Click here if not redirected...</a></p>";
+  echo "<p>🔄 Redirecting to admin panel...</p>";
+  echo "<p><a href='" . htmlspecialchars($successUrl) . "'>Click here if not redirected...</a></p>";
   echo "</body></html>";
 } else {
   // Plain text output (CLI)
