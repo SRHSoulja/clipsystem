@@ -57,7 +57,14 @@ function getNavUserChannels($pdo, $currentUser) {
 }
 
 // Determine nav context
-$navUser = $currentUser ?? null;
+// Make sure OAuth functions are available
+if (!function_exists('getCurrentUser')) {
+    require_once __DIR__ . '/twitch_oauth.php';
+}
+
+// Use provided $currentUser or fetch fresh (don't re-fetch if already set)
+$navUser = isset($currentUser) ? $currentUser : getCurrentUser();
+
 $navPdo = $pdo ?? null;
 if (!$navPdo) {
     require_once __DIR__ . '/../db_config.php';
