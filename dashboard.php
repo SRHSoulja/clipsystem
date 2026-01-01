@@ -1589,8 +1589,16 @@ if ($currentUser) {
 
         async function checkBotStatus() {
             try {
-                const res = await fetch(`/bot_api.php?action=status&channel=${encodeURIComponent(streamerLogin)}`);
+                const res = await fetch(`/bot_api.php?action=status&channel=${encodeURIComponent(streamerLogin)}`, {
+                    credentials: 'same-origin'
+                });
                 const data = await res.json();
+
+                if (data.error) {
+                    console.error('Bot status error:', data.error);
+                    document.getElementById('botStatusText').textContent = 'Unable to check bot status';
+                    return;
+                }
 
                 botIsActive = data.bot_active === true;
                 updateBotStatusUI();
@@ -1625,7 +1633,9 @@ if ($currentUser) {
             btn.textContent = 'Inviting...';
 
             try {
-                const res = await fetch(`/bot_api.php?action=add&channel=${encodeURIComponent(streamerLogin)}`);
+                const res = await fetch(`/bot_api.php?action=add&channel=${encodeURIComponent(streamerLogin)}`, {
+                    credentials: 'same-origin'
+                });
                 const data = await res.json();
 
                 if (data.success) {
@@ -1653,7 +1663,9 @@ if ($currentUser) {
             btn.textContent = 'Removing...';
 
             try {
-                const res = await fetch(`/bot_api.php?action=remove&channel=${encodeURIComponent(streamerLogin)}`);
+                const res = await fetch(`/bot_api.php?action=remove&channel=${encodeURIComponent(streamerLogin)}`, {
+                    credentials: 'same-origin'
+                });
                 const data = await res.json();
 
                 if (data.success) {
