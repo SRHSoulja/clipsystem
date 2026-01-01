@@ -163,6 +163,13 @@ function init_votes_tables($pdo) {
         $pdo->exec("CREATE INDEX IF NOT EXISTS idx_channel_mods_channel ON channel_mods(channel_login)");
         $pdo->exec("CREATE INDEX IF NOT EXISTS idx_channel_mods_mod ON channel_mods(mod_username)");
 
+        // Add silent_prefix column to channel_settings if it doesn't exist
+        try {
+            $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS silent_prefix BOOLEAN DEFAULT FALSE");
+        } catch (PDOException $e) {
+            // Column might already exist
+        }
+
         // Suspicious voters table - tracks flagged accounts and vote activity
         $pdo->exec("
             CREATE TABLE IF NOT EXISTS suspicious_voters (

@@ -741,6 +741,21 @@ if ($currentUser) {
                 </div>
             </div>
 
+            <div class="card">
+                <h3>Bot Response Mode</h3>
+                <div style="display: flex; align-items: center; gap: 16px;">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="silentPrefix" onchange="saveSilentPrefix()">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span>Silent mode (prefix responses with ! to hide from on-screen chat)</span>
+                </div>
+                <p style="color: #adadb8; margin-top: 8px; font-size: 13px;">
+                    When enabled, bot responses start with "!" so they won't appear in chat overlays that filter out commands.
+                    Useful if viewers use commands like !cfind frequently.
+                </p>
+            </div>
+
             <div class="card" id="commandSettingsCard">
                 <h3>Bot Commands</h3>
                 <p style="color: #adadb8; margin-bottom: 16px;">Enable or disable individual chat commands for your channel.</p>
@@ -1411,6 +1426,9 @@ if ($currentUser) {
                 document.getElementById('votingEnabled').checked = settings.voting_enabled;
                 document.getElementById('voteFeedback').checked = settings.vote_feedback !== false;
 
+                // Bot response mode
+                document.getElementById('silentPrefix').checked = settings.silent_prefix === true;
+
                 // Last refresh
                 if (settings.last_refresh) {
                     document.getElementById('lastRefresh').textContent = new Date(settings.last_refresh).toLocaleString();
@@ -1531,6 +1549,14 @@ if ($currentUser) {
             const success = await saveSetting('vote_feedback', enabled, false);
             if (success) {
                 showToast('success', 'Vote Feedback ' + (enabled ? 'Enabled' : 'Disabled'), 'Chat feedback setting updated');
+            }
+        }
+
+        async function saveSilentPrefix() {
+            const enabled = document.getElementById('silentPrefix').checked;
+            const success = await saveSetting('silent_prefix', enabled, false);
+            if (success) {
+                showToast('success', 'Silent Mode ' + (enabled ? 'Enabled' : 'Disabled'), 'Bot responses will ' + (enabled ? 'now start with ! to hide from on-screen chat' : 'appear normally in chat'));
             }
         }
 

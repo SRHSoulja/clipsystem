@@ -154,6 +154,7 @@ try {
     $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS last_refresh TIMESTAMP");
     $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS command_settings TEXT DEFAULT '{}'");
     $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS weighting_config TEXT DEFAULT '{}'");
+    $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS silent_prefix BOOLEAN DEFAULT FALSE");
 
     // Ensure channel_mods table exists
     $pdo->exec("
@@ -178,7 +179,7 @@ switch ($action) {
 
         try {
             $stmt = $pdo->prepare("
-                SELECT hud_position, top_position, blocked_words, blocked_clippers, voting_enabled, vote_feedback, last_refresh, command_settings
+                SELECT hud_position, top_position, blocked_words, blocked_clippers, voting_enabled, vote_feedback, silent_prefix, last_refresh, command_settings
                 FROM channel_settings WHERE login = ?
             ");
             $stmt->execute([$login]);
@@ -192,6 +193,7 @@ switch ($action) {
                     'blocked_clippers' => '[]',
                     'vote_feedback' => true,
                     'voting_enabled' => true,
+                    'silent_prefix' => false,
                     'last_refresh' => null,
                     'command_settings' => '{}'
                 ];
@@ -242,6 +244,7 @@ switch ($action) {
             'top_position' => 'change_hud',
             'voting_enabled' => 'toggle_voting',
             'vote_feedback' => 'toggle_voting',
+            'silent_prefix' => 'toggle_voting',
             'blocked_words' => 'add_blocked_words',
             'blocked_clippers' => 'add_blocked_clippers',
             'command_settings' => 'toggle_commands'
@@ -264,6 +267,7 @@ switch ($action) {
                     break;
                 case 'voting_enabled':
                 case 'vote_feedback':
+                case 'silent_prefix':
                     $value = filter_var($value, FILTER_VALIDATE_BOOLEAN) ? 'TRUE' : 'FALSE';
                     break;
                 case 'blocked_words':

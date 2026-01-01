@@ -60,6 +60,11 @@ const VOTING_CACHE_TTL = 30000; // 30 second cache
 const commandSettingsCache = new Map();
 const COMMAND_CACHE_TTL = 30000; // 30 second cache
 
+// Cache for bot settings - silent prefix, etc.
+// Key: channel login, Value: { silentPrefix: boolean, cachedAt: timestamp }
+const botSettingsCache = new Map();
+const BOT_SETTINGS_CACHE_TTL = 30000; // 30 second cache
+
 // Fetch voting settings for a channel (returns both voting_enabled and vote_feedback)
 async function getVotingSettings(login) {
   const cached = votingSettingsCache.get(login);
@@ -136,6 +141,40 @@ async function isCommandEnabled(login, commandName) {
   if (!commands) return true;
   // If command not in settings, it's enabled by default
   return commands[commandName] !== false;
+}
+
+// Fetch bot settings for a channel (silent_prefix, etc.)
+async function getBotSettings(login) {
+  const cached = botSettingsCache.get(login);
+  const now = Date.now();
+
+  // Return cached value if fresh
+  if (cached && (now - cached.cachedAt) < BOT_SETTINGS_CACHE_TTL) {
+    return cached;
+  }
+
+  // Fetch from database via API
+  try {
+    const url = `${config.apiBaseUrl}/bot_settings.php?login=${encodeURIComponent(login)}`;
+    const res = await fetchWithTimeout(url, 3000);
+    const data = await res.json();
+    const settings = {
+      silentPrefix: data.silent_prefix === true,
+      cachedAt: now
+    };
+    botSettingsCache.set(login, settings);
+    return settings;
+  } catch (err) {
+    console.error('Error fetching bot settings:', err.message);
+    // On error, use cached value if available, otherwise default
+    return cached || { silentPrefix: false, cachedAt: now };
+  }
+}
+
+// Check if silent prefix is enabled for a channel
+async function isSilentPrefixEnabled(login) {
+  const settings = await getBotSettings(login);
+  return settings.silentPrefix;
 }
 
 // Helper to get the clip channel for a given chat channel
@@ -825,7 +864,10 @@ client.on('message', async (channel, tags, message, self) => {
   try {
     const response = await handler(channel, tags, args);
     if (response) {
-      client.say(channel, response);
+      // Check if silent prefix is enabled - prepends ! to hide from on-screen chat overlays
+      const useSilentPrefix = await isSilentPrefixEnabled(clipChannel);
+      const finalResponse = useSilentPrefix ? `! ${response}` : response;
+      client.say(channel, finalResponse);
     }
   } catch (err) {
     console.error(`Error handling !${cmdName}:`, err);
