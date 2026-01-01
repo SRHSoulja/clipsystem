@@ -99,14 +99,17 @@ $currentUser = getCurrentUser();
     <h2>Features</h2>
 
     <div class="feature-box">
-      <h3>Smart Weighted Selection</h3>
-      <p>The system uses an intelligent weighting algorithm to keep clips fresh and varied:</p>
+      <h3>Customizable Clip Weighting</h3>
+      <p>Streamers have full control over how clips are selected through the Streamer Dashboard:</p>
       <ul style="color: #adadb8; margin-top: 10px;">
-        <li><strong>Age-based weighting:</strong> Newer clips are prioritized to keep content fresh. Recent clips (last 30 days) get 50% weight, mid-age clips (30-180 days) get 30%, and older classics get 20%.</li>
-        <li><strong>Category rotation:</strong> Automatically cycles through different game categories to provide variety.</li>
-        <li><strong>No duplicates:</strong> Tracks recently played clips to avoid showing the same clip twice in a short period.</li>
-        <li><strong>View count consideration:</strong> Popular clips with higher view counts get a slight boost.</li>
+        <li><strong>Recency weight:</strong> Prioritize clips that haven't been played recently</li>
+        <li><strong>View count weight:</strong> Boost popular clips with higher view counts</li>
+        <li><strong>Play penalty:</strong> Reduce repeat plays by penalizing recently shown clips</li>
+        <li><strong>Voting weight:</strong> Let community !like/!dislike votes influence selection</li>
+        <li><strong>Duration boosts:</strong> Favor or penalize short, medium, or long clips</li>
+        <li><strong>Category boosts:</strong> Boost or penalize specific games/categories</li>
       </ul>
+      <p style="margin-top: 10px;">All weights are adjustable from 0 (disabled) to 2 (maximum) in the dashboard.</p>
     </div>
 
     <div class="feature-box">
@@ -141,12 +144,37 @@ $currentUser = getCurrentUser();
     </div>
 
     <div class="feature-box">
+      <h3>Streamer Dashboard</h3>
+      <p>A full-featured dashboard for streamers to manage their clip reel:</p>
+      <ul style="color: #adadb8; margin-top: 10px;">
+        <li><strong>Weighting controls:</strong> Customize how clips are selected</li>
+        <li><strong>HUD positioning:</strong> Move overlays to any corner</li>
+        <li><strong>Voting toggle:</strong> Enable or disable chat voting</li>
+        <li><strong>Bot settings:</strong> Configure command responses</li>
+        <li><strong>Mod management:</strong> Add mods with customizable permissions</li>
+        <li><strong>Stats:</strong> View top voted clips and voting activity</li>
+      </ul>
+    </div>
+
+    <div class="feature-box">
+      <h3>Mod Dashboard & Playlists</h3>
+      <p>Mods can access a dedicated dashboard to manage playlists:</p>
+      <ul style="color: #adadb8; margin-top: 10px;">
+        <li><strong>Create playlists:</strong> Curate themed clip collections</li>
+        <li><strong>Browse & search:</strong> Find clips by title, clipper, or game</li>
+        <li><strong>Queue playlists:</strong> Play curated playlists on demand</li>
+        <li><strong>Block clips:</strong> Hide individual clips from rotation</li>
+      </ul>
+      <p style="margin-top: 10px;">Streamers can customize what each mod can access through permission settings.</p>
+    </div>
+
+    <div class="feature-box">
       <h3>Multi-Channel Support</h3>
       <p>Each channel has its own independent clip pool and settings:</p>
       <ul style="color: #adadb8; margin-top: 10px;">
         <li>Commands typed in a channel affect only that channel's clips</li>
-        <li>Each channel has its own HUD position settings</li>
-        <li>Admins can use <code>!cswitch</code> to control another channel's clips</li>
+        <li>Each channel has its own HUD position and weighting settings</li>
+        <li>Mods can be added per-channel with customizable permissions</li>
         <li>Separate vote tracking per channel</li>
       </ul>
     </div>
