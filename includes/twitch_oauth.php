@@ -239,13 +239,28 @@ function initSession() {
   if (session_status() === PHP_SESSION_NONE) {
     // Set secure session settings
     $secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
-    session_set_cookie_params([
+
+    // Get domain from host, stripping port if present
+    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    $domain = preg_replace('/:\d+$/', '', $host);
+
+    // Don't set domain for localhost
+    $isLocalhost = (strpos($domain, 'localhost') !== false || strpos($domain, '127.0.0.1') !== false);
+
+    $params = [
       'lifetime' => 86400 * 7, // 7 days
       'path' => '/',
       'secure' => $secure,
       'httponly' => true,
       'samesite' => 'Lax',
-    ]);
+    ];
+
+    // Only add domain if not localhost (helps with subdomain issues)
+    if (!$isLocalhost) {
+      $params['domain'] = $domain;
+    }
+
+    session_set_cookie_params($params);
     session_start();
   }
 }
@@ -301,6 +316,9 @@ function login(array $userInfo, string $accessToken, int $expiresIn) {
   $_SESSION['access_token'] = $accessToken;
   $_SESSION['token_expires'] = time() + $expiresIn - 60; // 1 min buffer
   $_SESSION['last_validated'] = time(); // Track when we last validated with Twitch
+
+  // Ensure session is written before redirect
+  session_write_close();
 }
 
 function logout() {

@@ -194,7 +194,13 @@ $currentUser = getCurrentUser();
 
     <h2>Getting Started</h2>
 
-    <p>Want to use this for your channel? The system supports multiple streamers. Reach out to get set up with your own clip reel.</p>
+    <p>Want to use this for your channel? The system supports multiple streamers.</p>
+
+    <div class="feature-box" style="text-align: center; border-color: #00b894;">
+      <h3 style="color: #00b894;">Apply for Archiving</h3>
+      <p>Login with your Twitch account to request clip archiving for your channel.</p>
+      <a href="/apply.php" style="display: inline-block; background: #00b894; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 500; margin-top: 10px;">Apply Now</a>
+    </div>
 
     <div class="credits">
       Built for the Twitch community. Powered by the Twitch API.

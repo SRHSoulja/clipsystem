@@ -498,6 +498,112 @@ if ($authenticated) {
       </form>
     </div>
 
+    <!-- Archive Applications -->
+    <h2 style="color: #bf94ff; border-color: #bf94ff;">Archive Applications</h2>
+    <p style="color: #adadb8;">Review requests from streamers who want their clips archived.</p>
+
+    <div class="card" style="border: 1px solid #bf94ff;">
+      <h3 style="color: #bf94ff;">Pending Applications</h3>
+      <div id="applicationsList">
+        <p style="color: #adadb8;">Loading...</p>
+      </div>
+    </div>
+
+    <script>
+      async function loadApplications() {
+        const container = document.getElementById('applicationsList');
+        container.innerHTML = '<p style="color: #adadb8;">Loading...</p>';
+
+        try {
+          const res = await fetch('/admin_api.php?action=list_applications');
+          const data = await res.json();
+
+          if (!data.success || !data.applications || data.applications.length === 0) {
+            container.innerHTML = '<p style="color: #adadb8;">No pending applications.</p>';
+            return;
+          }
+
+          let html = '<table class="user-table"><thead><tr><th>Streamer</th><th>Info</th><th>Reason</th><th>Applied</th><th>Actions</th></tr></thead><tbody>';
+
+          for (const app of data.applications) {
+            const statusClass = app.status === 'pending' ? 'color: #fbbf24;' : (app.status === 'approved' ? 'color: #00d9a5;' : 'color: #ff6b6b;');
+            const appliedAt = app.created_at ? new Date(app.created_at).toLocaleDateString() : '-';
+            const profileImg = app.profile_image_url ? `<img src="${app.profile_image_url}" style="width: 32px; height: 32px; border-radius: 50%; margin-right: 8px; vertical-align: middle;">` : '';
+
+            html += `<tr>
+              <td>
+                ${profileImg}
+                <a href="https://twitch.tv/${app.twitch_login}" target="_blank" style="color: #9147ff; text-decoration: none;">
+                  ${app.twitch_display_name || app.twitch_login}
+                </a>
+              </td>
+              <td style="font-size: 12px; color: #adadb8;">
+                ${app.follower_count > 0 ? app.follower_count + ' followers<br>' : ''}
+                ${app.average_viewers > 0 ? app.average_viewers + ' avg viewers<br>' : ''}
+                ${app.streaming_years > 0 ? app.streaming_years + ' years' : ''}
+              </td>
+              <td style="max-width: 300px; font-size: 13px; color: #efeff1;">${escapeHtml(app.reason) || '-'}</td>
+              <td style="font-size: 12px;">${appliedAt}</td>
+              <td>
+                ${app.status === 'pending' ? `
+                  <button onclick="approveApplication(${app.id}, '${app.twitch_login}')" style="padding: 6px 10px; font-size: 12px; background: #00b894; margin-right: 5px;">Approve</button>
+                  <button onclick="denyApplication(${app.id})" class="btn-danger" style="padding: 6px 10px; font-size: 12px;">Deny</button>
+                ` : `<span style="${statusClass}">${app.status}</span>`}
+              </td>
+            </tr>`;
+          }
+
+          html += '</tbody></table>';
+          container.innerHTML = html;
+        } catch (e) {
+          console.error('Error loading applications:', e);
+          container.innerHTML = '<p style="color: #ff6666;">Error loading applications</p>';
+        }
+      }
+
+      async function approveApplication(id, login) {
+        if (!confirm(`Approve application for ${login}? This will archive their clips.`)) return;
+
+        try {
+          const res = await fetch(`/admin_api.php?action=approve_application&id=${id}`);
+          const data = await res.json();
+
+          if (data.success) {
+            alert('Application approved! Redirecting to archive the streamer...');
+            window.location.href = `/clips_backfill.php?login=${encodeURIComponent(login)}&years=3`;
+          } else {
+            alert('Error: ' + (data.error || 'Failed to approve application'));
+          }
+        } catch (e) {
+          console.error('Error approving application:', e);
+          alert('Error approving application');
+        }
+      }
+
+      async function denyApplication(id) {
+        const notes = prompt('Optional: Add a note explaining why (or leave blank):');
+        if (notes === null) return; // User cancelled
+
+        try {
+          const res = await fetch(`/admin_api.php?action=deny_application&id=${id}&notes=${encodeURIComponent(notes)}`);
+          const data = await res.json();
+
+          if (data.success) {
+            alert('Application denied.');
+            loadApplications();
+          } else {
+            alert('Error: ' + (data.error || 'Failed to deny application'));
+          }
+        } catch (e) {
+          console.error('Error denying application:', e);
+          alert('Error denying application');
+        }
+      }
+
+      // Load applications on page load
+      loadApplications();
+    </script>
+
     <!-- Bot Channel Management -->
     <h2>Bot Channel Management</h2>
     <p style="color: #adadb8;">Manage which Twitch channels the bot joins. Changes take effect within 30 seconds.</p>

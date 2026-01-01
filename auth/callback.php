@@ -88,7 +88,8 @@ if ($pdo && !empty($userInfo['profile_image_url'])) {
 }
 
 // Validate return URL (must be relative or same domain)
-if (!preg_match('#^/[^/]#', $returnTo) && !preg_match('#^https?://' . preg_quote($_SERVER['HTTP_HOST']) . '#', $returnTo)) {
+// Allow root path "/" as valid
+if ($returnTo !== '/' && !preg_match('#^/[^/]#', $returnTo) && !preg_match('#^https?://' . preg_quote($_SERVER['HTTP_HOST']) . '#', $returnTo)) {
   $returnTo = '/';
 }
 

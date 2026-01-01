@@ -357,7 +357,7 @@ $notArchivedRedirect = isset($_GET['not_archived']) && $_GET['not_archived'] ===
     <?php if ($notArchivedRedirect): ?>
     <div class="warning-banner">
         <p><strong>Channel Not Archived</strong>
-        Your channel doesn't have any clips archived yet. Contact the ClipArchive team to get started.</p>
+        Your channel doesn't have any clips archived yet. <a href="/apply.php" style="color: white; text-decoration: underline;">Apply for archiving</a> to get started.</p>
     </div>
     <?php endif; ?>
 
@@ -472,7 +472,7 @@ $notArchivedRedirect = isset($_GET['not_archived']) && $_GET['not_archived'] ===
             <div class="info-box">
                 <h3>How to get access:</h3>
                 <ul>
-                    <li><strong>As a streamer:</strong> Contact the ClipArchive team to get your clips archived</li>
+                    <li><strong>As a streamer:</strong> <a href="/apply.php" style="color: #9147ff;">Apply to get your clips archived</a></li>
                     <li><strong>As a mod:</strong> Ask a streamer to add your Twitch username to their mod list in their dashboard settings</li>
                 </ul>
             </div>

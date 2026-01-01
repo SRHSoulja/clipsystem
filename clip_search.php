@@ -100,15 +100,16 @@ if ($pdo) {
   }
 
   // If no profile image in DB, fetch from Twitch API and cache it
-  if (empty($streamerProfileImage) && $hasArchivedClips) {
+  // This works for both archived and non-archived streamers
+  if (empty($streamerProfileImage)) {
     try {
       $twitchApi = new TwitchAPI();
       if ($twitchApi->isConfigured()) {
         $userInfo = $twitchApi->getUserInfo($login);
         if ($userInfo && !empty($userInfo['profile_image_url'])) {
           $streamerProfileImage = $userInfo['profile_image_url'];
-          // Cache it in the database for next time
-          if ($pdo) {
+          // Cache it in the database for next time (only for archived streamers)
+          if ($pdo && $hasArchivedClips) {
             try {
               $cacheStmt = $pdo->prepare("
                 INSERT INTO channel_settings (login, profile_image_url, profile_image_updated_at)
