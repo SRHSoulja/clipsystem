@@ -746,7 +746,7 @@ if ($currentUser) {
             <div class="card">
                 <h3>Chat Bot</h3>
                 <p style="color: #adadb8; margin-bottom: 12px; font-size: 13px;">
-                    The FloppyJimmie bot enables chat commands like !cclip, !like, !dislike, !cfind and more.
+                    The ClipArchive bot enables chat commands like !cclip, !like, !dislike, !cfind and more.
                 </p>
                 <div id="botStatusContainer" style="display: flex; align-items: center; gap: 16px; margin-bottom: 16px;">
                     <span id="botStatusIndicator" style="width: 12px; height: 12px; border-radius: 50%; background: #666;"></span>

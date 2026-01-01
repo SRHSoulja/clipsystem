@@ -1,5 +1,5 @@
 /**
- * FloppyJimmie Clip System - Twitch Chat Bot
+ * Clip System - Twitch Chat Bot
  *
  * Multi-channel bot - commands in each chat control that channel's clips.
  * Use !cswitch to temporarily control another channel's clips.
@@ -20,7 +20,7 @@ const tmi = require('tmi.js');
 const config = {
   botUsername: process.env.TWITCH_BOT_USERNAME || '',
   oauthToken: process.env.TWITCH_OAUTH_TOKEN || '',
-  channel: process.env.TWITCH_CHANNEL || 'floppyjimmie',
+  channel: process.env.TWITCH_CHANNEL || '',
   apiBaseUrl: (process.env.API_BASE_URL || 'https://clips.gmgnrepeat.com').trim().replace(/\/+$/, ''),
   adminKey: (process.env.ADMIN_KEY || '').trim()
 };
@@ -953,7 +953,7 @@ process.on('uncaughtException', (err) => {
 });
 
 // Connect
-console.log('Starting FloppyJimmie Clip Bot...');
+console.log(`Starting ${config.botUsername || 'Clip'} Bot...`);
 client.connect().catch(err => {
   console.error('Failed to connect:', err);
   process.exit(1);
