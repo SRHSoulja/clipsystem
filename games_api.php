@@ -4,6 +4,7 @@
  *
  * Requires TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET env vars.
  * Caches game names in database for fast lookups.
+ * The 'resolve' action requires super admin OAuth.
  */
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
@@ -14,6 +15,7 @@ header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { exit(0); }
 
 require_once __DIR__ . '/db_config.php';
+require_once __DIR__ . '/includes/twitch_oauth.php';
 
 function json_response($data) {
   echo json_encode($data, JSON_UNESCAPED_SLASHES);
@@ -207,11 +209,10 @@ switch ($action) {
     // Resolve all missing game names for a login (or all logins if not specified)
     $login = isset($_GET['login']) ? strtolower(trim(preg_replace('/[^a-z0-9_]/', '', $_GET['login']))) : '';
 
-    // Auth check - require ADMIN_KEY
-    $key = $_GET['key'] ?? '';
-    $adminKey = getenv('ADMIN_KEY') ?: '';
-    if (!$adminKey || $key !== $adminKey) {
-      json_error("Unauthorized", 401);
+    // Auth check - require super admin OAuth
+    $currentUser = getCurrentUser();
+    if (!$currentUser || !isSuperAdmin()) {
+      json_error("Unauthorized - super admin access required", 401);
     }
 
     // Find all game_ids in clips that aren't in games_cache

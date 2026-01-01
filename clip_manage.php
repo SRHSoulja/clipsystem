@@ -8,7 +8,7 @@
  * - View blocked clips
  * - Block clippers
  *
- * Requires streamer key or mod password for access.
+ * Requires OAuth login (own channel, super admin, or mod).
  */
 header("Access-Control-Allow-Origin: *");
 header("Content-Type: text/html; charset=utf-8");
@@ -19,6 +19,7 @@ header("Content-Security-Policy: upgrade-insecure-requests");
 
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/includes/dashboard_auth.php';
+require_once __DIR__ . '/includes/twitch_oauth.php';
 
 function clean_login($s){
   $s = strtolower(trim((string)$s));
@@ -27,7 +28,6 @@ function clean_login($s){
 }
 
 $login  = clean_login($_GET["login"] ?? "");
-$key    = trim((string)($_GET["key"] ?? ""));
 $query  = trim((string)($_GET["q"] ?? ""));
 $gameId = trim((string)($_GET["game_id"] ?? ""));
 $gameName = trim((string)($_GET["game"] ?? ""));
@@ -37,30 +37,43 @@ $page   = max(1, (int)($_GET["page"] ?? 1));
 $perPage = 50; // Fewer per page for management view
 $showBlocked = isset($_GET["blocked"]) && $_GET["blocked"] === "1";
 
-// Authenticate
+// Authenticate via OAuth (own channel, super admin, or mod)
 $auth = new DashboardAuth();
 $isAuthed = false;
-$ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
+$currentUser = getCurrentUser();
 
-if ($key === $ADMIN_KEY && $ADMIN_KEY !== '') {
-  $isAuthed = true;
-} else if ($key && $login) {
-  // Try as streamer key
-  $result = $auth->authenticateWithKey($key, $login);
-  if ($result && $result['login'] === $login) {
+if ($currentUser) {
+  $oauthUsername = strtolower($currentUser['login']);
+  // Own channel access
+  if ($oauthUsername === $login) {
     $isAuthed = true;
-  } else {
-    // Try as mod password
-    $result = $auth->authenticateWithPassword($login, $key);
-    if ($result && $result['login'] === $login) {
-      $isAuthed = true;
+  }
+  // Super admin access
+  elseif (isSuperAdmin()) {
+    $isAuthed = true;
+  }
+  // Check if user is in channel's mod list
+  else {
+    $pdoCheck = get_db_connection();
+    if ($pdoCheck) {
+      try {
+        $stmt = $pdoCheck->prepare("SELECT 1 FROM channel_mods WHERE channel_login = ? AND mod_username = ?");
+        $stmt->execute([$login, $oauthUsername]);
+        if ($stmt->fetch()) {
+          $isAuthed = true;
+        }
+      } catch (PDOException $e) {
+        // Ignore - table might not exist
+      }
     }
   }
 }
 
 if (!$isAuthed) {
   http_response_code(403);
-  echo '<!DOCTYPE html><html><head><title>Access Denied</title><style>body{font-family:system-ui;background:#0e0e10;color:#efeff1;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;}.box{background:#1f1f23;padding:40px;border-radius:8px;text-align:center;max-width:400px;}.box h1{color:#f87171;margin-top:0;}.box a{color:#9147ff;}</style></head><body><div class="box"><h1>Access Denied</h1><p>You need a valid streamer key to access clip management.</p><p><a href="mod_dashboard.php">Go to Dashboard Login</a></p></div></body></html>';
+  $oauth = new TwitchOAuth();
+  $authUrl = $oauth->getAuthUrl($_SERVER['REQUEST_URI']);
+  echo '<!DOCTYPE html><html><head><title>Access Denied</title><style>body{font-family:system-ui;background:#0e0e10;color:#efeff1;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;}.box{background:#1f1f23;padding:40px;border-radius:8px;text-align:center;max-width:400px;}.box h1{color:#f87171;margin-top:0;}.box a{color:#9147ff;}.btn{display:inline-block;background:#9147ff;color:#fff;padding:12px 24px;border-radius:4px;text-decoration:none;margin-top:15px;}</style></head><body><div class="box"><h1>Access Denied</h1><p>Please log in with Twitch to access clip management.</p><a href="' . htmlspecialchars($authUrl) . '" class="btn">Login with Twitch</a></div></body></html>';
   exit;
 }
 

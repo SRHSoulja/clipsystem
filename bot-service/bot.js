@@ -7,9 +7,11 @@
  * Environment variables (set in Railway):
  *   TWITCH_BOT_USERNAME - Bot's Twitch username
  *   TWITCH_OAUTH_TOKEN  - OAuth token (from twitchtokengenerator.com)
- *   TWITCH_CHANNEL      - Channels to join (comma-separated, e.g., "floppyjimmie,joshbelmar")
+ *   TWITCH_CHANNEL      - Fallback channels (comma-separated) - used if database is empty
  *   API_BASE_URL        - Base URL for PHP endpoints
  *   ADMIN_KEY           - Admin key for mod commands
+ *
+ * Channel management is now dynamic via bot_api.php - no need to update env vars!
  */
 
 const tmi = require('tmi.js');
@@ -38,8 +40,11 @@ const oauthToken = config.oauthToken.startsWith('oauth:')
   ? config.oauthToken
   : `oauth:${config.oauthToken}`;
 
-// Parse channels (supports comma-separated list for joining multiple chats)
-const channels = config.channel.split(',').map(c => c.trim().toLowerCase()).filter(Boolean);
+// Parse fallback channels from env (used if database is empty)
+const fallbackChannels = config.channel.split(',').map(c => c.trim().toLowerCase()).filter(Boolean);
+
+// Track current channels we're joined to
+let currentChannels = new Set();
 
 // Channel overrides - allows mods to control a different channel's clips
 // Key: chat channel (without #), Value: target clip channel
@@ -49,6 +54,11 @@ const channelOverrides = new Map();
 // Key: channel login, Value: { votingEnabled: boolean, voteFeedback: boolean, cachedAt: timestamp }
 const votingSettingsCache = new Map();
 const VOTING_CACHE_TTL = 30000; // 30 second cache
+
+// Cache for command settings - which commands are enabled/disabled per channel
+// Key: channel login, Value: { commands: {cmdName: boolean}, cachedAt: timestamp }
+const commandSettingsCache = new Map();
+const COMMAND_CACHE_TTL = 30000; // 30 second cache
 
 // Fetch voting settings for a channel (returns both voting_enabled and vote_feedback)
 async function getVotingSettings(login) {
@@ -91,6 +101,43 @@ async function isVoteFeedbackEnabled(login) {
   return settings.voteFeedback;
 }
 
+// Fetch command settings for a channel
+async function getCommandSettings(login) {
+  const cached = commandSettingsCache.get(login);
+  const now = Date.now();
+
+  // Return cached value if fresh
+  if (cached && (now - cached.cachedAt) < COMMAND_CACHE_TTL) {
+    return cached.commands;
+  }
+
+  // Fetch from database via API
+  try {
+    const url = `${config.apiBaseUrl}/command_settings.php?login=${encodeURIComponent(login)}`;
+    const res = await fetchWithTimeout(url, 3000);
+    const data = await res.json();
+
+    if (data.success && data.commands) {
+      commandSettingsCache.set(login, { commands: data.commands, cachedAt: now });
+      return data.commands;
+    }
+    return null;
+  } catch (err) {
+    console.error('Error fetching command settings:', err.message);
+    // On error, use cached value if available
+    return cached ? cached.commands : null;
+  }
+}
+
+// Check if a specific command is enabled for a channel
+async function isCommandEnabled(login, commandName) {
+  const commands = await getCommandSettings(login);
+  // If we couldn't fetch settings, allow the command (fail open)
+  if (!commands) return true;
+  // If command not in settings, it's enabled by default
+  return commands[commandName] !== false;
+}
+
 // Helper to get the clip channel for a given chat channel
 // Checks for override first, otherwise uses the chat channel name
 function getClipChannel(chatChannel) {
@@ -100,7 +147,7 @@ function getClipChannel(chatChannel) {
   return channelOverrides.get(cleanChannel) || cleanChannel;
 }
 
-// Create TMI client
+// Create TMI client - starts with no channels, we'll join dynamically
 const client = new tmi.Client({
   options: { debug: false },
   connection: {
@@ -111,8 +158,79 @@ const client = new tmi.Client({
     username: config.botUsername,
     password: oauthToken
   },
-  channels: channels
+  channels: [] // Start empty, sync will join channels
 });
+
+// Channel sync interval (check for changes every 30 seconds)
+const CHANNEL_SYNC_INTERVAL = 30000;
+
+// Fetch channel list from API
+async function fetchChannelList() {
+  try {
+    const url = `${config.apiBaseUrl}/bot_api.php?action=list`;
+    const res = await fetchWithTimeout(url, 5000);
+    const data = await res.json();
+
+    if (data.success && Array.isArray(data.channels)) {
+      return data.channels.map(c => c.toLowerCase());
+    }
+    return null;
+  } catch (err) {
+    console.error('Error fetching channel list:', err.message);
+    return null;
+  }
+}
+
+// Sync channels - join new ones, leave removed ones
+async function syncChannels() {
+  const apiChannels = await fetchChannelList();
+
+  // If API failed or returned empty, use fallback channels on first run
+  let targetChannels;
+  if (apiChannels === null) {
+    // API error - keep current channels
+    console.log('Channel sync: API unavailable, keeping current channels');
+    return;
+  } else if (apiChannels.length === 0 && currentChannels.size === 0) {
+    // No channels in DB and we haven't joined any yet - use fallback
+    console.log('Channel sync: No channels in database, using fallback:', fallbackChannels.join(', '));
+    targetChannels = new Set(fallbackChannels);
+  } else {
+    targetChannels = new Set(apiChannels);
+  }
+
+  // Find channels to join (in target but not current)
+  const toJoin = [...targetChannels].filter(c => !currentChannels.has(c));
+
+  // Find channels to leave (in current but not target)
+  const toLeave = [...currentChannels].filter(c => !targetChannels.has(c));
+
+  // Join new channels
+  for (const channel of toJoin) {
+    try {
+      console.log(`Joining channel: #${channel}`);
+      await client.join(channel);
+      currentChannels.add(channel);
+    } catch (err) {
+      console.error(`Failed to join #${channel}:`, err.message);
+    }
+  }
+
+  // Leave removed channels
+  for (const channel of toLeave) {
+    try {
+      console.log(`Leaving channel: #${channel}`);
+      await client.part(channel);
+      currentChannels.delete(channel);
+    } catch (err) {
+      console.error(`Failed to leave #${channel}:`, err.message);
+    }
+  }
+
+  if (toJoin.length > 0 || toLeave.length > 0) {
+    console.log(`Channel sync complete. Current channels: ${[...currentChannels].join(', ') || '(none)'}`);
+  }
+}
 
 // Rate limiting - prevent spam
 const cooldowns = new Map();
@@ -696,6 +814,14 @@ client.on('message', async (channel, tags, message, self) => {
     return;
   }
 
+  // Check if command is enabled for this channel
+  const clipChannel = getClipChannel(channel);
+  const commandEnabled = await isCommandEnabled(clipChannel, cmdName);
+  if (!commandEnabled) {
+    // Command is disabled for this channel - silently ignore
+    return;
+  }
+
   try {
     const response = await handler(channel, tags, args);
     if (response) {
@@ -707,12 +833,19 @@ client.on('message', async (channel, tags, message, self) => {
 });
 
 // Connection events
-client.on('connected', (addr, port) => {
+client.on('connected', async (addr, port) => {
   console.log(`Connected to Twitch IRC at ${addr}:${port}`);
-  console.log(`Joining channels: ${channels.join(', ')}`);
-  console.log(`Multi-channel mode: commands use clips from the channel they're typed in`);
   console.log(`Bot username: ${config.botUsername}`);
+  console.log(`Multi-channel mode: commands use clips from the channel they're typed in`);
   console.log('Commands: !cclip, !cfind, !like, !dislike, !cplay, !cskip, !cprev, !ccat, !ctop, !cvote, !chud, !cremove, !cadd, !cswitch, !clikeon, !clikeoff, !chelp');
+
+  // Initial channel sync
+  console.log('Fetching channel list from database...');
+  await syncChannels();
+
+  // Start periodic channel sync
+  setInterval(syncChannels, CHANNEL_SYNC_INTERVAL);
+  console.log(`Channel sync interval: ${CHANNEL_SYNC_INTERVAL / 1000}s`);
 });
 
 client.on('join', (channel, username, self) => {

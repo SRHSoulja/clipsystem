@@ -336,6 +336,44 @@ if ($needsContinue) {
 } else {
     echo "\n✅ All clips migrated!\n";
     echo "\n📺 Player URL: $playerUrl\n";
+
+    // Create streamer entry for dashboard access
+    echo "\n🔑 Setting up dashboard access...\n";
+    try {
+        require_once __DIR__ . '/includes/dashboard_auth.php';
+        $auth = new DashboardAuth();
+        $existingKey = $auth->getStreamerKey($login);
+        if (!$existingKey) {
+            $newKey = $auth->createStreamer($login);
+            if ($newKey) {
+                echo "  ✓ Dashboard access created for '$login'\n";
+            }
+        } else {
+            echo "  ✓ Dashboard access already exists\n";
+        }
+    } catch (Exception $e) {
+        echo "  Note: Could not setup dashboard: " . $e->getMessage() . "\n";
+    }
+
+    // Register channel for bot (doesn't auto-join, just enables it when invited)
+    echo "\n🤖 Registering channel for bot commands...\n";
+    try {
+        $stmt = $pdo->prepare("
+            INSERT INTO bot_channels (login, enabled, added_at)
+            VALUES (?, true, CURRENT_TIMESTAMP)
+            ON CONFLICT (login) DO NOTHING
+        ");
+        $stmt->execute([$login]);
+        if ($stmt->rowCount() > 0) {
+            echo "  ✓ Channel registered - bot can now respond to commands when invited\n";
+        } else {
+            echo "  ✓ Channel already registered for bot\n";
+        }
+    } catch (PDOException $e) {
+        echo "  Note: Could not register bot channel: " . $e->getMessage() . "\n";
+    }
+
+    echo "\n💡 The streamer can invite the bot from their dashboard, or you can manage it via Bot Channel Management.\n";
 }
 
 // Get buffered output and send with proper headers

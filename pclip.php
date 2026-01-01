@@ -22,47 +22,45 @@ $runtimeDir = get_runtime_dir();
 
 $login = clean_login($_GET["login"] ?? "");
 $seq   = (int)($_GET["seq"] ?? 0);
-$key   = (string)($_GET["key"] ?? "");
-$useOAuth = isset($_GET["oauth"]) && $_GET["oauth"] === "1";
 
-// Auth: accept OAuth, ADMIN_KEY, streamer_key, or mod_password
-$ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
+// Auth: OAuth only (own channel, super admin, or mod)
 $isAuthorized = false;
-$auth = new DashboardAuth();
+$currentUser = getCurrentUser();
 
-// Check OAuth first
-if ($useOAuth) {
-  $currentUser = getCurrentUser();
-  if ($currentUser && strtolower($currentUser['login']) === $login) {
+if ($currentUser) {
+  $oauthUsername = strtolower($currentUser['login']);
+  // Own channel access
+  if ($oauthUsername === $login) {
     $isAuthorized = true;
   }
-}
-
-// Check ADMIN_KEY
-if (!$isAuthorized && $key === $ADMIN_KEY && $ADMIN_KEY !== '') {
-  $isAuthorized = true;
-}
-
-// Check streamer key or mod password
-if (!$isAuthorized && $key) {
-  // Try as streamer key first
-  $result = $auth->authenticateWithKey($key, $login);
-  if ($result && $result['login'] === $login) {
+  // Super admin access
+  elseif (isSuperAdmin()) {
     $isAuthorized = true;
-  } else {
-    // Try as mod password
-    $result = $auth->authenticateWithPassword($login, $key);
-    if ($result && $result['login'] === $login) {
-      $isAuthorized = true;
+  }
+  // Check if user is in channel's mod list
+  else {
+    $pdoCheck = get_db_connection();
+    if ($pdoCheck) {
+      try {
+        $stmt = $pdoCheck->prepare("SELECT 1 FROM channel_mods WHERE channel_login = ? AND mod_username = ?");
+        $stmt->execute([$login, $oauthUsername]);
+        if ($stmt->fetch()) {
+          $isAuthorized = true;
+        }
+      } catch (PDOException $e) {
+        // Ignore - table might not exist
+      }
     }
   }
 }
 
 if (!$isAuthorized) {
   http_response_code(403);
-  echo "Forbidden";
+  echo "Forbidden - OAuth login required";
   exit;
 }
+
+$auth = new DashboardAuth();
 
 // Get streamer's instance for command isolation
 $instance = $auth->getStreamerInstance($login) ?: "";

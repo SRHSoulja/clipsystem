@@ -163,6 +163,39 @@ function init_votes_tables($pdo) {
         $pdo->exec("CREATE INDEX IF NOT EXISTS idx_channel_mods_channel ON channel_mods(channel_login)");
         $pdo->exec("CREATE INDEX IF NOT EXISTS idx_channel_mods_mod ON channel_mods(mod_username)");
 
+        // Suspicious voters table - tracks flagged accounts and vote activity
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS suspicious_voters (
+                id SERIAL PRIMARY KEY,
+                username VARCHAR(64) NOT NULL UNIQUE,
+                twitch_user_id VARCHAR(64),
+                total_votes INTEGER DEFAULT 0,
+                votes_last_hour INTEGER DEFAULT 0,
+                votes_last_day INTEGER DEFAULT 0,
+                downvote_ratio NUMERIC(5,4) DEFAULT 0,
+                first_vote_at TIMESTAMP,
+                last_vote_at TIMESTAMP,
+                flagged BOOLEAN DEFAULT FALSE,
+                flag_reason TEXT,
+                flagged_at TIMESTAMP,
+                reviewed BOOLEAN DEFAULT FALSE,
+                reviewed_by VARCHAR(64),
+                reviewed_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ");
+        $pdo->exec("CREATE INDEX IF NOT EXISTS idx_suspicious_flagged ON suspicious_voters(flagged, reviewed)");
+        $pdo->exec("CREATE INDEX IF NOT EXISTS idx_suspicious_username ON suspicious_voters(username)");
+
+        // Vote rate limit tracking - for real-time rate limiting
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS vote_rate_limits (
+                username VARCHAR(64) PRIMARY KEY,
+                vote_count INTEGER DEFAULT 0,
+                window_start TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ");
+
         return true;
     } catch (PDOException $e) {
         error_log("Failed to create tables: " . $e->getMessage());

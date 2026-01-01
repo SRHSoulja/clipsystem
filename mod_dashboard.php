@@ -2,7 +2,7 @@
 /**
  * mod_dashboard.php - Mod Dashboard for Playlist Management
  *
- * OAuth or password protected page for mods to:
+ * OAuth protected page for mods to:
  * - Browse all clips with search/filter
  * - Create and manage playlists
  * - Queue playlists for playback
@@ -37,7 +37,6 @@ function clean_login($s){
 }
 
 $login = clean_login($_GET["login"] ?? "");
-$ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
 
 // Check if user is authorized via OAuth for a specific channel
 $oauthAuthorized = false;
@@ -663,24 +662,19 @@ if ($currentUser) {
       <p style="color:#adadb8;margin-bottom:16px;">You don't have mod access to <strong><?= htmlspecialchars($login) ?></strong>.</p>
       <p style="color:#666;font-size:13px;margin-bottom:16px;">The streamer needs to add your username to their mod list in their dashboard settings.</p>
       <a href="/my_channels.php" style="display: block; text-align: center; padding: 12px; background: #3a3a3d; color: white; border-radius: 4px; text-decoration: none; margin-bottom: 12px;">View My Channels</a>
-      <div class="login-divider"><span>or use password</span></div>
       <input type="hidden" id="channelInput" value="<?= htmlspecialchars($login) ?>">
-      <input type="password" id="keyInput" placeholder="Streamer Key or Mod Password" autofocus>
-      <button onclick="login()">Enter</button>
+      <input type="hidden" id="keyInput" value="">
       <?php endif; ?>
 
       <?php else: ?>
-      <!-- Not logged in - show OAuth button and password option -->
+      <!-- Not logged in - show OAuth button -->
       <a href="/auth/login.php?return=<?= urlencode($_SERVER['REQUEST_URI']) ?>" class="oauth-btn">
         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.64 5.93h1.43v4.28h-1.43m3.93-4.28H17v4.28h-1.43M7 2L3.43 5.57v12.86h4.28V22l3.58-3.57h2.85L20.57 12V2m-1.43 9.29l-2.85 2.85h-2.86l-2.5 2.5v-2.5H7.71V3.43h11.43z"/></svg>
         Login with Twitch
       </a>
-
-      <div class="login-divider"><span>or use password</span></div>
-
-      <input type="text" id="channelInput" placeholder="Channel Name" value="<?= htmlspecialchars($login && $login !== 'default' ? $login : '') ?>" autofocus>
-      <input type="password" id="keyInput" placeholder="Streamer Key or Mod Password">
-      <button onclick="login()">Enter</button>
+      <p style="color: #666; font-size: 12px; margin-top: 16px;">Login with your Twitch account to access channels where you're a mod.</p>
+      <input type="hidden" id="channelInput" value="<?= htmlspecialchars($login && $login !== 'default' ? $login : '') ?>">
+      <input type="hidden" id="keyInput" value="">
       <?php endif; ?>
     </div>
   </div>
@@ -885,7 +879,7 @@ if ($currentUser) {
         return;
       }
       if (!adminKey) {
-        document.getElementById('loginError').textContent = 'Please enter a key or password';
+        document.getElementById('loginError').textContent = 'Please enter a streamer key';
         document.getElementById('loginError').style.display = 'block';
         return;
       }
@@ -897,7 +891,7 @@ if ($currentUser) {
 
         if (data.error) {
           document.getElementById('loginError').textContent = data.error === 'forbidden'
-            ? 'Invalid key/password for this channel'
+            ? 'Invalid key for this channel'
             : data.error;
           document.getElementById('loginError').style.display = 'block';
           return;

@@ -120,75 +120,47 @@ function fetchGamesFromTwitch($gameIds, $pdo) {
 }
 
 $login   = clean_login($_GET["login"] ?? "");
-$key     = (string)($_GET["key"] ?? "");
 $page    = max(1, (int)($_GET["page"] ?? 1));
 $perPage = min(500, max(50, (int)($_GET["per_page"] ?? 200)));
 $search  = trim((string)($_GET["q"] ?? ""));
 $gameId  = trim((string)($_GET["game_id"] ?? ""));
 $action  = $_GET["action"] ?? "list";
-$useOAuth = isset($_GET["oauth"]) && $_GET["oauth"] === "1";
 
-// Auth: accept OAuth, ADMIN_KEY, streamer_key, or mod_password
-require_once __DIR__ . '/includes/dashboard_auth.php';
+// Auth: OAuth only (own channel, super admin, or mod)
 require_once __DIR__ . '/includes/twitch_oauth.php';
 
-$ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
 $isAuthorized = false;
+$currentUser = getCurrentUser();
 
-// Check OAuth first
-if ($useOAuth) {
-  $currentUser = getCurrentUser();
-  if ($currentUser) {
-    $oauthUsername = strtolower($currentUser['login']);
-    // Own channel access
-    if ($oauthUsername === $login) {
-      $isAuthorized = true;
-    }
-    // Super admin access
-    elseif (isSuperAdmin()) {
-      $isAuthorized = true;
-    }
-    // Check if user is in channel's mod list
-    else {
-      $pdoCheck = get_db_connection();
-      if ($pdoCheck) {
-        try {
-          $stmt = $pdoCheck->prepare("SELECT 1 FROM channel_mods WHERE channel_login = ? AND mod_username = ?");
-          $stmt->execute([$login, $oauthUsername]);
-          if ($stmt->fetch()) {
-            $isAuthorized = true;
-          }
-        } catch (PDOException $e) {
-          // Ignore - table might not exist
+if ($currentUser) {
+  $oauthUsername = strtolower($currentUser['login']);
+  // Own channel access
+  if ($oauthUsername === $login) {
+    $isAuthorized = true;
+  }
+  // Super admin access
+  elseif (isSuperAdmin()) {
+    $isAuthorized = true;
+  }
+  // Check if user is in channel's mod list
+  else {
+    $pdoCheck = get_db_connection();
+    if ($pdoCheck) {
+      try {
+        $stmt = $pdoCheck->prepare("SELECT 1 FROM channel_mods WHERE channel_login = ? AND mod_username = ?");
+        $stmt->execute([$login, $oauthUsername]);
+        if ($stmt->fetch()) {
+          $isAuthorized = true;
         }
+      } catch (PDOException $e) {
+        // Ignore - table might not exist
       }
     }
   }
 }
 
-// Check ADMIN_KEY
-if (!$isAuthorized && $key === $ADMIN_KEY && $ADMIN_KEY !== '') {
-  $isAuthorized = true;
-}
-
-// Check streamer key or mod password
-if (!$isAuthorized && $key) {
-  $auth = new DashboardAuth();
-  // Try as streamer key first
-  $result = $auth->authenticateWithKey($key, $login);
-  if ($result && $result['login'] === $login) {
-    $isAuthorized = true;
-  } else {
-    // Try as mod password
-    $result = $auth->authenticateWithPassword($login, $key);
-    if ($result && $result['login'] === $login) {
-      $isAuthorized = true;
-    }
-  }
-}
-
 if (!$isAuthorized) {
-  json_error("Forbidden", 403);
+  json_error("Forbidden - OAuth login required", 403);
 }
 
 $pdo = get_db_connection();

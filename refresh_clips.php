@@ -8,34 +8,35 @@
  * 3. Adds only NEW clips with proper seq numbers (max+1, max+2, etc.)
  * 4. Skips any clips that already exist (by clip_id)
  *
- * Usage: refresh_clips.php?login=floppyjimmie&key=ADMIN_KEY
+ * Usage: refresh_clips.php?login=floppyjimmie (requires OAuth login)
  */
 
 header("Content-Type: text/html; charset=utf-8");
 set_time_limit(300);
 
 require_once __DIR__ . '/db_config.php';
+require_once __DIR__ . '/includes/twitch_oauth.php';
 
-// Auth - accept either ADMIN_KEY or streamer's own key
-$ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
-$key = $_GET['key'] ?? '';
 $login = strtolower(trim(preg_replace('/[^a-z0-9_]/', '', $_GET['login'] ?? '')));
 
+// Auth - require OAuth (own channel or super admin)
 $isAuthorized = false;
-if ($key === $ADMIN_KEY && $ADMIN_KEY !== '') {
-    $isAuthorized = true;
-} else {
-    // Check if it's the streamer's own key
-    require_once __DIR__ . '/includes/dashboard_auth.php';
-    $auth = new DashboardAuth();
-    $result = $auth->authenticateWithKey($key, $login);
-    if ($result && $result['login'] === $login) {
+$currentUser = getCurrentUser();
+
+if ($currentUser) {
+    $oauthUsername = strtolower($currentUser['login']);
+    // Own channel access
+    if ($oauthUsername === $login) {
+        $isAuthorized = true;
+    }
+    // Super admin access
+    elseif (isSuperAdmin()) {
         $isAuthorized = true;
     }
 }
 
 if (!$isAuthorized) {
-    die("Forbidden - invalid key");
+    die("Forbidden - OAuth login required (own channel or super admin)");
 }
 
 if (!$login) {

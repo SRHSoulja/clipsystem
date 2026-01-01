@@ -32,13 +32,15 @@ $query  = trim((string)($_GET["q"] ?? ""));
 $gameId = trim((string)($_GET["game_id"] ?? ""));
 $gameName = trim((string)($_GET["game"] ?? "")); // Search by game name
 $clipper = trim((string)($_GET["clipper"] ?? ""));
-$sort   = $_GET["sort"] ?? "views"; // views, date, title
+$sort   = $_GET["sort"] ?? "views"; // views, date, title, trending
 $page   = max(1, (int)($_GET["page"] ?? 1));
-$perPage = 100;
+$perPage = max(25, min(200, (int)($_GET["per_page"] ?? 100))); // 25-200, default 100
 $dateRange = $_GET["range"] ?? "year"; // Date range for live mode
+$minDuration = $_GET["duration"] ?? ""; // short, medium, long, or empty for all
+$minViews = max(0, (int)($_GET["min_views"] ?? 0)); // Minimum view count filter
 
 // Validate sort option
-$validSorts = ['views', 'date', 'oldest', 'title', 'titlez'];
+$validSorts = ['views', 'date', 'oldest', 'title', 'titlez', 'trending'];
 if (!in_array($sort, $validSorts)) {
   $sort = 'views';
 }
@@ -47,6 +49,12 @@ if (!in_array($sort, $validSorts)) {
 $validRanges = ['week', 'month', '3months', '6months', 'year', '2years', '3years', 'all'];
 if (!in_array($dateRange, $validRanges)) {
   $dateRange = 'year';
+}
+
+// Validate duration filter
+$validDurations = ['', 'short', 'medium', 'long'];
+if (!in_array($minDuration, $validDurations)) {
+  $minDuration = '';
 }
 
 // Split query into words for multi-word search
@@ -198,6 +206,21 @@ if ($hasArchivedClips && $pdo) {
       $params[] = '%' . $clipper . '%';
     }
 
+    // Duration filter
+    if ($minDuration === 'short') {
+      $whereClauses[] = "duration < 30";
+    } elseif ($minDuration === 'medium') {
+      $whereClauses[] = "duration >= 30 AND duration <= 60";
+    } elseif ($minDuration === 'long') {
+      $whereClauses[] = "duration > 60";
+    }
+
+    // Minimum views filter
+    if ($minViews > 0) {
+      $whereClauses[] = "view_count >= ?";
+      $params[] = $minViews;
+    }
+
     // Check if query is a clip number (all digits)
     $isClipNumber = $query && preg_match('/^\d+$/', $query);
 
@@ -230,6 +253,7 @@ if ($hasArchivedClips && $pdo) {
       'oldest' => 'created_at ASC',
       'title' => 'title ASC',
       'titlez' => 'title DESC',
+      'trending' => 'view_count::float / GREATEST(1, EXTRACT(EPOCH FROM (NOW() - created_at)) / 86400) DESC',
       default => 'view_count DESC',
     };
 
@@ -379,6 +403,26 @@ if ($hasArchivedClips && $pdo) {
         $allLiveClips = array_values($allLiveClips);
       }
 
+      // Apply duration filter
+      if ($minDuration) {
+        $allLiveClips = array_filter($allLiveClips, function($clip) use ($minDuration) {
+          $dur = (float)($clip['duration'] ?? 0);
+          if ($minDuration === 'short') return $dur < 30;
+          if ($minDuration === 'medium') return $dur >= 30 && $dur <= 60;
+          if ($minDuration === 'long') return $dur > 60;
+          return true;
+        });
+        $allLiveClips = array_values($allLiveClips);
+      }
+
+      // Apply minimum views filter
+      if ($minViews > 0) {
+        $allLiveClips = array_filter($allLiveClips, function($clip) use ($minViews) {
+          return ($clip['view_count'] ?? 0) >= $minViews;
+        });
+        $allLiveClips = array_values($allLiveClips);
+      }
+
       // Sort clips
       usort($allLiveClips, function($a, $b) use ($sort) {
         switch ($sort) {
@@ -390,6 +434,14 @@ if ($hasArchivedClips && $pdo) {
             return strcasecmp($a['title'] ?? '', $b['title'] ?? '');
           case 'titlez':
             return strcasecmp($b['title'] ?? '', $a['title'] ?? '');
+          case 'trending':
+            // Trending = views per day (higher = more trending)
+            $nowTs = time();
+            $ageA = max(1, ($nowTs - strtotime($a['created_at'] ?? 'now')) / 86400);
+            $ageB = max(1, ($nowTs - strtotime($b['created_at'] ?? 'now')) / 86400);
+            $trendA = ($a['view_count'] ?? 0) / $ageA;
+            $trendB = ($b['view_count'] ?? 0) / $ageB;
+            return $trendB <=> $trendA;
           default: // views
             return ($b['view_count'] ?? 0) - ($a['view_count'] ?? 0);
         }
@@ -916,6 +968,37 @@ if ($hasArchivedClips && $pdo) {
       background: #772ce8;
     }
 
+    /* Load More button */
+    .load-more-container {
+      display: flex;
+      justify-content: center;
+      padding: 30px 20px;
+    }
+    .load-more-btn {
+      padding: 14px 40px;
+      border: 2px solid #9147ff;
+      border-radius: 8px;
+      background: transparent;
+      color: #9147ff;
+      font-weight: 600;
+      font-size: 15px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .load-more-btn:hover {
+      background: #9147ff;
+      color: white;
+    }
+    .load-more-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .load-more-btn.loading {
+      background: #1f1f23;
+      border-color: #3d3d42;
+      color: #adadb8;
+    }
+
     /* Mobile adjustments */
     @media (max-width: 768px) {
       body { padding: 12px; }
@@ -984,10 +1067,43 @@ if ($hasArchivedClips && $pdo) {
         <label>Sort By</label>
         <select name="sort">
           <option value="views" <?= $sort === 'views' ? 'selected' : '' ?>>Most Viewed</option>
+          <option value="trending" <?= $sort === 'trending' ? 'selected' : '' ?>>Trending</option>
           <option value="date" <?= $sort === 'date' ? 'selected' : '' ?>>Newest First</option>
           <option value="oldest" <?= $sort === 'oldest' ? 'selected' : '' ?>>Oldest First</option>
           <option value="title" <?= $sort === 'title' ? 'selected' : '' ?>>Title (A-Z)</option>
           <option value="titlez" <?= $sort === 'titlez' ? 'selected' : '' ?>>Title (Z-A)</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label>Duration</label>
+        <select name="duration">
+          <option value="" <?= $minDuration === '' ? 'selected' : '' ?>>Any Length</option>
+          <option value="short" <?= $minDuration === 'short' ? 'selected' : '' ?>>Short (&lt;30s)</option>
+          <option value="medium" <?= $minDuration === 'medium' ? 'selected' : '' ?>>Medium (30-60s)</option>
+          <option value="long" <?= $minDuration === 'long' ? 'selected' : '' ?>>Long (&gt;60s)</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label>Min Views</label>
+        <select name="min_views">
+          <option value="0" <?= $minViews === 0 ? 'selected' : '' ?>>Any</option>
+          <option value="100" <?= $minViews === 100 ? 'selected' : '' ?>>100+</option>
+          <option value="500" <?= $minViews === 500 ? 'selected' : '' ?>>500+</option>
+          <option value="1000" <?= $minViews === 1000 ? 'selected' : '' ?>>1K+</option>
+          <option value="5000" <?= $minViews === 5000 ? 'selected' : '' ?>>5K+</option>
+          <option value="10000" <?= $minViews === 10000 ? 'selected' : '' ?>>10K+</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label>Per Page</label>
+        <select name="per_page">
+          <option value="25" <?= $perPage === 25 ? 'selected' : '' ?>>25</option>
+          <option value="50" <?= $perPage === 50 ? 'selected' : '' ?>>50</option>
+          <option value="100" <?= $perPage === 100 ? 'selected' : '' ?>>100</option>
+          <option value="200" <?= $perPage === 200 ? 'selected' : '' ?>>200</option>
         </select>
       </div>
 
@@ -1008,38 +1124,67 @@ if ($hasArchivedClips && $pdo) {
       <?php endif; ?>
 
       <button type="submit" class="filter-btn">Search</button>
-      <?php if ($query || $gameId || $gameName || $clipper): ?>
+      <?php if ($query || $gameId || $gameName || $clipper || $minDuration || $minViews > 0): ?>
       <a href="/search/<?= htmlspecialchars(urlencode($login)) ?>" class="clear-btn">Clear All</a>
       <?php endif; ?>
     </form>
 
     <?php
-      $sortParam = ($sort !== 'views') ? '&sort=' . htmlspecialchars($sort) : '';
+      // Build base params for filter tag removal links
+      $baseFilterParams = [];
+      if ($query) $baseFilterParams['q'] = $query;
+      if ($clipper) $baseFilterParams['clipper'] = $clipper;
+      if ($gameId) $baseFilterParams['game_id'] = $gameId;
+      if ($gameName && !$gameId) $baseFilterParams['game'] = $gameName;
+      if ($minDuration) $baseFilterParams['duration'] = $minDuration;
+      if ($minViews > 0) $baseFilterParams['min_views'] = $minViews;
+      if ($sort !== 'views') $baseFilterParams['sort'] = $sort;
+      if ($perPage !== 100) $baseFilterParams['per_page'] = $perPage;
+
+      function buildFilterUrl($login, $params, $exclude = []) {
+        $filtered = array_diff_key($params, array_flip($exclude));
+        $query = http_build_query($filtered);
+        return '/search/' . htmlspecialchars(urlencode($login)) . ($query ? '?' . $query : '');
+      }
+
+      $durationLabels = ['short' => 'Short (<30s)', 'medium' => 'Medium (30-60s)', 'long' => 'Long (>60s)'];
     ?>
-    <?php if ($query || $gameId || $gameName || $clipper): ?>
+    <?php if ($query || $gameId || $gameName || $clipper || $minDuration || $minViews > 0): ?>
     <div class="active-filters">
       <?php if ($query): ?>
       <span class="filter-tag">
         Search: "<?= htmlspecialchars($query) ?>"
-        <a href="/search/<?= htmlspecialchars(urlencode($login)) ?>?<?= $gameId ? 'game_id=' . htmlspecialchars($gameId) . '&' : '' ?><?= $gameName ? 'game=' . htmlspecialchars($gameName) . '&' : '' ?><?= $clipper ? 'clipper=' . htmlspecialchars($clipper) . '&' : '' ?><?= $sortParam ? substr($sortParam, 1) : '' ?>">&times;</a>
+        <a href="<?= buildFilterUrl($login, $baseFilterParams, ['q']) ?>">&times;</a>
       </span>
       <?php endif; ?>
       <?php if ($clipper): ?>
       <span class="filter-tag">
         Clipper: <?= htmlspecialchars($clipper) ?>
-        <a href="/search/<?= htmlspecialchars(urlencode($login)) ?>?<?= $query ? 'q=' . htmlspecialchars($query) . '&' : '' ?><?= $gameId ? 'game_id=' . htmlspecialchars($gameId) . '&' : '' ?><?= $gameName ? 'game=' . htmlspecialchars($gameName) . '&' : '' ?><?= $sortParam ? substr($sortParam, 1) : '' ?>">&times;</a>
+        <a href="<?= buildFilterUrl($login, $baseFilterParams, ['clipper']) ?>">&times;</a>
       </span>
       <?php endif; ?>
       <?php if ($gameId): ?>
       <span class="filter-tag">
         Category: <?= htmlspecialchars($currentGameName) ?>
-        <a href="/search/<?= htmlspecialchars(urlencode($login)) ?>?<?= $query ? 'q=' . htmlspecialchars($query) . '&' : '' ?><?= $clipper ? 'clipper=' . htmlspecialchars($clipper) . '&' : '' ?><?= $sortParam ? substr($sortParam, 1) : '' ?>">&times;</a>
+        <a href="<?= buildFilterUrl($login, $baseFilterParams, ['game_id']) ?>">&times;</a>
       </span>
       <?php endif; ?>
       <?php if ($gameName && !$gameId): ?>
       <span class="filter-tag">
         Category: "<?= htmlspecialchars($gameName) ?>"
-        <a href="/search/<?= htmlspecialchars(urlencode($login)) ?>?<?= $query ? 'q=' . htmlspecialchars($query) . '&' : '' ?><?= $clipper ? 'clipper=' . htmlspecialchars($clipper) . '&' : '' ?><?= $sortParam ? substr($sortParam, 1) : '' ?>">&times;</a>
+        <a href="<?= buildFilterUrl($login, $baseFilterParams, ['game']) ?>">&times;</a>
+      </span>
+      <?php endif; ?>
+      <?php if ($minDuration): ?>
+      <span class="filter-tag">
+        Duration: <?= $durationLabels[$minDuration] ?? $minDuration ?>
+        <a href="<?= buildFilterUrl($login, $baseFilterParams, ['duration']) ?>">&times;</a>
+      </span>
+      <?php endif; ?>
+      <?php if ($minViews > 0): ?>
+      <span class="filter-tag">
+        Min Views: <?= number_format($minViews) ?>+
+        <a href="<?= buildFilterUrl($login, $baseFilterParams, ['min_views']) ?>">&times;</a>
       </span>
       <?php endif; ?>
     </div>
@@ -1049,7 +1194,7 @@ if ($hasArchivedClips && $pdo) {
     <div class="info-msg" style="background: linear-gradient(90deg, rgba(145,71,255,0.2), rgba(145,71,255,0.1)); border-color: #9147ff;">
       <strong>Live from Twitch</strong> - Showing clips from <?= $dateRange === 'all' ? 'all time' : 'the last ' . str_replace(['week', 'month', '3months', '6months', 'year', '2years', '3years'], ['week', 'month', '3 months', '6 months', 'year', '2 years', '3 years'], $dateRange) ?>.
       <span style="color: #adadb8; font-size: 12px; display: block; margin-top: 5px;">
-        Fetched ~<?= $totalCount ?> clips. Use Date Range filter to search different time periods. No voting or clip numbers in live mode.
+        Showing <span id="liveClipCount"><?= $totalCount ?></span> clips. Use filters above to narrow results. No voting or clip numbers in live mode.
       </span>
     </div>
     <?php elseif ($liveError): ?>
@@ -1161,6 +1306,15 @@ if ($hasArchivedClips && $pdo) {
       <?php endforeach; ?>
     </div>
 
+    <?php if ($isLiveMode && $totalCount >= 500): ?>
+    <!-- Load More for live mode (Twitch API returns more clips) -->
+    <div class="load-more-container">
+      <button type="button" class="load-more-btn" id="loadMoreBtn" onclick="loadMoreClips()">
+        Load More Clips
+      </button>
+    </div>
+    <?php endif; ?>
+
     <?php if ($totalPages > 1): ?>
     <div class="pagination">
       <?php
@@ -1170,6 +1324,9 @@ if ($hasArchivedClips && $pdo) {
         if ($gameId) $baseParams['game_id'] = $gameId;
         if ($gameName) $baseParams['game'] = $gameName;
         if ($sort !== 'views') $baseParams['sort'] = $sort;
+        if ($minDuration) $baseParams['duration'] = $minDuration;
+        if ($minViews > 0) $baseParams['min_views'] = $minViews;
+        if ($perPage !== 100) $baseParams['per_page'] = $perPage;
         if ($isLiveMode && $dateRange !== 'year') $baseParams['range'] = $dateRange;
 
         function pageUrl($params, $pageNum) {
@@ -1316,6 +1473,199 @@ if ($hasArchivedClips && $pdo) {
 
     // Load initial votes
     loadVotes();
+  </script>
+  <?php endif; ?>
+
+  <?php if ($isLiveMode && !$liveError && !empty($matches)): ?>
+  <script>
+    // Live mode: Load More functionality
+    const liveConfig = {
+      streamer: <?= json_encode($login) ?>,
+      dateRange: <?= json_encode($dateRange) ?>,
+      query: <?= json_encode($query) ?>,
+      clipper: <?= json_encode($clipper) ?>,
+      gameId: <?= json_encode($gameId) ?>,
+      minDuration: <?= json_encode($minDuration) ?>,
+      minViews: <?= (int)$minViews ?>,
+      sort: <?= json_encode($sort) ?>,
+      cursor: null, // Will be set when we start loading more
+      loadedClips: new Set(), // Track clip IDs to avoid duplicates
+      totalDisplayed: <?= $totalCount ?>
+    };
+
+    // Track already-loaded clip IDs
+    document.querySelectorAll('.clip-card .clip-thumb').forEach(el => {
+      const url = el.href;
+      const clipId = url.split('/').pop();
+      if (clipId) liveConfig.loadedClips.add(clipId);
+    });
+
+    function formatDuration(seconds) {
+      const mins = Math.floor(seconds / 60);
+      const secs = Math.floor(seconds % 60);
+      return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    function formatDate(dateStr) {
+      const date = new Date(dateStr);
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
+    function formatViews(num) {
+      return num.toLocaleString();
+    }
+
+    function createClipCard(clip) {
+      const thumbUrl = clip.thumbnail_url || `https://clips-media-assets2.twitch.tv/${clip.clip_id}-preview-480x272.jpg`;
+      const twitchUrl = `https://clips.twitch.tv/${encodeURIComponent(clip.clip_id)}`;
+      const duration = clip.duration ? formatDuration(clip.duration) : '';
+
+      return `
+        <div class="clip-card">
+          <a href="${twitchUrl}" target="_blank" class="clip-thumb">
+            <img src="${thumbUrl}" alt="" loading="lazy"
+                 onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 480 272%22><rect fill=%22%2326262c%22 width=%22480%22 height=%22272%22/><text x=%22240%22 y=%22140%22 fill=%22%23666%22 text-anchor=%22middle%22>No Preview</text></svg>'">
+            ${duration ? `<span class="clip-duration">${duration}</span>` : ''}
+            <span class="play-overlay"></span>
+          </a>
+          <div class="clip-info">
+            <div class="clip-title">${clip.title ? clip.title.replace(/</g, '&lt;').replace(/>/g, '&gt;') : '(no title)'}</div>
+            <div class="clip-meta">
+              <span class="clip-views">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+                ${formatViews(clip.view_count || 0)}
+              </span>
+              ${clip.created_at ? `<span class="clip-date">${formatDate(clip.created_at)}</span>` : ''}
+            </div>
+            <div class="clip-meta">
+              ${clip.creator_name ? `<a href="/search/${encodeURIComponent(liveConfig.streamer)}?clipper=${encodeURIComponent(clip.creator_name)}" class="clip-clipper" title="View all clips by ${clip.creator_name.replace(/"/g, '&quot;')}">&#9986; ${clip.creator_name.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</a>` : ''}
+            </div>
+            ${clip.game_name ? `<div class="clip-game-row"><span class="clip-game" title="${clip.game_name.replace(/"/g, '&quot;')}">${clip.game_name.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span></div>` : ''}
+          </div>
+        </div>
+      `;
+    }
+
+    function filterClip(clip) {
+      // Skip duplicates
+      if (liveConfig.loadedClips.has(clip.clip_id)) return false;
+
+      // Apply title search filter
+      if (liveConfig.query) {
+        const words = liveConfig.query.toLowerCase().split(/\s+/).filter(w => w.length >= 2);
+        const title = (clip.title || '').toLowerCase();
+        for (const word of words) {
+          if (!title.includes(word)) return false;
+        }
+      }
+
+      // Apply clipper filter
+      if (liveConfig.clipper) {
+        if (!(clip.creator_name || '').toLowerCase().includes(liveConfig.clipper.toLowerCase())) return false;
+      }
+
+      // Apply game filter
+      if (liveConfig.gameId && clip.game_id !== liveConfig.gameId) return false;
+
+      // Apply duration filter
+      if (liveConfig.minDuration) {
+        const dur = clip.duration || 0;
+        if (liveConfig.minDuration === 'short' && dur >= 30) return false;
+        if (liveConfig.minDuration === 'medium' && (dur < 30 || dur > 60)) return false;
+        if (liveConfig.minDuration === 'long' && dur <= 60) return false;
+      }
+
+      // Apply min views filter
+      if (liveConfig.minViews > 0 && (clip.view_count || 0) < liveConfig.minViews) return false;
+
+      return true;
+    }
+
+    function sortClips(clips) {
+      const sort = liveConfig.sort;
+      return clips.sort((a, b) => {
+        switch (sort) {
+          case 'date':
+            return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+          case 'oldest':
+            return new Date(a.created_at || 0) - new Date(b.created_at || 0);
+          case 'title':
+            return (a.title || '').localeCompare(b.title || '');
+          case 'titlez':
+            return (b.title || '').localeCompare(a.title || '');
+          case 'trending':
+            const now = Date.now();
+            const ageA = Math.max(1, (now - new Date(a.created_at || now)) / 86400000);
+            const ageB = Math.max(1, (now - new Date(b.created_at || now)) / 86400000);
+            return ((b.view_count || 0) / ageB) - ((a.view_count || 0) / ageA);
+          default: // views
+            return (b.view_count || 0) - (a.view_count || 0);
+        }
+      });
+    }
+
+    async function loadMoreClips() {
+      const btn = document.getElementById('loadMoreBtn');
+      if (!btn) return;
+
+      btn.disabled = true;
+      btn.classList.add('loading');
+      btn.textContent = 'Loading...';
+
+      try {
+        const params = new URLSearchParams({
+          login: liveConfig.streamer,
+          range: liveConfig.dateRange,
+          batch: 100
+        });
+        if (liveConfig.cursor) params.set('cursor', liveConfig.cursor);
+
+        const response = await fetch(`/api/live_clips.php?${params}`);
+        const data = await response.json();
+
+        if (!data.success) {
+          throw new Error(data.error || 'Failed to load clips');
+        }
+
+        // Filter and sort new clips
+        const newClips = data.clips.filter(filterClip);
+        sortClips(newClips);
+
+        // Add to grid
+        const grid = document.querySelector('.results-grid');
+        if (grid && newClips.length > 0) {
+          for (const clip of newClips) {
+            liveConfig.loadedClips.add(clip.clip_id);
+            grid.insertAdjacentHTML('beforeend', createClipCard(clip));
+            liveConfig.totalDisplayed++;
+          }
+
+          // Update counter
+          const counter = document.getElementById('liveClipCount');
+          if (counter) counter.textContent = liveConfig.totalDisplayed;
+        }
+
+        // Update cursor for next batch
+        liveConfig.cursor = data.cursor;
+
+        // Hide button if no more clips
+        if (!data.has_more) {
+          btn.textContent = 'All Clips Loaded';
+          btn.disabled = true;
+          btn.classList.remove('loading');
+        } else {
+          btn.disabled = false;
+          btn.classList.remove('loading');
+          btn.textContent = 'Load More Clips';
+        }
+
+      } catch (error) {
+        console.error('Load more failed:', error);
+        btn.disabled = false;
+        btn.classList.remove('loading');
+        btn.textContent = 'Error - Try Again';
+      }
+    }
   </script>
   <?php endif; ?>
 </body>

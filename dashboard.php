@@ -3,7 +3,7 @@
  * dashboard.php - Streamer Dashboard
  *
  * Self-service dashboard for streamers to manage their clip reel.
- * Access: dashboard.php?key=STREAMER_KEY or dashboard.php?login=username (+ mod password)
+ * Access: dashboard.php?key=STREAMER_KEY or via Twitch OAuth
  * Super admins (thearsondragon, cliparchive) can access any channel via OAuth
  */
 header("Content-Type: text/html; charset=utf-8");
@@ -273,6 +273,43 @@ if ($currentUser) {
             font-weight: bold;
         }
 
+        /* Slider styling */
+        .slider-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .slider-group label {
+            font-size: 14px;
+            color: #adadb8;
+        }
+        input[type="range"] {
+            flex: 1;
+            -webkit-appearance: none;
+            appearance: none;
+            height: 6px;
+            background: #3a3a3d;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            background: #9147ff;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        input[type="range"]::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            background: #9147ff;
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+        }
+
         /* Toggle Switch */
         .toggle-switch {
             position: relative;
@@ -302,6 +339,16 @@ if ($currentUser) {
         }
         .toggle-switch input:checked + .toggle-slider { background: #9147ff; }
         .toggle-switch input:checked + .toggle-slider:before { transform: translateX(24px); }
+        .toggle-switch input:disabled + .toggle-slider { opacity: 0.5; cursor: not-allowed; }
+        .toggle-switch.saving .toggle-slider:before {
+            background: linear-gradient(90deg, #fff, #ccc, #fff);
+            background-size: 200% 100%;
+            animation: shimmer 1s infinite;
+        }
+        @keyframes shimmer {
+            0% { background-position: 100% 0; }
+            100% { background-position: -100% 0; }
+        }
 
         /* URL Box */
         .url-box {
@@ -315,6 +362,62 @@ if ($currentUser) {
         }
         .url-box:hover { background: #1a1a1d; }
 
+        /* Command Toggles */
+        .command-group {
+            background: #26262c;
+            border-radius: 8px;
+            padding: 16px;
+        }
+        .command-toggle {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 0;
+            border-bottom: 1px solid #3a3a3d;
+        }
+        .command-toggle:last-child { border-bottom: none; }
+        .command-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .command-info .command-name {
+            color: #00ff7f;
+            font-family: monospace;
+            font-size: 14px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .command-info .command-desc {
+            color: #adadb8;
+            font-size: 12px;
+        }
+
+        /* Role Tags */
+        .role-tag {
+            font-size: 9px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .role-tag.viewer {
+            background: #9147ff;
+            color: white;
+        }
+        .role-tag.mod {
+            background: #00ad03;
+            color: white;
+        }
+        .role-tag.vip {
+            background: #e91916;
+            color: white;
+        }
+
         /* Success/Error Messages */
         .message {
             padding: 12px 16px;
@@ -323,9 +426,226 @@ if ($currentUser) {
         }
         .message.success { background: rgba(0, 173, 3, 0.2); border: 1px solid #00ad03; }
         .message.error { background: rgba(235, 4, 0, 0.2); border: 1px solid #eb0400; }
+
+        /* Toast Notifications */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: none;
+        }
+        .toast {
+            background: #18181b;
+            border: 1px solid #3a3a3d;
+            border-radius: 8px;
+            padding: 12px 16px;
+            min-width: 280px;
+            max-width: 400px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            transform: translateX(120%);
+            transition: transform 0.3s ease;
+            pointer-events: auto;
+        }
+        .toast.show {
+            transform: translateX(0);
+        }
+        .toast.success {
+            border-color: #00ad03;
+            background: linear-gradient(135deg, #18181b 0%, rgba(0, 173, 3, 0.1) 100%);
+        }
+        .toast.error {
+            border-color: #eb0400;
+            background: linear-gradient(135deg, #18181b 0%, rgba(235, 4, 0, 0.1) 100%);
+        }
+        .toast.info {
+            border-color: #9147ff;
+            background: linear-gradient(135deg, #18181b 0%, rgba(145, 71, 255, 0.1) 100%);
+        }
+        .toast-icon {
+            font-size: 20px;
+            flex-shrink: 0;
+        }
+        .toast-content {
+            flex: 1;
+        }
+        .toast-title {
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 2px;
+        }
+        .toast-message {
+            font-size: 13px;
+            color: #adadb8;
+        }
+        .toast-close {
+            background: none;
+            border: none;
+            color: #666;
+            cursor: pointer;
+            padding: 4px;
+            font-size: 18px;
+            line-height: 1;
+        }
+        .toast-close:hover {
+            color: #efeff1;
+        }
+
+        /* Loading spinner for buttons */
+        .btn.loading {
+            position: relative;
+            color: transparent !important;
+            pointer-events: none;
+        }
+        .btn.loading::after {
+            content: '';
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            top: 50%;
+            left: 50%;
+            margin-left: -8px;
+            margin-top: -8px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Mobile Responsive Styles */
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                gap: 12px;
+                text-align: center;
+                padding: 12px 16px;
+            }
+            .header .user-info {
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+            .tabs {
+                overflow-x: auto;
+                padding: 0 8px;
+                -webkit-overflow-scrolling: touch;
+            }
+            .tab {
+                padding: 12px 16px;
+                white-space: nowrap;
+                font-size: 14px;
+            }
+            .tab-content {
+                padding: 16px;
+            }
+            .card {
+                padding: 16px;
+            }
+            .position-picker {
+                gap: 8px;
+            }
+            .position-btn {
+                width: 50px;
+                height: 40px;
+                font-size: 11px;
+            }
+            .command-toggle {
+                flex-wrap: wrap;
+            }
+            .command-info {
+                flex: 1;
+                min-width: 150px;
+            }
+            .command-info .command-name {
+                flex-wrap: wrap;
+            }
+            .url-box {
+                font-size: 11px;
+                padding: 10px;
+            }
+            .tags {
+                gap: 6px;
+            }
+            .tag {
+                font-size: 12px;
+                padding: 4px 10px;
+            }
+            /* Super admin quick access */
+            .admin-quick-access {
+                flex-wrap: wrap !important;
+            }
+            .admin-quick-access input {
+                min-width: 150px;
+            }
+            /* Stats grid */
+            .stats-grid {
+                grid-template-columns: 1fr !important;
+            }
+            /* Toast positioning on mobile */
+            .toast-container {
+                top: auto;
+                bottom: 20px;
+                right: 10px;
+                left: 10px;
+            }
+            .toast {
+                min-width: auto;
+                max-width: none;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .header h1 {
+                font-size: 18px;
+            }
+            .role-badge {
+                font-size: 10px;
+                padding: 3px 6px;
+            }
+            .tab {
+                padding: 10px 12px;
+                font-size: 13px;
+            }
+            .card h3 {
+                font-size: 15px;
+            }
+            .btn {
+                padding: 10px 16px;
+                font-size: 13px;
+            }
+            .toggle-switch {
+                width: 44px;
+                height: 24px;
+            }
+            .toggle-slider:before {
+                height: 18px;
+                width: 18px;
+            }
+            .toggle-switch input:checked + .toggle-slider:before {
+                transform: translateX(20px);
+            }
+            .form-group label {
+                font-size: 13px;
+            }
+            input[type="text"], select {
+                padding: 10px;
+                font-size: 14px;
+            }
+        }
     </style>
 </head>
 <body>
+    <!-- Toast Notification Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
     <div class="login-screen" id="loginScreen">
         <div class="login-box">
             <h1>Streamer Dashboard</h1>
@@ -372,6 +692,7 @@ if ($currentUser) {
 
         <div class="tabs">
             <div class="tab active" data-tab="settings">Settings</div>
+            <div class="tab" data-tab="weighting">Clip Weighting</div>
             <div class="tab" data-tab="clips">Clip Management</div>
             <div class="tab" data-tab="playlists">Playlists</div>
             <div class="tab" data-tab="stats">Stats</div>
@@ -420,11 +741,188 @@ if ($currentUser) {
                 </div>
             </div>
 
+            <div class="card" id="commandSettingsCard">
+                <h3>Bot Commands</h3>
+                <p style="color: #adadb8; margin-bottom: 16px;">Enable or disable individual chat commands for your channel.</p>
+
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px;" id="commandToggles">
+                    <!-- Viewer Commands -->
+                    <div class="command-group">
+                        <h4 style="color: #9147ff; font-size: 13px; margin-bottom: 8px; text-transform: uppercase;">Everyone</h4>
+                        <div class="command-toggle" data-cmd="cclip">
+                            <label class="toggle-switch">
+                                <input type="checkbox" checked onchange="toggleCommand('cclip', this.checked)">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <div class="command-info">
+                                <span class="command-name">!cclip <span class="role-tag viewer">Everyone</span></span>
+                                <span class="command-desc">Show current/specific clip info</span>
+                            </div>
+                        </div>
+                        <div class="command-toggle" data-cmd="cfind">
+                            <label class="toggle-switch">
+                                <input type="checkbox" checked onchange="toggleCommand('cfind', this.checked)">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <div class="command-info">
+                                <span class="command-name">!cfind <span class="role-tag viewer">Everyone</span></span>
+                                <span class="command-desc">Search clips by title/game</span>
+                            </div>
+                        </div>
+                        <div class="command-toggle" data-cmd="like">
+                            <label class="toggle-switch">
+                                <input type="checkbox" checked onchange="toggleCommand('like', this.checked)">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <div class="command-info">
+                                <span class="command-name">!like <span class="role-tag viewer">Everyone</span></span>
+                                <span class="command-desc">Upvote a clip</span>
+                            </div>
+                        </div>
+                        <div class="command-toggle" data-cmd="dislike">
+                            <label class="toggle-switch">
+                                <input type="checkbox" checked onchange="toggleCommand('dislike', this.checked)">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <div class="command-info">
+                                <span class="command-name">!dislike <span class="role-tag viewer">Everyone</span></span>
+                                <span class="command-desc">Downvote a clip</span>
+                            </div>
+                        </div>
+                        <div class="command-toggle" data-cmd="cvote">
+                            <label class="toggle-switch">
+                                <input type="checkbox" checked onchange="toggleCommand('cvote', this.checked)">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <div class="command-info">
+                                <span class="command-name">!cvote <span class="role-tag viewer">Everyone</span></span>
+                                <span class="command-desc">Clear own votes</span>
+                            </div>
+                        </div>
+                        <div class="command-toggle" data-cmd="chelp">
+                            <label class="toggle-switch">
+                                <input type="checkbox" checked onchange="toggleCommand('chelp', this.checked)">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <div class="command-info">
+                                <span class="command-name">!chelp <span class="role-tag viewer">Everyone</span></span>
+                                <span class="command-desc">Show available commands</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Mod Commands -->
+                    <div class="command-group">
+                        <h4 style="color: #00ad03; font-size: 13px; margin-bottom: 8px; text-transform: uppercase;">Moderators Only</h4>
+                        <div class="command-toggle" data-cmd="cplay">
+                            <label class="toggle-switch">
+                                <input type="checkbox" checked onchange="toggleCommand('cplay', this.checked)">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <div class="command-info">
+                                <span class="command-name">!cplay <span class="role-tag mod">Mod</span></span>
+                                <span class="command-desc">Play specific clip</span>
+                            </div>
+                        </div>
+                        <div class="command-toggle" data-cmd="cskip">
+                            <label class="toggle-switch">
+                                <input type="checkbox" checked onchange="toggleCommand('cskip', this.checked)">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <div class="command-info">
+                                <span class="command-name">!cskip <span class="role-tag mod">Mod</span></span>
+                                <span class="command-desc">Skip current clip</span>
+                            </div>
+                        </div>
+                        <div class="command-toggle" data-cmd="cprev">
+                            <label class="toggle-switch">
+                                <input type="checkbox" checked onchange="toggleCommand('cprev', this.checked)">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <div class="command-info">
+                                <span class="command-name">!cprev <span class="role-tag mod">Mod</span></span>
+                                <span class="command-desc">Go to previous clip</span>
+                            </div>
+                        </div>
+                        <div class="command-toggle" data-cmd="ccat">
+                            <label class="toggle-switch">
+                                <input type="checkbox" checked onchange="toggleCommand('ccat', this.checked)">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <div class="command-info">
+                                <span class="command-name">!ccat <span class="role-tag mod">Mod</span></span>
+                                <span class="command-desc">Filter by game/category</span>
+                            </div>
+                        </div>
+                        <div class="command-toggle" data-cmd="ctop">
+                            <label class="toggle-switch">
+                                <input type="checkbox" checked onchange="toggleCommand('ctop', this.checked)">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <div class="command-info">
+                                <span class="command-name">!ctop <span class="role-tag mod">Mod</span></span>
+                                <span class="command-desc">Show top voted clips overlay</span>
+                            </div>
+                        </div>
+                        <div class="command-toggle" data-cmd="chud">
+                            <label class="toggle-switch">
+                                <input type="checkbox" checked onchange="toggleCommand('chud', this.checked)">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <div class="command-info">
+                                <span class="command-name">!chud <span class="role-tag mod">Mod</span></span>
+                                <span class="command-desc">Move HUD position</span>
+                            </div>
+                        </div>
+                        <div class="command-toggle" data-cmd="cremove">
+                            <label class="toggle-switch">
+                                <input type="checkbox" checked onchange="toggleCommand('cremove', this.checked)">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <div class="command-info">
+                                <span class="command-name">!cremove <span class="role-tag mod">Mod</span></span>
+                                <span class="command-desc">Remove clip from pool</span>
+                            </div>
+                        </div>
+                        <div class="command-toggle" data-cmd="cadd">
+                            <label class="toggle-switch">
+                                <input type="checkbox" checked onchange="toggleCommand('cadd', this.checked)">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <div class="command-info">
+                                <span class="command-name">!cadd <span class="role-tag mod">Mod</span></span>
+                                <span class="command-desc">Restore removed clip</span>
+                            </div>
+                        </div>
+                        <div class="command-toggle" data-cmd="clikeon">
+                            <label class="toggle-switch">
+                                <input type="checkbox" checked onchange="toggleCommand('clikeon', this.checked)">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <div class="command-info">
+                                <span class="command-name">!clikeon <span class="role-tag mod">Mod</span></span>
+                                <span class="command-desc">Enable voting</span>
+                            </div>
+                        </div>
+                        <div class="command-toggle" data-cmd="clikeoff">
+                            <label class="toggle-switch">
+                                <input type="checkbox" checked onchange="toggleCommand('clikeoff', this.checked)">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <div class="command-info">
+                                <span class="command-name">!clikeoff <span class="role-tag mod">Mod</span></span>
+                                <span class="command-desc">Disable voting</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="card" id="refreshCard">
                 <h3>Refresh Clips</h3>
                 <p style="color: #adadb8; margin-bottom: 12px;">Fetch new clips from Twitch.</p>
                 <p style="color: #666; font-size: 13px; margin-bottom: 12px;">Last refresh: <span id="lastRefresh">Never</span></p>
-                <button class="btn btn-primary" onclick="refreshClips()">Get New Clips</button>
+                <button class="btn btn-primary" id="refreshClipsBtn" onclick="refreshClips()">Get New Clips</button>
             </div>
 
             <div class="card" id="modManagementCard">
@@ -432,7 +930,7 @@ if ($currentUser) {
                 <p style="color: #adadb8; margin-bottom: 12px;">Add Twitch users who can access your mod dashboard. They just login with their Twitch account - no password needed.</p>
                 <div class="form-group">
                     <input type="text" id="newModUsername" placeholder="Enter Twitch username" onkeypress="if(event.key==='Enter')addMod()">
-                    <button class="btn btn-primary" style="margin-top: 8px;" onclick="addMod()">Add Mod</button>
+                    <button class="btn btn-primary" id="addModBtn" style="margin-top: 8px;" onclick="addMod()">Add Mod</button>
                 </div>
                 <div id="modList" style="margin-top: 16px;">
                     <p style="color: #666; font-size: 13px;">Loading mods...</p>
@@ -444,6 +942,142 @@ if ($currentUser) {
                 <p style="color: #adadb8; margin-bottom: 12px;">Use this URL as a Browser Source in OBS.</p>
                 <div class="url-box" id="playerUrl" onclick="copyPlayerUrl()">Loading...</div>
                 <p style="color: #666; font-size: 12px; margin-top: 8px;">Click to copy</p>
+            </div>
+        </div>
+
+        <div class="tab-content" id="tab-weighting">
+            <div id="weightingMessage"></div>
+
+            <div class="card">
+                <h3>Clip Weighting System</h3>
+                <p style="color: #adadb8; margin-bottom: 16px;">Customize how clips are ranked in your player. Adjust weights to prioritize different factors.</p>
+                <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 24px;">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="weightingEnabled" onchange="saveWeighting()">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span>Enable custom weighting</span>
+                </div>
+            </div>
+
+            <div class="card" id="weightsCard">
+                <h3>Base Weights</h3>
+                <p style="color: #adadb8; margin-bottom: 16px;">Adjust how much each factor affects clip selection (0 = disabled, 1 = normal, 2 = maximum).</p>
+
+                <div style="display: grid; gap: 16px;">
+                    <div class="slider-group">
+                        <label>Recency (favor clips not recently played)</label>
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <input type="range" id="weightRecency" min="0" max="2" step="0.1" value="1" onchange="updateWeightLabel('Recency'); saveWeighting()">
+                            <span id="weightRecencyLabel" style="min-width: 40px;">1.0</span>
+                        </div>
+                    </div>
+
+                    <div class="slider-group">
+                        <label>Views (favor high view count clips)</label>
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <input type="range" id="weightViews" min="0" max="2" step="0.1" value="1" onchange="updateWeightLabel('Views'); saveWeighting()">
+                            <span id="weightViewsLabel" style="min-width: 40px;">1.0</span>
+                        </div>
+                    </div>
+
+                    <div class="slider-group">
+                        <label>Play Penalty (avoid recently played clips)</label>
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <input type="range" id="weightPlayPenalty" min="0" max="2" step="0.1" value="1" onchange="updateWeightLabel('PlayPenalty'); saveWeighting()">
+                            <span id="weightPlayPenaltyLabel" style="min-width: 40px;">1.0</span>
+                        </div>
+                    </div>
+
+                    <div class="slider-group">
+                        <label>Voting (community !like/!dislike impact)</label>
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <input type="range" id="weightVoting" min="0" max="2" step="0.1" value="1" onchange="updateWeightLabel('Voting'); saveWeighting()">
+                            <span id="weightVotingLabel" style="min-width: 40px;">1.0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card" id="durationBoostsCard">
+                <h3>Duration Boosts</h3>
+                <p style="color: #adadb8; margin-bottom: 16px;">Boost or penalize clips based on their length (-2 to +2).</p>
+
+                <div style="display: grid; gap: 16px;">
+                    <div style="display: flex; align-items: center; gap: 16px;">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="durationShortEnabled" onchange="saveWeighting()">
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <span style="min-width: 120px;">Short (&lt;30s)</span>
+                        <input type="range" id="durationShortBoost" min="-2" max="2" step="0.5" value="0" onchange="updateDurationLabel('Short'); saveWeighting()">
+                        <span id="durationShortLabel" style="min-width: 40px;">0</span>
+                    </div>
+
+                    <div style="display: flex; align-items: center; gap: 16px;">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="durationMediumEnabled" onchange="saveWeighting()">
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <span style="min-width: 120px;">Medium (30-60s)</span>
+                        <input type="range" id="durationMediumBoost" min="-2" max="2" step="0.5" value="0" onchange="updateDurationLabel('Medium'); saveWeighting()">
+                        <span id="durationMediumLabel" style="min-width: 40px;">0</span>
+                    </div>
+
+                    <div style="display: flex; align-items: center; gap: 16px;">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="durationLongEnabled" onchange="saveWeighting()">
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <span style="min-width: 120px;">Long (&gt;60s)</span>
+                        <input type="range" id="durationLongBoost" min="-2" max="2" step="0.5" value="0" onchange="updateDurationLabel('Long'); saveWeighting()">
+                        <span id="durationLongLabel" style="min-width: 40px;">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card" id="categoryBoostsCard">
+                <h3>Category Boosts</h3>
+                <p style="color: #adadb8; margin-bottom: 16px;">Boost or penalize clips from specific games/categories.</p>
+
+                <div style="display: flex; gap: 12px; margin-bottom: 16px;">
+                    <select id="categorySelect" style="flex: 1; padding: 10px; border: 1px solid #3a3a3d; border-radius: 4px; background: #0e0e10; color: #efeff1;">
+                        <option value="">Select a category...</option>
+                    </select>
+                    <input type="number" id="categoryBoostValue" min="-2" max="2" step="0.5" value="1" placeholder="Boost" style="width: 80px; padding: 10px; border: 1px solid #3a3a3d; border-radius: 4px; background: #0e0e10; color: #efeff1;">
+                    <button class="btn btn-primary" onclick="addCategoryBoost()">Add</button>
+                </div>
+                <div id="categoryBoostsList" class="tags"></div>
+            </div>
+
+            <div class="card" id="clipperBoostsCard">
+                <h3>Clipper Boosts</h3>
+                <p style="color: #adadb8; margin-bottom: 16px;">Boost or penalize clips from specific clippers.</p>
+
+                <div style="display: flex; gap: 12px; margin-bottom: 16px;">
+                    <select id="clipperSelect" style="flex: 1; padding: 10px; border: 1px solid #3a3a3d; border-radius: 4px; background: #0e0e10; color: #efeff1;">
+                        <option value="">Select a clipper...</option>
+                    </select>
+                    <input type="number" id="clipperBoostValue" min="-2" max="2" step="0.5" value="1" placeholder="Boost" style="width: 80px; padding: 10px; border: 1px solid #3a3a3d; border-radius: 4px; background: #0e0e10; color: #efeff1;">
+                    <button class="btn btn-primary" onclick="addClipperBoost()">Add</button>
+                </div>
+                <div id="clipperBoostsList" class="tags"></div>
+            </div>
+
+            <div class="card" id="goldenClipsCard">
+                <h3>Golden Clips</h3>
+                <p style="color: #adadb8; margin-bottom: 16px;">Add specific clips to a "golden" list that always gets a boost (use clip # from !cnow).</p>
+
+                <div style="display: flex; gap: 12px; margin-bottom: 16px;">
+                    <input type="number" id="goldenClipSeq" min="1" placeholder="Clip #" style="width: 100px; padding: 10px; border: 1px solid #3a3a3d; border-radius: 4px; background: #0e0e10; color: #efeff1;">
+                    <input type="number" id="goldenClipBoost" min="0" max="5" step="0.5" value="2" placeholder="Boost" style="width: 80px; padding: 10px; border: 1px solid #3a3a3d; border-radius: 4px; background: #0e0e10; color: #efeff1;">
+                    <button class="btn btn-primary" onclick="addGoldenClip()">Add Golden Clip</button>
+                </div>
+                <div id="goldenClipsList" class="tags"></div>
+            </div>
+
+            <div class="card">
+                <button class="btn" style="background: #3a3a3d;" onclick="resetWeighting()">Reset to Defaults</button>
             </div>
         </div>
 
@@ -493,6 +1127,37 @@ if ($currentUser) {
                     <div class="stat-value" id="statBlocked">-</div>
                     <div class="stat-label">Blocked Clips</div>
                 </div>
+                <div class="stat-box">
+                    <div class="stat-value" id="statTotalVotes">-</div>
+                    <div class="stat-label">Total Votes</div>
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px; margin-top: 20px;">
+                <div class="card">
+                    <h3 style="display: flex; align-items: center; gap: 8px;">
+                        <span style="color: #00ad03;">▲</span> Top Liked Clips
+                    </h3>
+                    <div id="topLikedList" style="margin-top: 12px;">
+                        <p style="color: #666; font-size: 13px;">Loading...</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3 style="display: flex; align-items: center; gap: 8px;">
+                        <span style="color: #eb0400;">▼</span> Most Disliked Clips
+                    </h3>
+                    <div id="topDislikedList" style="margin-top: 12px;">
+                        <p style="color: #666; font-size: 13px;">Loading...</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card" style="margin-top: 20px;">
+                <h3>Recent Voting Activity</h3>
+                <div id="recentVotesActivity" style="margin-top: 12px;">
+                    <p style="color: #666; font-size: 13px;">Loading...</p>
+                </div>
             </div>
         </div>
     </div>
@@ -509,6 +1174,72 @@ if ($currentUser) {
         let authRole = '';
         let authInstance = '';
         let settings = {};
+
+        // Loading state helpers
+        function setLoading(element, loading) {
+            if (loading) {
+                element.classList.add('loading');
+                element.disabled = true;
+            } else {
+                element.classList.remove('loading');
+                element.disabled = false;
+            }
+        }
+
+        // Toast notification system (XSS-safe)
+        function showToast(type, title, message, duration = 3000) {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+
+            const icons = {
+                success: '✓',
+                error: '✕',
+                info: 'ℹ'
+            };
+
+            // Build toast safely using textContent to prevent XSS
+            const iconSpan = document.createElement('span');
+            iconSpan.className = 'toast-icon';
+            iconSpan.textContent = icons[type] || icons.info;
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'toast-content';
+
+            const titleDiv = document.createElement('div');
+            titleDiv.className = 'toast-title';
+            titleDiv.textContent = title;
+            contentDiv.appendChild(titleDiv);
+
+            if (message) {
+                const msgDiv = document.createElement('div');
+                msgDiv.className = 'toast-message';
+                msgDiv.textContent = message;
+                contentDiv.appendChild(msgDiv);
+            }
+
+            const closeBtn = document.createElement('button');
+            closeBtn.className = 'toast-close';
+            closeBtn.innerHTML = '&times;';
+            closeBtn.onclick = () => toast.remove();
+
+            toast.appendChild(iconSpan);
+            toast.appendChild(contentDiv);
+            toast.appendChild(closeBtn);
+
+            container.appendChild(toast);
+
+            // Trigger animation
+            requestAnimationFrame(() => {
+                toast.classList.add('show');
+            });
+
+            // Auto-remove after duration
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => toast.remove(), 300);
+            }, duration);
+        }
 
         // Auto-login if key provided or OAuth authorized
         if (INITIAL_KEY) {
@@ -531,11 +1262,16 @@ if ($currentUser) {
         // Position picker
         document.querySelectorAll('.position-picker').forEach(picker => {
             picker.querySelectorAll('.position-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
+                btn.addEventListener('click', async () => {
                     picker.querySelectorAll('.position-btn').forEach(b => b.classList.remove('active'));
                     btn.classList.add('active');
                     const field = picker.id === 'hudPositionPicker' ? 'hud_position' : 'top_position';
-                    saveSetting(field, btn.dataset.pos);
+                    const posLabels = { tl: 'Top Left', tr: 'Top Right', bl: 'Bottom Left', br: 'Bottom Right' };
+                    const fieldLabel = field === 'hud_position' ? 'HUD' : 'Top Clips';
+                    const success = await saveSetting(field, btn.dataset.pos, false);
+                    if (success) {
+                        showToast('success', `${fieldLabel} Position Updated`, `Now showing in ${posLabels[btn.dataset.pos]}`);
+                    }
                 });
             });
         });
@@ -622,6 +1358,7 @@ if ($currentUser) {
                 document.getElementById('blockedClippersGroup').style.display = 'none';
                 document.getElementById('refreshCard').style.display = 'none';
                 document.getElementById('modManagementCard').style.display = 'none';
+                document.getElementById('commandSettingsCard').style.display = 'none';
             } else {
                 // Load mods list for streamers/admins
                 loadMods();
@@ -685,6 +1422,9 @@ if ($currentUser) {
                 // Blocked clippers
                 renderTags('blockedClippersTags', settings.blocked_clippers || [], removeBlockedClipper);
 
+                // Command settings
+                loadCommandSettings(settings.command_settings || {});
+
                 // Stats
                 if (data.stats) {
                     document.getElementById('statTotal').textContent = Number(data.stats.total).toLocaleString();
@@ -693,6 +1433,50 @@ if ($currentUser) {
                 }
             } catch (e) {
                 console.error('Error loading settings:', e);
+            }
+        }
+
+        // Command settings object - tracks current state
+        let commandSettings = {};
+
+        function loadCommandSettings(savedSettings) {
+            commandSettings = savedSettings || {};
+
+            // Update all command toggles based on saved settings
+            document.querySelectorAll('.command-toggle').forEach(toggle => {
+                const cmd = toggle.dataset.cmd;
+                const checkbox = toggle.querySelector('input[type="checkbox"]');
+                if (checkbox) {
+                    // Default to true (enabled) if not explicitly set to false
+                    checkbox.checked = commandSettings[cmd] !== false;
+                }
+            });
+        }
+
+        async function toggleCommand(cmdName, enabled) {
+            // Update local state
+            commandSettings[cmdName] = enabled;
+
+            // Save to server
+            try {
+                const res = await fetch(`${API_BASE}/dashboard_api.php?action=save_settings&key=${encodeURIComponent(authKey)}&login=${encodeURIComponent(authLogin)}&field=command_settings&value=${encodeURIComponent(JSON.stringify(commandSettings))}`);
+                const data = await res.json();
+                if (!data.success) {
+                    console.error('Failed to save command setting:', data.error);
+                    // Revert checkbox on error
+                    const toggle = document.querySelector(`.command-toggle[data-cmd="${cmdName}"] input`);
+                    if (toggle) toggle.checked = !enabled;
+                    commandSettings[cmdName] = !enabled;
+                    showToast('error', 'Failed to Update', `Could not ${enabled ? 'enable' : 'disable'} ${cmdName}`);
+                } else {
+                    showToast('success', `${cmdName} ${enabled ? 'Enabled' : 'Disabled'}`, `Command has been ${enabled ? 'enabled' : 'disabled'} for chat`);
+                }
+            } catch (e) {
+                console.error('Error saving command setting:', e);
+                const toggle = document.querySelector(`.command-toggle[data-cmd="${cmdName}"] input`);
+                if (toggle) toggle.checked = !enabled;
+                commandSettings[cmdName] = !enabled;
+                showToast('error', 'Connection Error', 'Could not save command setting');
             }
         }
 
@@ -713,68 +1497,149 @@ if ($currentUser) {
             `).join('');
         }
 
-        async function saveSetting(field, value) {
+        async function saveSetting(field, value, showNotification = true) {
             try {
                 const res = await fetch(`${API_BASE}/dashboard_api.php?action=save_settings&key=${encodeURIComponent(authKey)}&login=${encodeURIComponent(authLogin)}&field=${field}&value=${encodeURIComponent(value)}`);
                 const data = await res.json();
                 if (!data.success) {
                     console.error('Save failed:', data.error);
+                    if (showNotification) {
+                        showToast('error', 'Save Failed', data.error || 'Could not save setting');
+                    }
+                    return false;
                 }
+                return true;
             } catch (e) {
                 console.error('Save error:', e);
+                if (showNotification) {
+                    showToast('error', 'Connection Error', 'Could not connect to server');
+                }
+                return false;
             }
         }
 
-        function saveVoting() {
-            saveSetting('voting_enabled', document.getElementById('votingEnabled').checked);
+        async function saveVoting() {
+            const enabled = document.getElementById('votingEnabled').checked;
+            const success = await saveSetting('voting_enabled', enabled, false);
+            if (success) {
+                showToast('success', 'Voting ' + (enabled ? 'Enabled' : 'Disabled'), 'Chat voting has been updated');
+            }
         }
 
-        function saveVoteFeedback() {
-            saveSetting('vote_feedback', document.getElementById('voteFeedback').checked);
+        async function saveVoteFeedback() {
+            const enabled = document.getElementById('voteFeedback').checked;
+            const success = await saveSetting('vote_feedback', enabled, false);
+            if (success) {
+                showToast('success', 'Vote Feedback ' + (enabled ? 'Enabled' : 'Disabled'), 'Chat feedback setting updated');
+            }
         }
 
-        function addBlockedWord() {
+        async function addBlockedWord() {
             const input = document.getElementById('newBlockedWord');
             const word = input.value.trim().toLowerCase();
             if (!word) return;
 
+            // Validation
+            if (word.length < 2) {
+                showToast('error', 'Too Short', 'Blocked word must be at least 2 characters');
+                return;
+            }
+            if (word.length > 50) {
+                showToast('error', 'Too Long', 'Blocked word must be 50 characters or less');
+                return;
+            }
+
             const words = settings.blocked_words || [];
-            if (!words.includes(word)) {
-                words.push(word);
-                settings.blocked_words = words;
-                saveSetting('blocked_words', JSON.stringify(words));
+            if (words.includes(word)) {
+                showToast('info', 'Already Blocked', `"${word}" is already in the blocked list`);
+                input.value = '';
+                return;
+            }
+            if (words.length >= 100) {
+                showToast('error', 'Limit Reached', 'Maximum 100 blocked words allowed');
+                return;
+            }
+
+            words.push(word);
+            settings.blocked_words = words;
+            const success = await saveSetting('blocked_words', JSON.stringify(words), false);
+            if (success) {
                 renderTags('blockedWordsTags', words, removeBlockedWord);
+                showToast('success', 'Word Blocked', `Clips with "${word}" in the title will be hidden`);
+            } else {
+                // Revert on failure
+                settings.blocked_words = words.filter(w => w !== word);
+                showToast('error', 'Failed to Block', 'Could not save blocked word');
             }
             input.value = '';
         }
 
-        function removeBlockedWord(word) {
+        async function removeBlockedWord(word) {
             const words = (settings.blocked_words || []).filter(w => w !== word);
+            const oldWords = settings.blocked_words;
             settings.blocked_words = words;
-            saveSetting('blocked_words', JSON.stringify(words));
-            renderTags('blockedWordsTags', words, removeBlockedWord);
+            const success = await saveSetting('blocked_words', JSON.stringify(words), false);
+            if (success) {
+                renderTags('blockedWordsTags', words, removeBlockedWord);
+                showToast('success', 'Word Unblocked', `"${word}" removed from blocked list`);
+            } else {
+                settings.blocked_words = oldWords;
+                showToast('error', 'Failed to Unblock', 'Could not remove blocked word');
+            }
         }
 
-        function addBlockedClipper() {
+        async function addBlockedClipper() {
             const input = document.getElementById('newBlockedClipper');
-            const clipper = input.value.trim();
+            let clipper = input.value.trim().toLowerCase();
             if (!clipper) return;
 
+            // Validation - Twitch username rules
+            clipper = clipper.replace(/[^a-z0-9_]/g, '');
+            if (clipper.length < 3) {
+                showToast('error', 'Invalid Username', 'Twitch username must be at least 3 characters');
+                return;
+            }
+            if (clipper.length > 25) {
+                showToast('error', 'Invalid Username', 'Twitch username must be 25 characters or less');
+                return;
+            }
+
             const clippers = settings.blocked_clippers || [];
-            if (!clippers.includes(clipper)) {
-                clippers.push(clipper);
-                settings.blocked_clippers = clippers;
-                saveSetting('blocked_clippers', JSON.stringify(clippers));
+            if (clippers.includes(clipper)) {
+                showToast('info', 'Already Blocked', `"${clipper}" is already in the blocked list`);
+                input.value = '';
+                return;
+            }
+            if (clippers.length >= 50) {
+                showToast('error', 'Limit Reached', 'Maximum 50 blocked clippers allowed');
+                return;
+            }
+
+            clippers.push(clipper);
+            settings.blocked_clippers = clippers;
+            const success = await saveSetting('blocked_clippers', JSON.stringify(clippers), false);
+            if (success) {
                 renderTags('blockedClippersTags', clippers, removeBlockedClipper);
+                showToast('success', 'Clipper Blocked', `Clips by "${clipper}" will be hidden`);
+            } else {
+                settings.blocked_clippers = clippers.filter(c => c !== clipper);
+                showToast('error', 'Failed to Block', 'Could not save blocked clipper');
             }
             input.value = '';
         }
 
-        function removeBlockedClipper(clipper) {
+        async function removeBlockedClipper(clipper) {
             const clippers = (settings.blocked_clippers || []).filter(c => c !== clipper);
+            const oldClippers = settings.blocked_clippers;
             settings.blocked_clippers = clippers;
-            saveSetting('blocked_clippers', JSON.stringify(clippers));
-            renderTags('blockedClippersTags', clippers, removeBlockedClipper);
+            const success = await saveSetting('blocked_clippers', JSON.stringify(clippers), false);
+            if (success) {
+                renderTags('blockedClippersTags', clippers, removeBlockedClipper);
+                showToast('success', 'Clipper Unblocked', `"${clipper}" removed from blocked list`);
+            } else {
+                settings.blocked_clippers = oldClippers;
+                showToast('error', 'Failed to Unblock', 'Could not remove blocked clipper');
+            }
         }
 
         async function loadMods() {
@@ -809,24 +1674,27 @@ if ($currentUser) {
 
         async function addMod() {
             const input = document.getElementById('newModUsername');
+            const btn = document.getElementById('addModBtn');
             const username = input.value.trim().toLowerCase();
             if (!username) return;
 
+            setLoading(btn, true);
             try {
                 const res = await fetch(`${API_BASE}/dashboard_api.php?action=add_mod&key=${encodeURIComponent(authKey)}&login=${encodeURIComponent(authLogin)}&mod_username=${encodeURIComponent(username)}`);
                 const data = await res.json();
 
-                const msgEl = document.getElementById('settingsMessage');
                 if (data.success) {
                     renderModList(data.mods || []);
                     input.value = '';
-                    msgEl.innerHTML = '<div class="message success">' + data.message + '</div>';
+                    showToast('success', 'Mod Added', `${username} can now access the mod dashboard`);
                 } else {
-                    msgEl.innerHTML = '<div class="message error">' + (data.error || 'Failed to add mod') + '</div>';
+                    showToast('error', 'Failed to Add Mod', data.error || 'Could not add mod');
                 }
-                setTimeout(() => msgEl.innerHTML = '', 5000);
             } catch (e) {
                 console.error('Error adding mod:', e);
+                showToast('error', 'Connection Error', 'Could not add mod');
+            } finally {
+                setLoading(btn, false);
             }
         }
 
@@ -839,20 +1707,27 @@ if ($currentUser) {
 
                 if (data.success) {
                     renderModList(data.mods || []);
+                    showToast('success', 'Mod Removed', `${username} no longer has mod access`);
+                } else {
+                    showToast('error', 'Failed to Remove', data.error || 'Could not remove mod');
                 }
             } catch (e) {
                 console.error('Error removing mod:', e);
+                showToast('error', 'Connection Error', 'Could not remove mod');
             }
         }
 
         function refreshClips() {
+            showToast('info', 'Refreshing Clips', 'Opening refresh page in new tab...');
             window.open(`refresh_clips.php?login=${encodeURIComponent(authLogin)}&key=${encodeURIComponent(authKey)}`, '_blank');
         }
 
         function copyPlayerUrl() {
             const url = document.getElementById('playerUrl').textContent;
             navigator.clipboard.writeText(url).then(() => {
-                alert('URL copied to clipboard!');
+                showToast('success', 'URL Copied', 'Player URL copied to clipboard');
+            }).catch(() => {
+                showToast('error', 'Copy Failed', 'Could not copy URL - try selecting and copying manually');
             });
         }
 
@@ -861,6 +1736,400 @@ if ($currentUser) {
             div.textContent = str;
             return div.innerHTML;
         }
+
+        // Vote stats for Stats tab
+        async function loadVoteStats() {
+            try {
+                const res = await fetch(`${API_BASE}/dashboard_api.php?action=get_vote_stats&key=${encodeURIComponent(authKey)}&login=${encodeURIComponent(authLogin)}`);
+                const data = await res.json();
+
+                if (!data.success) {
+                    console.error('Failed to load vote stats:', data.error);
+                    return;
+                }
+
+                // Update total votes stat
+                document.getElementById('statTotalVotes').textContent = data.totals.total.toLocaleString();
+
+                // Render top liked clips
+                const likedList = document.getElementById('topLikedList');
+                if (data.top_liked.length === 0) {
+                    likedList.innerHTML = '<p style="color: #666; font-size: 13px;">No votes yet</p>';
+                } else {
+                    likedList.innerHTML = data.top_liked.map((clip, i) => `
+                        <div style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid #3a3a3d;">
+                            <span style="color: #666; font-size: 12px; width: 20px;">${i + 1}.</span>
+                            <div style="flex: 1; min-width: 0;">
+                                <div style="font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(clip.title || 'Untitled')}">#${clip.seq} - ${escapeHtml(clip.title || 'Untitled')}</div>
+                            </div>
+                            <div style="display: flex; gap: 8px; font-size: 12px;">
+                                <span style="color: #00ad03;">▲ ${clip.up_votes}</span>
+                                <span style="color: #eb0400;">▼ ${clip.down_votes}</span>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+
+                // Render top disliked clips
+                const dislikedList = document.getElementById('topDislikedList');
+                if (data.top_disliked.length === 0) {
+                    dislikedList.innerHTML = '<p style="color: #666; font-size: 13px;">No dislikes yet</p>';
+                } else {
+                    dislikedList.innerHTML = data.top_disliked.map((clip, i) => `
+                        <div style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid #3a3a3d;">
+                            <span style="color: #666; font-size: 12px; width: 20px;">${i + 1}.</span>
+                            <div style="flex: 1; min-width: 0;">
+                                <div style="font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(clip.title || 'Untitled')}">#${clip.seq} - ${escapeHtml(clip.title || 'Untitled')}</div>
+                            </div>
+                            <div style="display: flex; gap: 8px; font-size: 12px;">
+                                <span style="color: #00ad03;">▲ ${clip.up_votes}</span>
+                                <span style="color: #eb0400;">▼ ${clip.down_votes}</span>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+
+                // Render recent votes
+                const recentList = document.getElementById('recentVotesActivity');
+                if (data.recent_votes.length === 0) {
+                    recentList.innerHTML = '<p style="color: #666; font-size: 13px;">No voting activity yet</p>';
+                } else {
+                    recentList.innerHTML = data.recent_votes.map(vote => {
+                        const time = new Date(vote.voted_at).toLocaleString();
+                        const icon = vote.vote_dir === 'up' ? '▲' : '▼';
+                        const color = vote.vote_dir === 'up' ? '#00ad03' : '#eb0400';
+                        return `
+                            <div style="display: flex; align-items: center; gap: 12px; padding: 6px 0; border-bottom: 1px solid #2a2a2d; font-size: 13px;">
+                                <span style="color: ${color}; font-size: 14px;">${icon}</span>
+                                <span style="color: #9147ff;">${escapeHtml(vote.username)}</span>
+                                <span style="color: #666;">voted on</span>
+                                <span style="flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(vote.title || 'Untitled')}">#${vote.seq}</span>
+                                <span style="color: #666; font-size: 11px;">${time}</span>
+                            </div>
+                        `;
+                    }).join('');
+                }
+            } catch (e) {
+                console.error('Error loading vote stats:', e);
+            }
+        }
+
+        // Load vote stats when Stats tab is clicked
+        document.querySelector('.tab[data-tab="stats"]')?.addEventListener('click', loadVoteStats);
+
+        // ============ WEIGHTING FUNCTIONS ============
+        let weightingConfig = null;
+        let weightingCategories = [];
+        let weightingClippers = [];
+        let weightingSaveTimeout = null;
+
+        function showMessage(elementId, message, type = 'success') {
+            const el = document.getElementById(elementId);
+            if (!el) return;
+            el.innerHTML = `<div class="message ${type}" style="padding: 10px; border-radius: 4px; margin-bottom: 16px;">${escapeHtml(message)}</div>`;
+            setTimeout(() => { el.innerHTML = ''; }, 4000);
+        }
+
+        function updateWeightLabel(name) {
+            const slider = document.getElementById('weight' + name);
+            const label = document.getElementById('weight' + name + 'Label');
+            if (slider && label) {
+                label.textContent = parseFloat(slider.value).toFixed(1);
+            }
+        }
+
+        function updateDurationLabel(name) {
+            const slider = document.getElementById('duration' + name + 'Boost');
+            const label = document.getElementById('duration' + name + 'Label');
+            if (slider && label) {
+                const val = parseFloat(slider.value);
+                label.textContent = val > 0 ? '+' + val : val;
+            }
+        }
+
+        async function loadWeighting() {
+            try {
+                const res = await fetch(`${API_BASE}/dashboard_api.php?action=get_weighting&key=${encodeURIComponent(authKey)}&login=${encodeURIComponent(authLogin)}`);
+                const data = await res.json();
+
+                if (data.success && data.config) {
+                    weightingConfig = data.config;
+                    weightingCategories = data.available_categories || [];
+                    weightingClippers = data.available_clippers || [];
+
+                    // Populate UI
+                    document.getElementById('weightingEnabled').checked = weightingConfig.enabled;
+                    document.getElementById('weightRecency').value = weightingConfig.weights?.recency ?? 1;
+                    document.getElementById('weightViews').value = weightingConfig.weights?.views ?? 1;
+                    document.getElementById('weightPlayPenalty').value = weightingConfig.weights?.play_penalty ?? 1;
+                    document.getElementById('weightVoting').value = weightingConfig.weights?.voting ?? 1;
+
+                    updateWeightLabel('Recency');
+                    updateWeightLabel('Views');
+                    updateWeightLabel('PlayPenalty');
+                    updateWeightLabel('Voting');
+
+                    // Duration boosts
+                    const db = weightingConfig.duration_boosts || {};
+                    document.getElementById('durationShortEnabled').checked = db.short?.enabled || false;
+                    document.getElementById('durationShortBoost').value = db.short?.boost ?? 0;
+                    document.getElementById('durationMediumEnabled').checked = db.medium?.enabled || false;
+                    document.getElementById('durationMediumBoost').value = db.medium?.boost ?? 0;
+                    document.getElementById('durationLongEnabled').checked = db.long?.enabled || false;
+                    document.getElementById('durationLongBoost').value = db.long?.boost ?? 0;
+
+                    updateDurationLabel('Short');
+                    updateDurationLabel('Medium');
+                    updateDurationLabel('Long');
+
+                    // Populate category dropdown
+                    const catSelect = document.getElementById('categorySelect');
+                    catSelect.innerHTML = '<option value="">Select a category...</option>';
+                    weightingCategories.forEach(cat => {
+                        catSelect.innerHTML += `<option value="${cat.game_id}" data-name="${escapeHtml(cat.name || 'Unknown')}">${escapeHtml(cat.name || 'Unknown')} (${cat.count})</option>`;
+                    });
+
+                    // Populate clipper dropdown
+                    const clipperSelect = document.getElementById('clipperSelect');
+                    clipperSelect.innerHTML = '<option value="">Select a clipper...</option>';
+                    weightingClippers.forEach(c => {
+                        clipperSelect.innerHTML += `<option value="${escapeHtml(c.name)}">${escapeHtml(c.name)} (${c.count})</option>`;
+                    });
+
+                    renderCategoryBoosts();
+                    renderClipperBoosts();
+                    renderGoldenClips();
+                }
+            } catch (e) {
+                console.error('Failed to load weighting config:', e);
+            }
+        }
+
+        function renderCategoryBoosts() {
+            const container = document.getElementById('categoryBoostsList');
+            const boosts = weightingConfig?.category_boosts || [];
+            if (boosts.length === 0) {
+                container.innerHTML = '<span style="color: #666; font-size: 13px;">No category boosts set</span>';
+                return;
+            }
+            container.innerHTML = boosts.map(b => {
+                const sign = b.boost > 0 ? '+' : '';
+                return `<span class="tag">${escapeHtml(b.name || b.game_id)} (${sign}${b.boost}) <span class="remove" onclick="removeCategoryBoost('${b.game_id}')">×</span></span>`;
+            }).join('');
+        }
+
+        function renderClipperBoosts() {
+            const container = document.getElementById('clipperBoostsList');
+            const boosts = weightingConfig?.clipper_boosts || [];
+            if (boosts.length === 0) {
+                container.innerHTML = '<span style="color: #666; font-size: 13px;">No clipper boosts set</span>';
+                return;
+            }
+            container.innerHTML = boosts.map(b => {
+                const sign = b.boost > 0 ? '+' : '';
+                return `<span class="tag">${escapeHtml(b.name)} (${sign}${b.boost}) <span class="remove" onclick="removeClipperBoost('${escapeHtml(b.name)}')">×</span></span>`;
+            }).join('');
+        }
+
+        function renderGoldenClips() {
+            const container = document.getElementById('goldenClipsList');
+            const goldens = weightingConfig?.golden_clips || [];
+            if (goldens.length === 0) {
+                container.innerHTML = '<span style="color: #666; font-size: 13px;">No golden clips set</span>';
+                return;
+            }
+            container.innerHTML = goldens.map(g => {
+                return `<span class="tag" style="background: linear-gradient(135deg, #ffd700 0%, #ffaa00 100%); color: #000;">
+                    #${g.seq} (+${g.boost})${g.title ? ' - ' + escapeHtml(g.title.substring(0, 20)) : ''}
+                    <span class="remove" onclick="removeGoldenClip(${g.seq})" style="color: #000;">×</span>
+                </span>`;
+            }).join('');
+        }
+
+        async function saveWeighting() {
+            // Debounce saves
+            if (weightingSaveTimeout) clearTimeout(weightingSaveTimeout);
+            weightingSaveTimeout = setTimeout(async () => {
+                const config = {
+                    enabled: document.getElementById('weightingEnabled').checked,
+                    weights: {
+                        recency: parseFloat(document.getElementById('weightRecency').value),
+                        views: parseFloat(document.getElementById('weightViews').value),
+                        play_penalty: parseFloat(document.getElementById('weightPlayPenalty').value),
+                        voting: parseFloat(document.getElementById('weightVoting').value)
+                    },
+                    duration_boosts: {
+                        short: {
+                            enabled: document.getElementById('durationShortEnabled').checked,
+                            max: 30,
+                            boost: parseFloat(document.getElementById('durationShortBoost').value)
+                        },
+                        medium: {
+                            enabled: document.getElementById('durationMediumEnabled').checked,
+                            min: 30, max: 60,
+                            boost: parseFloat(document.getElementById('durationMediumBoost').value)
+                        },
+                        long: {
+                            enabled: document.getElementById('durationLongEnabled').checked,
+                            min: 60,
+                            boost: parseFloat(document.getElementById('durationLongBoost').value)
+                        }
+                    },
+                    category_boosts: weightingConfig?.category_boosts || [],
+                    clipper_boosts: weightingConfig?.clipper_boosts || [],
+                    golden_clips: weightingConfig?.golden_clips || []
+                };
+
+                try {
+                    const res = await fetch(`${API_BASE}/dashboard_api.php?action=save_weighting&key=${encodeURIComponent(authKey)}&login=${encodeURIComponent(authLogin)}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ config })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        weightingConfig = config;
+                        showMessage('weightingMessage', 'Weighting settings saved', 'success');
+                    } else {
+                        showMessage('weightingMessage', data.error || 'Failed to save', 'error');
+                    }
+                } catch (e) {
+                    showMessage('weightingMessage', 'Network error', 'error');
+                }
+            }, 500);
+        }
+
+        async function addCategoryBoost() {
+            const select = document.getElementById('categorySelect');
+            const gameId = select.value;
+            const name = select.options[select.selectedIndex]?.dataset?.name || '';
+            const boost = parseFloat(document.getElementById('categoryBoostValue').value) || 1;
+
+            if (!gameId) return;
+
+            // Check if already exists
+            if ((weightingConfig?.category_boosts || []).some(b => b.game_id === gameId)) {
+                showMessage('weightingMessage', 'Category already in list', 'error');
+                return;
+            }
+
+            if (!weightingConfig) weightingConfig = { category_boosts: [] };
+            if (!weightingConfig.category_boosts) weightingConfig.category_boosts = [];
+
+            weightingConfig.category_boosts.push({ game_id: gameId, name, boost });
+            renderCategoryBoosts();
+            select.value = '';
+            await saveWeighting();
+        }
+
+        async function removeCategoryBoost(gameId) {
+            if (!weightingConfig?.category_boosts) return;
+            weightingConfig.category_boosts = weightingConfig.category_boosts.filter(b => b.game_id !== gameId);
+            renderCategoryBoosts();
+            await saveWeighting();
+        }
+
+        async function addClipperBoost() {
+            const select = document.getElementById('clipperSelect');
+            const name = select.value.toLowerCase();
+            const boost = parseFloat(document.getElementById('clipperBoostValue').value) || 1;
+
+            if (!name) return;
+
+            if ((weightingConfig?.clipper_boosts || []).some(b => b.name === name)) {
+                showMessage('weightingMessage', 'Clipper already in list', 'error');
+                return;
+            }
+
+            if (!weightingConfig) weightingConfig = { clipper_boosts: [] };
+            if (!weightingConfig.clipper_boosts) weightingConfig.clipper_boosts = [];
+
+            weightingConfig.clipper_boosts.push({ name, boost });
+            renderClipperBoosts();
+            select.value = '';
+            await saveWeighting();
+        }
+
+        async function removeClipperBoost(name) {
+            if (!weightingConfig?.clipper_boosts) return;
+            weightingConfig.clipper_boosts = weightingConfig.clipper_boosts.filter(b => b.name !== name);
+            renderClipperBoosts();
+            await saveWeighting();
+        }
+
+        async function addGoldenClip() {
+            const seqInput = document.getElementById('goldenClipSeq');
+            const seq = parseInt(seqInput.value) || 0;
+            const boost = parseFloat(document.getElementById('goldenClipBoost').value) || 2;
+
+            if (seq <= 0) {
+                showMessage('weightingMessage', 'Please enter a valid clip number', 'error');
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_BASE}/dashboard_api.php?action=add_golden_clip&key=${encodeURIComponent(authKey)}&login=${encodeURIComponent(authLogin)}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ seq, boost })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    if (!weightingConfig) weightingConfig = { golden_clips: [] };
+                    if (!weightingConfig.golden_clips) weightingConfig.golden_clips = [];
+                    weightingConfig.golden_clips.push({ seq, boost, title: data.title || '' });
+                    renderGoldenClips();
+                    seqInput.value = '';
+                    showMessage('weightingMessage', `Added golden clip #${seq}`, 'success');
+                } else {
+                    showMessage('weightingMessage', data.error || 'Failed to add golden clip', 'error');
+                }
+            } catch (e) {
+                showMessage('weightingMessage', 'Network error', 'error');
+            }
+        }
+
+        async function removeGoldenClip(seq) {
+            try {
+                const res = await fetch(`${API_BASE}/dashboard_api.php?action=remove_golden_clip&key=${encodeURIComponent(authKey)}&login=${encodeURIComponent(authLogin)}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ seq })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    if (weightingConfig?.golden_clips) {
+                        weightingConfig.golden_clips = weightingConfig.golden_clips.filter(g => g.seq !== seq);
+                    }
+                    renderGoldenClips();
+                    showMessage('weightingMessage', `Removed golden clip #${seq}`, 'success');
+                }
+            } catch (e) {
+                showMessage('weightingMessage', 'Network error', 'error');
+            }
+        }
+
+        async function resetWeighting() {
+            if (!confirm('Reset all weighting settings to defaults?')) return;
+
+            try {
+                const res = await fetch(`${API_BASE}/dashboard_api.php?action=reset_weighting&key=${encodeURIComponent(authKey)}&login=${encodeURIComponent(authLogin)}`, {
+                    method: 'POST'
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showMessage('weightingMessage', 'Weighting reset to defaults', 'success');
+                    await loadWeighting();
+                } else {
+                    showMessage('weightingMessage', data.error || 'Failed to reset', 'error');
+                }
+            } catch (e) {
+                showMessage('weightingMessage', 'Network error', 'error');
+            }
+        }
+
+        // Load weighting when tab is clicked
+        document.querySelector('.tab[data-tab="weighting"]')?.addEventListener('click', loadWeighting);
     </script>
 </body>
 </html>

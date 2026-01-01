@@ -15,6 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { exit(0); }
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/includes/dashboard_auth.php';
 require_once __DIR__ . '/includes/twitch_oauth.php';
+require_once __DIR__ . '/includes/clip_weighting.php';
 
 function json_response($data) {
     echo json_encode($data, JSON_UNESCAPED_SLASHES);
@@ -33,15 +34,13 @@ function clean_login($s) {
 }
 
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
-$key = $_GET['key'] ?? $_POST['key'] ?? '';
 $login = clean_login($_GET['login'] ?? $_POST['login'] ?? '');
-$password = $_GET['password'] ?? $_POST['password'] ?? '';
 
 $auth = new DashboardAuth();
 $authenticated = false;
+$currentUser = getCurrentUser();
 
 // Try OAuth super admin authentication first
-$currentUser = getCurrentUser();
 if ($currentUser && isSuperAdmin()) {
     // Super admin via OAuth - grant admin role
     $authenticated = true;
@@ -49,39 +48,38 @@ if ($currentUser && isSuperAdmin()) {
     if (!$login) {
         $login = strtolower($currentUser['login']);
     }
-    // Manually set admin role in auth object for permission checks
-    $auth->authenticateWithKey(getenv('ADMIN_KEY') ?: 'oauth-super-admin', $login);
-}
-
-// Try key authentication
-if (!$authenticated && $key) {
-    $result = $auth->authenticateWithKey($key, $login);
-    if ($result) {
-        $authenticated = true;
-        $login = $result['login'];
-    }
-}
-
-// Try password authentication if key failed and we have login
-if (!$authenticated && $login && $password) {
-    $result = $auth->authenticateWithPassword($login, $password);
-    if ($result) {
-        $authenticated = true;
-    }
+    $auth->setRole(DashboardAuth::ROLE_ADMIN, $login);
 }
 
 // Try OAuth for own channel (non-super-admin)
 if (!$authenticated && $currentUser && $login) {
     if (strtolower($currentUser['login']) === strtolower($login)) {
         $authenticated = true;
-        // Set streamer role for own channel access
-        $auth->authenticateWithKey($auth->getStreamerKey($login) ?: '', $login);
+        $auth->setRole(DashboardAuth::ROLE_STREAMER, $login);
+    }
+}
+
+// Try OAuth for mod access
+if (!$authenticated && $currentUser && $login) {
+    $oauthUsername = strtolower($currentUser['login']);
+    $pdo = get_db_connection();
+    if ($pdo) {
+        try {
+            $stmt = $pdo->prepare("SELECT 1 FROM channel_mods WHERE channel_login = ? AND mod_username = ?");
+            $stmt->execute([$login, $oauthUsername]);
+            if ($stmt->fetch()) {
+                $authenticated = true;
+                $auth->setRole(DashboardAuth::ROLE_MOD, $login);
+            }
+        } catch (PDOException $e) {
+            // Ignore - table might not exist
+        }
     }
 }
 
 // Special case: login check doesn't require auth
 if ($action === 'check_login') {
-    // Just verify if the login/password or key is valid
+    // Just verify if the login/key is valid (or OAuth session)
     json_response([
         "authenticated" => $authenticated,
         "role" => $auth->getRoleName(),
@@ -154,6 +152,8 @@ try {
     $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS voting_enabled BOOLEAN DEFAULT TRUE");
     $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS vote_feedback BOOLEAN DEFAULT TRUE");
     $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS last_refresh TIMESTAMP");
+    $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS command_settings TEXT DEFAULT '{}'");
+    $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS weighting_config TEXT DEFAULT '{}'");
 
     // Ensure channel_mods table exists
     $pdo->exec("
@@ -178,7 +178,7 @@ switch ($action) {
 
         try {
             $stmt = $pdo->prepare("
-                SELECT hud_position, top_position, blocked_words, blocked_clippers, voting_enabled, vote_feedback, last_refresh
+                SELECT hud_position, top_position, blocked_words, blocked_clippers, voting_enabled, vote_feedback, last_refresh, command_settings
                 FROM channel_settings WHERE login = ?
             ");
             $stmt->execute([$login]);
@@ -192,13 +192,15 @@ switch ($action) {
                     'blocked_clippers' => '[]',
                     'vote_feedback' => true,
                     'voting_enabled' => true,
-                    'last_refresh' => null
+                    'last_refresh' => null,
+                    'command_settings' => '{}'
                 ];
             }
 
             // Parse JSON fields
             $settings['blocked_words'] = json_decode($settings['blocked_words'] ?: '[]', true) ?: [];
             $settings['blocked_clippers'] = json_decode($settings['blocked_clippers'] ?: '[]', true) ?: [];
+            $settings['command_settings'] = json_decode($settings['command_settings'] ?: '{}', true) ?: [];
 
             // Get clip stats
             $stmt = $pdo->prepare("
@@ -241,7 +243,8 @@ switch ($action) {
             'voting_enabled' => 'toggle_voting',
             'vote_feedback' => 'toggle_voting',
             'blocked_words' => 'add_blocked_words',
-            'blocked_clippers' => 'add_blocked_clippers'
+            'blocked_clippers' => 'add_blocked_clippers',
+            'command_settings' => 'toggle_commands'
         ];
 
         if (!isset($allowedFields[$field])) {
@@ -270,6 +273,12 @@ switch ($action) {
                     if (!is_array($arr)) $arr = [];
                     $value = json_encode(array_values(array_filter(array_map('trim', $arr))));
                     break;
+                case 'command_settings':
+                    // Expect JSON object with command names as keys and boolean values
+                    $obj = json_decode($value, true);
+                    if (!is_array($obj)) $obj = [];
+                    $value = json_encode($obj);
+                    break;
             }
 
             $stmt = $pdo->prepare("
@@ -286,17 +295,8 @@ switch ($action) {
         break;
 
     case 'set_mod_password':
-        if (!$auth->canDo('change_mod_password')) {
-            json_error("Permission denied", 403);
-        }
-
-        $newPassword = $_GET['new_password'] ?? $_POST['new_password'] ?? '';
-
-        if ($auth->setModPassword($login, $newPassword)) {
-            json_response(["success" => true, "message" => $newPassword ? "Mod password set" : "Mod password removed"]);
-        } else {
-            json_error("Failed to update password");
-        }
+        // Mod passwords have been removed - use channel_mods table with OAuth instead
+        json_error("Mod passwords are no longer supported. Use the Mod Access tab to add mods via their Twitch username.", 410);
         break;
 
     case 'get_mods':
@@ -461,6 +461,237 @@ switch ($action) {
             json_response(["success" => true, "blocked_clippers" => $clippers]);
         } catch (PDOException $e) {
             json_error("Database error", 500);
+        }
+        break;
+
+    case 'get_vote_stats':
+        if (!$auth->canDo('view')) json_error("Permission denied", 403);
+
+        try {
+            // Total votes for this channel
+            $stmt = $pdo->prepare("
+                SELECT
+                    COALESCE(SUM(up_votes), 0) as total_up,
+                    COALESCE(SUM(down_votes), 0) as total_down
+                FROM votes WHERE login = ?
+            ");
+            $stmt->execute([$login]);
+            $totals = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            // Top 10 liked clips
+            $stmt = $pdo->prepare("
+                SELECT v.seq, v.title, v.up_votes, v.down_votes,
+                       (v.up_votes - v.down_votes) as score
+                FROM votes v
+                WHERE v.login = ? AND v.up_votes > 0
+                ORDER BY v.up_votes DESC, v.down_votes ASC
+                LIMIT 10
+            ");
+            $stmt->execute([$login]);
+            $topLiked = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // Top 10 disliked clips
+            $stmt = $pdo->prepare("
+                SELECT v.seq, v.title, v.up_votes, v.down_votes,
+                       (v.up_votes - v.down_votes) as score
+                FROM votes v
+                WHERE v.login = ? AND v.down_votes > 0
+                ORDER BY v.down_votes DESC, v.up_votes ASC
+                LIMIT 10
+            ");
+            $stmt->execute([$login]);
+            $topDisliked = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // Recent votes (last 20)
+            $stmt = $pdo->prepare("
+                SELECT vl.username, vl.vote_dir, vl.voted_at, v.seq, v.title
+                FROM vote_ledger vl
+                JOIN votes v ON vl.login = v.login AND vl.clip_id = v.clip_id
+                WHERE vl.login = ?
+                ORDER BY vl.voted_at DESC
+                LIMIT 20
+            ");
+            $stmt->execute([$login]);
+            $recentVotes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            json_response([
+                "success" => true,
+                "totals" => [
+                    "up" => (int)$totals['total_up'],
+                    "down" => (int)$totals['total_down'],
+                    "total" => (int)$totals['total_up'] + (int)$totals['total_down']
+                ],
+                "top_liked" => $topLiked,
+                "top_disliked" => $topDisliked,
+                "recent_votes" => $recentVotes
+            ]);
+        } catch (PDOException $e) {
+            json_error("Database error: " . $e->getMessage(), 500);
+        }
+        break;
+
+    // ===== CLIP WEIGHTING ENDPOINTS =====
+
+    case 'get_weighting':
+        if (!$auth->canDo('view')) json_error("Permission denied", 403);
+
+        try {
+            $weighting = new ClipWeighting($pdo, $login);
+            $config = $weighting->getConfig();
+            $categories = $weighting->getCategories();
+            $clippers = $weighting->getClippers();
+
+            json_response([
+                "success" => true,
+                "config" => $config,
+                "available_categories" => $categories,
+                "available_clippers" => $clippers
+            ]);
+        } catch (Exception $e) {
+            json_error("Error loading weighting config: " . $e->getMessage(), 500);
+        }
+        break;
+
+    case 'save_weighting':
+        // Only streamer/admin can change weighting (not mods)
+        if ($auth->getRole() < DashboardAuth::ROLE_STREAMER) {
+            json_error("Permission denied - streamer access required", 403);
+        }
+
+        // Get JSON body if POST
+        $rawInput = file_get_contents('php://input');
+        $input = json_decode($rawInput, true);
+
+        if (!$input || !isset($input['config'])) {
+            json_error("Missing config in request body");
+        }
+
+        try {
+            $weighting = new ClipWeighting($pdo, $login);
+            $success = $weighting->saveConfig($input['config']);
+
+            if ($success) {
+                json_response([
+                    "success" => true,
+                    "config" => $weighting->getConfig()
+                ]);
+            } else {
+                json_error("Failed to save weighting config");
+            }
+        } catch (Exception $e) {
+            json_error("Error saving weighting config: " . $e->getMessage(), 500);
+        }
+        break;
+
+    case 'reset_weighting':
+        // Only streamer/admin can reset weighting
+        if ($auth->getRole() < DashboardAuth::ROLE_STREAMER) {
+            json_error("Permission denied - streamer access required", 403);
+        }
+
+        try {
+            $weighting = new ClipWeighting($pdo, $login);
+            $success = $weighting->saveConfig(ClipWeighting::DEFAULT_CONFIG);
+
+            if ($success) {
+                json_response([
+                    "success" => true,
+                    "message" => "Weighting config reset to defaults",
+                    "config" => $weighting->getConfig()
+                ]);
+            } else {
+                json_error("Failed to reset weighting config");
+            }
+        } catch (Exception $e) {
+            json_error("Error resetting weighting config: " . $e->getMessage(), 500);
+        }
+        break;
+
+    case 'add_golden_clip':
+        if ($auth->getRole() < DashboardAuth::ROLE_STREAMER) {
+            json_error("Permission denied - streamer access required", 403);
+        }
+
+        // Read from JSON body or GET/POST params
+        $rawInput = file_get_contents('php://input');
+        $jsonInput = json_decode($rawInput, true) ?: [];
+
+        $seq = (int)($jsonInput['seq'] ?? $_GET['seq'] ?? $_POST['seq'] ?? 0);
+        $boost = (float)($jsonInput['boost'] ?? $_GET['boost'] ?? $_POST['boost'] ?? 2.0);
+
+        if ($seq <= 0) json_error("Invalid clip seq");
+
+        try {
+            // Get clip title for display and verify it exists
+            $stmt = $pdo->prepare("SELECT title FROM clips WHERE login = ? AND seq = ?");
+            $stmt->execute([$login, $seq]);
+            $clip = $stmt->fetch();
+
+            if (!$clip) {
+                json_error("Clip #{$seq} not found");
+            }
+
+            $title = $clip['title'] ?? '';
+
+            $weighting = new ClipWeighting($pdo, $login);
+            $success = $weighting->addGoldenClip($seq, $boost, $title);
+
+            if ($success) {
+                json_response([
+                    "success" => true,
+                    "message" => "Added clip #{$seq} as golden clip",
+                    "title" => $title,
+                    "config" => $weighting->getConfig()
+                ]);
+            } else {
+                json_error("Clip #{$seq} is already a golden clip");
+            }
+        } catch (Exception $e) {
+            json_error("Error adding golden clip: " . $e->getMessage(), 500);
+        }
+        break;
+
+    case 'remove_golden_clip':
+        if ($auth->getRole() < DashboardAuth::ROLE_STREAMER) {
+            json_error("Permission denied - streamer access required", 403);
+        }
+
+        // Read from JSON body or GET/POST params
+        $rawInput = file_get_contents('php://input');
+        $jsonInput = json_decode($rawInput, true) ?: [];
+
+        $seq = (int)($jsonInput['seq'] ?? $_GET['seq'] ?? $_POST['seq'] ?? 0);
+        if ($seq <= 0) json_error("Invalid clip seq");
+
+        try {
+            $weighting = new ClipWeighting($pdo, $login);
+            $success = $weighting->removeGoldenClip($seq);
+
+            json_response([
+                "success" => true,
+                "message" => "Removed clip #{$seq} from golden clips",
+                "config" => $weighting->getConfig()
+            ]);
+        } catch (Exception $e) {
+            json_error("Error removing golden clip: " . $e->getMessage(), 500);
+        }
+        break;
+
+    case 'get_weighting_for_player':
+        // This endpoint is public (no auth needed) for the player to fetch weights
+        // It only returns the weighting config, no sensitive data
+        try {
+            $weighting = new ClipWeighting($pdo, $login);
+            json_response([
+                "success" => true,
+                "config" => $weighting->getConfigForPlayer()
+            ]);
+        } catch (Exception $e) {
+            // Return defaults on error
+            json_response([
+                "success" => true,
+                "config" => (new ClipWeighting(null, ''))->getConfigForPlayer()
+            ]);
         }
         break;
 

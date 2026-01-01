@@ -82,14 +82,14 @@ function sleep_backoff($attempt) {
 
 load_env(__DIR__ . '/.env');
 
-// Require admin key for web access (skip for CLI)
-$ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
+// Require super admin OAuth for web access (skip for CLI)
 $isWeb = php_sapi_name() !== 'cli';
 if ($isWeb) {
-  $providedKey = arg('key', '');
-  if ($providedKey !== $ADMIN_KEY || $ADMIN_KEY === '') {
+  require_once __DIR__ . '/includes/twitch_oauth.php';
+  $currentUser = getCurrentUser();
+  if (!$currentUser || !isSuperAdmin()) {
     http_response_code(403);
-    echo "Forbidden - admin key required\n";
+    echo "Forbidden - super admin OAuth required\n";
     exit;
   }
 }

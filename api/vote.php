@@ -11,6 +11,10 @@
  *   - streamer: Channel/streamer name
  *   - seq: Clip sequence number
  *   - vote: 'like', 'dislike', or 'clear'
+ *
+ * Anti-bot measures:
+ *   - Rate limiting: Max 30 votes per 5 minutes per user
+ *   - Suspicious activity tracking: Flags accounts with unusual patterns
  */
 
 header('Content-Type: application/json');
@@ -25,6 +29,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 require_once __DIR__ . '/../includes/twitch_oauth.php';
 require_once __DIR__ . '/../db_config.php';
+
+// Rate limiting constants
+const RATE_LIMIT_VOTES = 30;        // Max votes per window
+const RATE_LIMIT_WINDOW = 300;      // Window in seconds (5 minutes)
+const SUSPICIOUS_DOWNVOTE_RATIO = 0.9;  // Flag if >90% of votes are downvotes
+const SUSPICIOUS_VOTES_PER_HOUR = 50;   // Flag if >50 votes in an hour
+const NEW_ACCOUNT_VOTE_LIMIT = 10;      // Stricter limit for accounts voting in first hour
 
 // Check authentication
 $user = getCurrentUser();
@@ -80,6 +91,100 @@ if (!$pdo) {
   exit;
 }
 
+$username = $user['login'];
+$userId = $user['id'] ?? null;
+
+// ============================================
+// ANTI-BOT: Rate limiting check (atomic upsert to prevent race conditions)
+// ============================================
+try {
+  // Ensure rate limit table exists
+  $pdo->exec("
+    CREATE TABLE IF NOT EXISTS vote_rate_limits (
+      username VARCHAR(64) PRIMARY KEY,
+      vote_count INTEGER DEFAULT 0,
+      window_start TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  ");
+
+  // Atomic upsert with rate limit check
+  // This query atomically:
+  // 1. Inserts new row if user doesn't exist
+  // 2. Resets window if expired
+  // 3. Increments counter if within window
+  // 4. Returns the resulting state for checking
+  $stmt = $pdo->prepare("
+    INSERT INTO vote_rate_limits (username, vote_count, window_start)
+    VALUES (?, 1, NOW())
+    ON CONFLICT (username) DO UPDATE SET
+      vote_count = CASE
+        WHEN EXTRACT(EPOCH FROM (NOW() - vote_rate_limits.window_start)) >= ?
+        THEN 1
+        ELSE vote_rate_limits.vote_count + 1
+      END,
+      window_start = CASE
+        WHEN EXTRACT(EPOCH FROM (NOW() - vote_rate_limits.window_start)) >= ?
+        THEN NOW()
+        ELSE vote_rate_limits.window_start
+      END
+    RETURNING vote_count, EXTRACT(EPOCH FROM (NOW() - window_start)) as window_age
+  ");
+  $stmt->execute([$username, RATE_LIMIT_WINDOW, RATE_LIMIT_WINDOW]);
+  $rateLimit = $stmt->fetch(PDO::FETCH_ASSOC);
+
+  if ($rateLimit) {
+    $voteCount = (int)$rateLimit['vote_count'];
+    $windowAge = (float)$rateLimit['window_age'];
+
+    // Check if over limit (vote_count already incremented, so check against limit)
+    if ($voteCount > RATE_LIMIT_VOTES) {
+      $remaining = ceil(RATE_LIMIT_WINDOW - $windowAge);
+      http_response_code(429);
+      echo json_encode([
+        'error' => 'Rate limit exceeded',
+        'message' => "Too many votes. Please wait {$remaining} seconds.",
+        'retry_after' => $remaining
+      ]);
+      exit;
+    }
+  }
+} catch (PDOException $e) {
+  // Log but don't fail on rate limit errors
+  error_log("Rate limit check error: " . $e->getMessage());
+}
+
+// ============================================
+// ANTI-BOT: Check if user is flagged as suspicious
+// ============================================
+try {
+  // Check if table exists first to avoid errors on fresh installs
+  $tableCheck = $pdo->query("
+    SELECT EXISTS (
+      SELECT FROM information_schema.tables
+      WHERE table_name = 'suspicious_voters'
+    )
+  ");
+  $tableExists = $tableCheck->fetchColumn();
+
+  if ($tableExists) {
+    $stmt = $pdo->prepare("SELECT flagged, reviewed FROM suspicious_voters WHERE username = ?");
+    $stmt->execute([$username]);
+    $suspiciousStatus = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if ($suspiciousStatus && $suspiciousStatus['flagged'] && !$suspiciousStatus['reviewed']) {
+      http_response_code(403);
+      echo json_encode([
+        'error' => 'Voting suspended',
+        'message' => 'Your voting privileges have been temporarily suspended for review.'
+      ]);
+      exit;
+    }
+  }
+} catch (PDOException $e) {
+  // Table might not exist yet on first vote - that's fine, just log and continue
+  error_log("Suspicious check error: " . $e->getMessage());
+}
+
 try {
   // Find the clip
   $stmt = $pdo->prepare("SELECT clip_id, title FROM clips WHERE login = ? AND seq = ? AND blocked = FALSE");
@@ -94,7 +199,6 @@ try {
 
   $clipId = $clip['clip_id'];
   $clipTitle = $clip['title'];
-  $username = $user['login'];
 
   // Debug logging
   error_log("vote.php: Voting - streamer=$streamer, seq=$seq, clipId=$clipId, username=$username, vote=$vote");
@@ -195,6 +299,115 @@ try {
   $response['user_vote'] = $currentVote === 'up' ? 'like' : ($currentVote === 'down' ? 'dislike' : null);
 
   echo json_encode($response);
+
+  // ============================================
+  // ANTI-BOT: Update suspicious activity tracking (async, after response)
+  // ============================================
+  if ($vote !== 'clear') {
+    try {
+      // Ensure suspicious_voters table exists
+      $pdo->exec("
+        CREATE TABLE IF NOT EXISTS suspicious_voters (
+          id SERIAL PRIMARY KEY,
+          username VARCHAR(64) NOT NULL UNIQUE,
+          twitch_user_id VARCHAR(64),
+          total_votes INTEGER DEFAULT 0,
+          votes_last_hour INTEGER DEFAULT 0,
+          votes_last_day INTEGER DEFAULT 0,
+          downvote_ratio NUMERIC(5,4) DEFAULT 0,
+          first_vote_at TIMESTAMP,
+          last_vote_at TIMESTAMP,
+          flagged BOOLEAN DEFAULT FALSE,
+          flag_reason TEXT,
+          flagged_at TIMESTAMP,
+          reviewed BOOLEAN DEFAULT FALSE,
+          reviewed_by VARCHAR(64),
+          reviewed_at TIMESTAMP,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      ");
+
+      // Get user's vote statistics
+      $stmt = $pdo->prepare("
+        SELECT
+          COUNT(*) as total,
+          COUNT(*) FILTER (WHERE vote_dir = 'down') as downvotes,
+          COUNT(*) FILTER (WHERE voted_at > NOW() - INTERVAL '1 hour') as last_hour,
+          COUNT(*) FILTER (WHERE voted_at > NOW() - INTERVAL '1 day') as last_day,
+          MIN(voted_at) as first_vote
+        FROM vote_ledger WHERE username = ?
+      ");
+      $stmt->execute([$username]);
+      $stats = $stmt->fetch(PDO::FETCH_ASSOC);
+
+      $totalVotes = (int)$stats['total'];
+      $downvotes = (int)$stats['downvotes'];
+      $votesLastHour = (int)$stats['last_hour'];
+      $votesLastDay = (int)$stats['last_day'];
+      $downvoteRatio = $totalVotes > 0 ? $downvotes / $totalVotes : 0;
+
+      // Check for suspicious patterns
+      $flagReasons = [];
+
+      // Pattern 1: Very high downvote ratio with significant votes
+      if ($totalVotes >= 10 && $downvoteRatio >= SUSPICIOUS_DOWNVOTE_RATIO) {
+        $flagReasons[] = "High downvote ratio: " . round($downvoteRatio * 100) . "% downvotes";
+      }
+
+      // Pattern 2: Too many votes in a short time
+      if ($votesLastHour >= SUSPICIOUS_VOTES_PER_HOUR) {
+        $flagReasons[] = "High velocity: {$votesLastHour} votes in last hour";
+      }
+
+      // Pattern 3: New account voting rapidly
+      $firstVoteTime = $stats['first_vote'] ? strtotime($stats['first_vote']) : time();
+      $accountAge = time() - $firstVoteTime;
+      if ($accountAge < 3600 && $totalVotes >= NEW_ACCOUNT_VOTE_LIMIT) {
+        $flagReasons[] = "New account rapid voting: {$totalVotes} votes in first hour";
+      }
+
+      $shouldFlag = !empty($flagReasons);
+      $flagReason = implode('; ', $flagReasons);
+
+      // Upsert suspicious voter tracking
+      $stmt = $pdo->prepare("
+        INSERT INTO suspicious_voters (username, twitch_user_id, total_votes, votes_last_hour, votes_last_day, downvote_ratio, first_vote_at, last_vote_at, flagged, flag_reason, flagged_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, CASE WHEN ? THEN NOW() ELSE NULL END)
+        ON CONFLICT (username) DO UPDATE SET
+          twitch_user_id = COALESCE(EXCLUDED.twitch_user_id, suspicious_voters.twitch_user_id),
+          total_votes = EXCLUDED.total_votes,
+          votes_last_hour = EXCLUDED.votes_last_hour,
+          votes_last_day = EXCLUDED.votes_last_day,
+          downvote_ratio = EXCLUDED.downvote_ratio,
+          last_vote_at = NOW(),
+          flagged = CASE WHEN suspicious_voters.reviewed THEN suspicious_voters.flagged ELSE EXCLUDED.flagged END,
+          flag_reason = CASE WHEN suspicious_voters.reviewed THEN suspicious_voters.flag_reason ELSE EXCLUDED.flag_reason END,
+          flagged_at = CASE
+            WHEN suspicious_voters.reviewed THEN suspicious_voters.flagged_at
+            WHEN EXCLUDED.flagged AND NOT suspicious_voters.flagged THEN NOW()
+            ELSE suspicious_voters.flagged_at
+          END
+      ");
+      $stmt->execute([
+        $username,
+        $userId,
+        $totalVotes,
+        $votesLastHour,
+        $votesLastDay,
+        $downvoteRatio,
+        $stats['first_vote'],
+        $shouldFlag,
+        $flagReason ?: null,
+        $shouldFlag
+      ]);
+
+      if ($shouldFlag) {
+        error_log("SUSPICIOUS VOTER FLAGGED: {$username} - {$flagReason}");
+      }
+    } catch (PDOException $e) {
+      error_log("Suspicious tracking error: " . $e->getMessage());
+    }
+  }
 
 } catch (PDOException $e) {
   error_log("Vote API error: " . $e->getMessage());

@@ -453,6 +453,7 @@
   // State
   let clips = [];
   let voteScores = {};
+  let weightingConfig = null; // Custom weighting config from streamer settings
   let currentClip = null;
   let failedClips = new Set();
   let isSwitching = false;
@@ -619,17 +620,72 @@
       const lastAt = state.lastPlayedAt[c.id] || 0;
       const minutesAgo = (Date.now() - lastAt) / 60000;
 
+      // Get weights (defaults if no custom config)
+      const w = weightingConfig?.enabled && weightingConfig?.weights
+        ? weightingConfig.weights
+        : { recency: 1.0, views: 1.0, play_penalty: 1.0, voting: 1.0 };
+
       let score = 1;
-      score += Math.min(5, minutesAgo / 15);
-      score += Math.max(0, 3 - plays);
 
+      // Recency bonus (time since last played, scaled by weight)
+      score += Math.min(5, minutesAgo / 15) * w.recency;
+
+      // Play count penalty (scaled by weight)
+      score += Math.max(0, 3 - plays) * w.play_penalty;
+
+      // View count bonus (log scale, scaled by weight)
       const views = Number(c.view_count || 0);
-      score += Math.min(1.8, Math.log10(views + 1) * 0.55);
+      score += Math.min(1.8, Math.log10(views + 1) * 0.55) * w.views;
 
+      // Voting bonus (scaled by weight)
       const netVotes = voteScores[c.id] || 0;
-      score += Math.max(-5, Math.min(5, netVotes * 0.5));
+      score += Math.max(-5, Math.min(5, netVotes * 0.5)) * w.voting;
 
-      return { c, score };
+      // Apply custom boosts if weighting is enabled
+      if (weightingConfig?.enabled) {
+        // Duration boosts
+        const dur = Number(c.duration || 30);
+        const db = weightingConfig.duration_boosts || {};
+        if (db.short?.enabled && dur < (db.short.max || 30)) {
+          score += db.short.boost || 0;
+        } else if (db.medium?.enabled && dur >= (db.medium.min || 30) && dur <= (db.medium.max || 60)) {
+          score += db.medium.boost || 0;
+        } else if (db.long?.enabled && dur > (db.long.min || 60)) {
+          score += db.long.boost || 0;
+        }
+
+        // Category boosts
+        const gameId = c.game_id || '';
+        const catBoosts = weightingConfig.category_boosts || [];
+        for (const cat of catBoosts) {
+          if (cat.game_id === gameId) {
+            score += cat.boost || 0;
+            break;
+          }
+        }
+
+        // Clipper boosts
+        const clipper = (c.creator_name || '').toLowerCase();
+        const clipperBoosts = weightingConfig.clipper_boosts || [];
+        for (const cb of clipperBoosts) {
+          if (cb.name === clipper) {
+            score += cb.boost || 0;
+            break;
+          }
+        }
+
+        // Golden clips boost
+        const seq = Number(c.seq || 0);
+        const goldenClips = weightingConfig.golden_clips || [];
+        for (const g of goldenClips) {
+          if (g.seq === seq) {
+            score += g.boost || 0;
+            break;
+          }
+        }
+      }
+
+      return { c, score: Math.max(0, score) };
     }).filter(x => x.score > 0.1);
 
     scored.sort((a,b) => b.score - a.score);
@@ -1374,6 +1430,16 @@
       if (Array.isArray(data.votes)) {
         data.votes.forEach(v => { voteScores[v.clip_id] = v.net_score || 0; });
         debugLog(`Loaded ${Object.keys(voteScores).length} votes`);
+      }
+    } catch {}
+
+    // Fetch custom weighting config
+    try {
+      const res = await fetch(`${API_BASE}/dashboard_api.php?action=get_weighting_for_player&login=${encodeURIComponent(login)}`, { cache: "no-store" });
+      const data = await res.json();
+      if (data.success && data.config) {
+        weightingConfig = data.config;
+        debugLog(`Loaded weighting config (enabled: ${weightingConfig.enabled})`);
       }
     } catch {}
 
