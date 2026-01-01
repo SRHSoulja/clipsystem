@@ -680,7 +680,7 @@ if ($isSuperAdmin || $isStreamerOfChannel) {
       <!-- Not authorized - show channels they can access -->
       <p style="color:#adadb8;margin-bottom:16px;">You don't have mod access to <strong><?= htmlspecialchars($login) ?></strong>.</p>
       <p style="color:#666;font-size:13px;margin-bottom:16px;">The streamer needs to add your username to their mod list in their dashboard settings.</p>
-      <a href="/my_channels.php" style="display: block; text-align: center; padding: 12px; background: #3a3a3d; color: white; border-radius: 4px; text-decoration: none; margin-bottom: 12px;">View My Channels</a>
+      <a href="/channels" style="display: block; text-align: center; padding: 12px; background: #3a3a3d; color: white; border-radius: 4px; text-decoration: none; margin-bottom: 12px;">View My Channels</a>
       <input type="hidden" id="channelInput" value="<?= htmlspecialchars($login) ?>">
       <input type="hidden" id="keyInput" value="">
       <?php endif; ?>

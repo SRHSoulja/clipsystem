@@ -15,6 +15,9 @@
 
     # Clean URLs - /manage/username -> clip_manage.php?login=username
     RewriteRule ^manage/([a-zA-Z0-9_]+)/?$ clip_manage.php?login=$1 [QSA,L]
+
+    # Clean URLs - /channels -> my_channels.php (dashboard hub)
+    RewriteRule ^channels/?$ my_channels.php [QSA,L]
 </IfModule>
 
 # Enable CORS for all origins and security headers

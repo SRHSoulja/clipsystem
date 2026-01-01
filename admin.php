@@ -384,7 +384,7 @@ if ($authenticated) {
           <div style="margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 4px;">
             <strong>Dashboard enabled for <?= htmlspecialchars($generatedLogin) ?>!</strong><br>
             <div style="margin-top: 8px; font-size: 13px; color: #adadb8;">
-              The streamer can access their dashboard by visiting <a href="https://clips.gmgnrepeat.com/my_channels.php" style="color: #9147ff;">clips.gmgnrepeat.com/my_channels.php</a> and logging in with their Twitch account.
+              The streamer can access their dashboard by visiting <a href="https://clips.gmgnrepeat.com/channels" style="color: #9147ff;">clips.gmgnrepeat.com/channels</a> and logging in with their Twitch account.
             </div>
           </div>
         <?php endif; ?>
