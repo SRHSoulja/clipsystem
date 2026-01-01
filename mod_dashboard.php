@@ -890,11 +890,11 @@ if ($isSuperAdmin || $isStreamerOfChannel) {
       closeBtn.style.display = sidebar.classList.contains('open') ? 'block' : 'none';
     }
 
-    // Login - handle Enter on both inputs
-    document.getElementById('channelInput').addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') document.getElementById('keyInput').focus();
+    // Login - handle Enter on both inputs (only if login form exists)
+    document.getElementById('channelInput')?.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') document.getElementById('keyInput')?.focus();
     });
-    document.getElementById('keyInput').addEventListener('keypress', (e) => {
+    document.getElementById('keyInput')?.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') login();
     });
 
