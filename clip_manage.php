@@ -555,7 +555,7 @@ $baseUrl = "clip_manage.php?login=" . urlencode($login) . "&key=" . urlencode($k
         <h1>Clip Manager</h1>
         <p class="subtitle"><?= htmlspecialchars($login) ?>'s Clips</p>
         <div class="nav-links">
-          <a href="mod_dashboard.php?key=<?= htmlspecialchars($key) ?>">Back to Dashboard</a>
+          <a href="mod_dashboard.php?login=<?= htmlspecialchars($login) ?>">Back to Dashboard</a>
           <a href="clip_search.php?login=<?= htmlspecialchars($login) ?>">Public Search</a>
         </div>
       </div>

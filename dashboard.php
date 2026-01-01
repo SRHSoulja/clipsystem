@@ -3,8 +3,8 @@
  * dashboard.php - Streamer Dashboard
  *
  * Self-service dashboard for streamers to manage their clip reel.
- * Access: dashboard.php?key=STREAMER_KEY or via Twitch OAuth
- * Super admins (thearsondragon, cliparchive) can access any channel via OAuth
+ * Access: Twitch OAuth required. dashboard.php?login=username
+ * Super admins (thearsondragon, cliparchive) can access any channel.
  */
 header("Content-Type: text/html; charset=utf-8");
 header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");

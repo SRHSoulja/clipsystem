@@ -70,16 +70,17 @@ if ($authenticated && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($login) {
       $auth = new DashboardAuth();
-      $key = $auth->createStreamer($login);
+      $created = $auth->createStreamer($login);
 
-      if ($key) {
-        $dashboardUrl = "https://clips.gmgnrepeat.com/dashboard.php?key=" . urlencode($key);
-        $message = "Dashboard link generated for {$login}!";
+      if ($created || $auth->streamerExists($login)) {
+        // OAuth-based URL - streamer logs in with Twitch to access their dashboard
+        $dashboardUrl = "https://clips.gmgnrepeat.com/dashboard.php?login=" . urlencode($login);
+        $message = "Dashboard enabled for {$login}! They can access it by logging in with Twitch.";
         $messageType = 'success';
         $generatedDashboardUrl = $dashboardUrl;
         $generatedLogin = $login;
       } else {
-        $message = "Failed to generate dashboard link";
+        $message = "Failed to enable dashboard";
         $messageType = 'error';
       }
     }
@@ -381,10 +382,9 @@ if ($authenticated) {
         <?php endif; ?>
         <?php if (isset($generatedDashboardUrl)): ?>
           <div style="margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 4px;">
-            <strong>Dashboard URL for <?= htmlspecialchars($generatedLogin) ?>:</strong><br>
-            <input type="text" value="<?= htmlspecialchars($generatedDashboardUrl) ?>" readonly onclick="this.select()" style="width: 100%; margin-top: 5px; cursor: pointer;">
+            <strong>Dashboard enabled for <?= htmlspecialchars($generatedLogin) ?>!</strong><br>
             <div style="margin-top: 8px; font-size: 13px; color: #adadb8;">
-              Share this link with the streamer. They can bookmark it for easy access.
+              The streamer can access their dashboard by visiting <a href="https://clips.gmgnrepeat.com/my_channels.php" style="color: #9147ff;">clips.gmgnrepeat.com/my_channels.php</a> and logging in with their Twitch account.
             </div>
           </div>
         <?php endif; ?>
