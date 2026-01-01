@@ -407,12 +407,11 @@ foreach ($clips as $c) {
 // Determine if we need to continue and build next URL
 $needsContinue = $isWeb && $nextWindow > 0 && $nextWindow <= $totalWindows;
 $freshParam = $freshMode ? "&fresh=1" : "";
-$keyParam = "&key=" . urlencode($providedKey);
-$nextUrl = $needsContinue ? "clips_backfill.php?login=$login&years=$years&window=$nextWindow&maxwin=$maxWindows$freshParam$keyParam" : null;
+$nextUrl = $needsContinue ? "clips_backfill.php?login=$login&years=$years&window=$nextWindow&maxwin=$maxWindows$freshParam" : null;
 
 // URL to auto-migrate after backfill completes
 // Pass fresh=1 to migration if we're doing a fresh backfill (so it deletes existing DB clips too)
-$migrateUrl = "migrate_clips_to_db.php?login=$login&key=" . urlencode($providedKey) . "&update=1&from_backfill=1" . $freshParam;
+$migrateUrl = "migrate_clips_to_db.php?login=$login&update=1&from_backfill=1" . $freshParam;
 
 echo "=== Chunk Complete ===\n";
 echo "Windows processed: $windowsProcessed\n";

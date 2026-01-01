@@ -274,6 +274,63 @@ if ($currentUser) {
             font-weight: bold;
         }
 
+        /* Mod entries with permissions */
+        .mod-entry {
+            background: #26262c;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+        .mod-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .mod-name {
+            font-weight: 600;
+            color: #efeff1;
+        }
+        .btn-remove {
+            background: transparent;
+            border: none;
+            color: #eb0400;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 0 8px;
+            line-height: 1;
+        }
+        .btn-remove:hover {
+            color: #ff6b6b;
+        }
+        .mod-permissions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .perm-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            background: #3a3a3d;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #adadb8;
+            cursor: pointer;
+        }
+        .perm-checkbox:hover {
+            background: #464649;
+        }
+        .perm-checkbox input[type="checkbox"] {
+            width: 14px;
+            height: 14px;
+            cursor: pointer;
+        }
+        .perm-checkbox input[type="checkbox"]:checked + span {
+            color: #9147ff;
+        }
+
         /* Slider styling */
         .slider-group {
             display: flex;
@@ -672,12 +729,15 @@ if ($currentUser) {
     <div class="dashboard" id="dashboard">
         <div class="header">
             <h1>Streamer Dashboard</h1>
-            <div class="user-info">
-                <span id="channelName"></span>
+            <div class="user-info" style="display: flex; align-items: center; gap: 12px;">
+                <select id="channelSwitcher" onchange="switchChannel(this.value)" style="background: #26262c; color: #efeff1; border: 1px solid #3a3a3d; border-radius: 4px; padding: 6px 10px; font-size: 14px; cursor: pointer;">
+                    <option value="" id="currentChannelOption">Loading...</option>
+                </select>
                 <span class="role-badge" id="roleBadge">MOD</span>
                 <?php if ($isSuperAdmin): ?>
                 <span class="role-badge" style="background: #eb0400;">SUPER ADMIN</span>
                 <?php endif; ?>
+                <a href="/auth/logout.php" style="color: #adadb8; text-decoration: none; font-size: 12px;">Logout</a>
             </div>
         </div>
 
@@ -962,14 +1022,27 @@ if ($currentUser) {
             </div>
 
             <div class="card" id="modManagementCard">
-                <h3>Mod Access</h3>
-                <p style="color: #adadb8; margin-bottom: 12px;">Add Twitch users who can access your mod dashboard. They just login with their Twitch account - no password needed.</p>
+                <h3>Mod Access & Permissions</h3>
+                <p style="color: #adadb8; margin-bottom: 12px;">Add Twitch users who can access your mod dashboard. Customize what each mod can do.</p>
                 <div class="form-group">
                     <input type="text" id="newModUsername" placeholder="Enter Twitch username" onkeypress="if(event.key==='Enter')addMod()">
                     <button class="btn btn-primary" id="addModBtn" style="margin-top: 8px;" onclick="addMod()">Add Mod</button>
                 </div>
                 <div id="modList" style="margin-top: 16px;">
                     <p style="color: #666; font-size: 13px;">Loading mods...</p>
+                </div>
+                <div id="permissionLegend" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #3a3a3d; display: none;">
+                    <p style="color: #666; font-size: 12px; margin-bottom: 8px;"><strong>Permission Legend:</strong></p>
+                    <div style="display: flex; flex-wrap: wrap; gap: 8px; font-size: 11px; color: #888;">
+                        <span title="Create/edit playlists">Playlists</span>
+                        <span title="Hide individual clips">Block</span>
+                        <span title="Change overlay positions">HUD</span>
+                        <span title="Toggle voting settings">Voting</span>
+                        <span title="Modify clip weights">Weights</span>
+                        <span title="Bot response mode">Bot</span>
+                        <span title="Access stats tab">Stats</span>
+                        <span title="Enable/disable commands">Commands</span>
+                    </div>
                 </div>
             </div>
 
@@ -1359,6 +1432,46 @@ if ($currentUser) {
             window.location.href = `/mod_dashboard.php?login=${encodeURIComponent(channel)}`;
         }
 
+        // Load channels the user can access for the channel switcher
+        async function loadAccessibleChannels() {
+            const select = document.getElementById('channelSwitcher');
+            // Set current channel as default while loading (safe - authLogin is server-validated)
+            select.innerHTML = '';
+            const defaultOption = document.createElement('option');
+            defaultOption.value = authLogin;
+            defaultOption.selected = true;
+            defaultOption.textContent = authLogin;
+            select.appendChild(defaultOption);
+
+            try {
+                const res = await fetch(`${API_BASE}/dashboard_api.php?action=get_accessible_channels`);
+                const data = await res.json();
+
+                if (data.success && data.channels && data.channels.length > 0) {
+                    // Clear and rebuild safely to prevent XSS
+                    select.innerHTML = '';
+                    data.channels.forEach(ch => {
+                        const option = document.createElement('option');
+                        option.value = ch.login;
+                        option.selected = (ch.login === authLogin);
+                        const suffix = ch.role === 'streamer' ? ' (Your Channel)' :
+                                      ch.role === 'mod' ? ' (Mod)' : '';
+                        option.textContent = ch.login + suffix;
+                        select.appendChild(option);
+                    });
+                }
+            } catch (e) {
+                console.error('Error loading accessible channels:', e);
+            }
+        }
+
+        // Switch to a different channel
+        function switchChannel(login) {
+            if (login && login !== authLogin) {
+                window.location.href = `/dashboard.php?login=${encodeURIComponent(login)}`;
+            }
+        }
+
         // Allow Enter key in admin channel input
         document.getElementById('adminChannelInput')?.addEventListener('keypress', e => {
             if (e.key === 'Enter') goToChannel();
@@ -1382,7 +1495,9 @@ if ($currentUser) {
         function showDashboard() {
             document.getElementById('loginScreen').style.display = 'none';
             document.getElementById('dashboard').classList.add('active');
-            document.getElementById('channelName').textContent = authLogin;
+
+            // Load accessible channels for the dropdown
+            loadAccessibleChannels();
 
             const badge = document.getElementById('roleBadge');
             badge.textContent = authRole.toUpperCase();
@@ -1806,19 +1921,74 @@ if ($currentUser) {
             }
         }
 
+        // Permission definitions for UI
+        const modPermissions = {
+            'manage_playlists': { label: 'Playlists', desc: 'Create/edit playlists' },
+            'block_clips': { label: 'Block', desc: 'Hide individual clips' },
+            'edit_hud': { label: 'HUD', desc: 'Change overlay positions' },
+            'edit_voting': { label: 'Voting', desc: 'Toggle voting settings' },
+            'edit_weighting': { label: 'Weights', desc: 'Modify clip weights' },
+            'edit_bot_settings': { label: 'Bot', desc: 'Bot response mode' },
+            'view_stats': { label: 'Stats', desc: 'Access stats tab' },
+            'toggle_commands': { label: 'Commands', desc: 'Enable/disable commands' }
+        };
+
         function renderModList(mods) {
             const container = document.getElementById('modList');
+            const legend = document.getElementById('permissionLegend');
+
             if (mods.length === 0) {
                 container.innerHTML = '<p style="color: #666; font-size: 13px;">No mods added yet. Add Twitch usernames above.</p>';
+                legend.style.display = 'none';
                 return;
             }
 
-            container.innerHTML = '<div class="tags">' + mods.map(mod => `
-                <span class="tag">
-                    ${escapeHtml(mod.mod_username)}
-                    <span class="remove" onclick="removeMod('${escapeHtml(mod.mod_username)}')">&times;</span>
-                </span>
-            `).join('') + '</div>';
+            legend.style.display = 'block';
+
+            container.innerHTML = mods.map(mod => {
+                const perms = mod.permissions || [];
+                const permCheckboxes = Object.entries(modPermissions).map(([key, info]) => {
+                    const checked = perms.includes(key) ? 'checked' : '';
+                    return `
+                        <label class="perm-checkbox" title="${info.desc}">
+                            <input type="checkbox" ${checked} onchange="toggleModPermission('${escapeHtml(mod.mod_username)}', '${key}', this.checked)">
+                            <span>${info.label}</span>
+                        </label>
+                    `;
+                }).join('');
+
+                return `
+                    <div class="mod-entry">
+                        <div class="mod-header">
+                            <span class="mod-name">${escapeHtml(mod.mod_username)}</span>
+                            <button class="btn-remove" onclick="removeMod('${escapeHtml(mod.mod_username)}')" title="Remove mod">&times;</button>
+                        </div>
+                        <div class="mod-permissions">
+                            ${permCheckboxes}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function toggleModPermission(modUsername, permission, granted) {
+            try {
+                const res = await fetch(`${API_BASE}/dashboard_api.php?action=set_mod_permission&key=${encodeURIComponent(authKey)}&login=${encodeURIComponent(authLogin)}&mod_username=${encodeURIComponent(modUsername)}&permission=${encodeURIComponent(permission)}&granted=${granted ? '1' : '0'}`);
+                const data = await res.json();
+
+                if (data.success) {
+                    const action = granted ? 'granted' : 'revoked';
+                    showToast('success', 'Permission Updated', `${modPermissions[permission]?.label || permission} ${action} for ${modUsername}`);
+                } else {
+                    // Revert checkbox on failure
+                    loadMods();
+                    showToast('error', 'Failed to Update', data.error || 'Could not update permission');
+                }
+            } catch (e) {
+                console.error('Error updating permission:', e);
+                loadMods();
+                showToast('error', 'Connection Error', 'Could not update permission');
+            }
         }
 
         async function addMod() {

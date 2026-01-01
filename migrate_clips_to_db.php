@@ -8,8 +8,8 @@
  *   php migrate_clips_to_db.php [login]
  *   Default login: floppyjimmie
  *
- * Browser usage:
- *   migrate_clips_to_db.php?login=floppyjimmie&key=YOUR_ADMIN_KEY
+ * Browser usage (requires OAuth super admin login):
+ *   migrate_clips_to_db.php?login=streamer_name
  *
  * Options:
  *   &update=1  - Update existing clips with creator_name from JSON
@@ -35,14 +35,13 @@ if (file_exists($envPath)) {
 }
 
 require_once __DIR__ . '/db_config.php';
+require_once __DIR__ . '/includes/twitch_oauth.php';
 
-// Auth check for web access
-$ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
+// Auth check for web access - super admin only
 if (php_sapi_name() !== 'cli') {
-    $key = $_GET['key'] ?? '';
-    if ($key !== $ADMIN_KEY) {
+    if (!isSuperAdmin()) {
         http_response_code(403);
-        echo "Forbidden. Use ?key=YOUR_ADMIN_KEY";
+        echo "Forbidden. Super admin access required. Please log in via OAuth.";
         exit;
     }
 }
@@ -323,7 +322,7 @@ $needsContinue = $isWeb && $nextOffset < $totalClips;
 $freshParam = $freshMode ? "&fresh=1" : "";
 $fromBackfill = isset($_GET['from_backfill']);
 $nextUrl = $needsContinue
-    ? "migrate_clips_to_db.php?login=$login&key=" . urlencode($_GET['key'] ?? '') . "&offset=$nextOffset&chunk=$chunkSize" . ($updateMode ? "&update=1" : "") . $freshParam . ($fromBackfill ? "&from_backfill=1" : "")
+    ? "migrate_clips_to_db.php?login=$login&offset=$nextOffset&chunk=$chunkSize" . ($updateMode ? "&update=1" : "") . $freshParam . ($fromBackfill ? "&from_backfill=1" : "")
     : null;
 
 // Success URL - redirect to admin with success message

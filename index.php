@@ -34,6 +34,44 @@ if ($pdo) {
   }
 }
 
+// Check if current user should see a dashboard link
+$showDashboard = false;
+$dashboardChannels = [];
+if ($currentUser && $pdo) {
+  $userLogin = strtolower($currentUser['login']);
+
+  // Super admins always get dashboard access
+  if (isSuperAdmin()) {
+    $showDashboard = true;
+  }
+
+  // Check if user is an archived streamer
+  if (!$showDashboard) {
+    try {
+      $stmt = $pdo->prepare("SELECT 1 FROM clips WHERE login = ? LIMIT 1");
+      $stmt->execute([$userLogin]);
+      if ($stmt->fetch()) {
+        $showDashboard = true;
+        $dashboardChannels[] = $userLogin;
+      }
+    } catch (PDOException $e) {
+      // Ignore
+    }
+  }
+
+  // Check if user is a mod for any archived streamer
+  try {
+    $stmt = $pdo->prepare("SELECT channel_login FROM channel_mods WHERE mod_username = ?");
+    $stmt->execute([$userLogin]);
+    while ($row = $stmt->fetch()) {
+      $showDashboard = true;
+      $dashboardChannels[] = $row['channel_login'];
+    }
+  } catch (PDOException $e) {
+    // Ignore - table might not exist
+  }
+}
+
 // Otherwise show landing page
 header("Content-Type: text/html; charset=utf-8");
 ?>
@@ -305,7 +343,9 @@ header("Content-Type: text/html; charset=utf-8");
     <div class="user-info">
       <span class="user-name"><?= htmlspecialchars($currentUser['display_name'] ?? $currentUser['login']) ?></span>
       <div class="user-links">
+        <?php if ($showDashboard): ?>
         <a href="/mod_dashboard.php">Dashboard</a>
+        <?php endif; ?>
         <a href="/auth/logout.php" class="logout-btn">Logout</a>
       </div>
     </div>

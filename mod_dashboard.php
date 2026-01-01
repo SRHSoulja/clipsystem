@@ -26,6 +26,7 @@ if (file_exists($envPath)) {
 
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/includes/twitch_oauth.php';
+require_once __DIR__ . '/includes/dashboard_auth.php';
 
 // Get current OAuth user
 $currentUser = getCurrentUser();
@@ -43,6 +44,10 @@ $oauthAuthorized = false;
 $oauthChannel = '';
 $isSuperAdmin = false;
 $isChannelMod = false;
+$modPermissions = [];
+$isStreamerOfChannel = false;
+
+$auth = new DashboardAuth();
 
 if ($currentUser) {
   $oauthChannel = strtolower($currentUser['login']);
@@ -56,6 +61,11 @@ if ($currentUser) {
   // User is authorized if they're a super admin or accessing their own channel
   $oauthAuthorized = isAuthorizedForChannel($login);
 
+  // Check if user is the streamer of this channel (for permission inheritance)
+  if ($login === $oauthChannel) {
+    $isStreamerOfChannel = true;
+  }
+
   // Also check if user is in the channel's mod list
   if (!$oauthAuthorized) {
     $pdo = get_db_connection();
@@ -64,14 +74,23 @@ if ($currentUser) {
         $stmt = $pdo->prepare("SELECT 1 FROM channel_mods WHERE channel_login = ? AND mod_username = ?");
         $stmt->execute([$login, $oauthChannel]);
         if ($stmt->fetch()) {
-          $oauthAuthorized = true;
-          $isChannelMod = true;
+          // Check if mod has view_dashboard permission
+          $modPermissions = $auth->getModPermissions($login, $oauthChannel);
+          if (in_array('view_dashboard', $modPermissions)) {
+            $oauthAuthorized = true;
+            $isChannelMod = true;
+          }
         }
       } catch (PDOException $e) {
         // Ignore - table might not exist yet
       }
     }
   }
+}
+
+// For admins and streamers, grant all permissions
+if ($isSuperAdmin || $isStreamerOfChannel) {
+  $modPermissions = array_keys(DashboardAuth::ALL_PERMISSIONS);
 }
 ?>
 <!DOCTYPE html>
@@ -687,11 +706,14 @@ if ($currentUser) {
         <a href="#" id="searchClipsLink" class="nav-link" style="display:none;">Search Clips</a>
         <button class="mobile-toggle" onclick="toggleSidebar()">Playlists</button>
       </div>
-      <div class="user">
-        <?php echo htmlspecialchars($login); ?>
+      <div class="user" style="display: flex; align-items: center; gap: 12px;">
+        <select id="channelSwitcher" onchange="switchChannel(this.value)" style="background: #26262c; color: #efeff1; border: 1px solid #3a3a3d; border-radius: 4px; padding: 6px 10px; font-size: 14px; cursor: pointer;">
+          <option value="<?php echo htmlspecialchars($login); ?>" selected><?php echo htmlspecialchars($login); ?></option>
+        </select>
         <?php if ($isSuperAdmin): ?>
-        <span style="background: #eb0400; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 8px;">SUPER ADMIN</span>
+        <span style="background: #eb0400; padding: 2px 6px; border-radius: 4px; font-size: 10px;">SUPER ADMIN</span>
         <?php endif; ?>
+        <a href="/auth/logout.php" style="color: #adadb8; text-decoration: none; font-size: 12px;">Logout</a>
       </div>
     </div>
 
@@ -804,6 +826,13 @@ if ($currentUser) {
     const oauthAuthorized = <?= $oauthAuthorized ? 'true' : 'false' ?>;
     const oauthChannel = <?= json_encode($oauthChannel) ?>;
     const oauthLogin = <?= json_encode($login) ?>;
+    const userPermissions = <?= json_encode($modPermissions) ?>;
+    const isChannelMod = <?= $isChannelMod ? 'true' : 'false' ?>;
+
+    // Permission checking helper
+    function hasPermission(perm) {
+      return userPermissions.includes(perm);
+    }
 
     // Check for auto-login from URL parameters or OAuth
     const urlParams = new URLSearchParams(window.location.search);
@@ -924,6 +953,61 @@ if ($currentUser) {
 
     async function loadDashboard() {
       await Promise.all([loadClips(), loadPlaylists(), loadGames()]);
+      applyPermissions();
+    }
+
+    // Apply permission-based visibility to UI elements
+    function applyPermissions() {
+      // Manage playlists permission - controls create/edit/delete
+      const canManagePlaylists = hasPermission('manage_playlists');
+      const newPlaylistBtn = document.querySelector('.new-playlist-btn');
+      if (newPlaylistBtn) {
+        newPlaylistBtn.style.display = canManagePlaylists ? 'block' : 'none';
+      }
+
+      // Block clips permission - show/hide block buttons in clip grid
+      // This will be handled in renderClips function
+
+      // If mod has no manage_playlists permission, hide add to playlist button
+      const addToPlaylistBtn = document.querySelector('.actions-bar .btn-primary');
+      if (addToPlaylistBtn && !canManagePlaylists) {
+        addToPlaylistBtn.style.display = 'none';
+      }
+
+      // Load accessible channels for the channel switcher dropdown
+      loadAccessibleChannels();
+    }
+
+    // Load channels the user can access for the channel switcher
+    async function loadAccessibleChannels() {
+      try {
+        const res = await fetch(`${API_BASE}/dashboard_api.php?action=get_accessible_channels`);
+        const data = await res.json();
+
+        if (data.success && data.channels && data.channels.length > 0) {
+          const select = document.getElementById('channelSwitcher');
+          // Clear existing options and build safely to prevent XSS
+          select.innerHTML = '';
+          data.channels.forEach(ch => {
+            const option = document.createElement('option');
+            option.value = ch.login;
+            option.selected = (ch.login === LOGIN);
+            const suffix = ch.role === 'streamer' ? ' (Your Channel)' :
+                          ch.role === 'mod' ? ' (Mod)' : '';
+            option.textContent = ch.login + suffix;
+            select.appendChild(option);
+          });
+        }
+      } catch (e) {
+        console.error('Error loading accessible channels:', e);
+      }
+    }
+
+    // Switch to a different channel
+    function switchChannel(login) {
+      if (login && login !== LOGIN) {
+        window.location.href = `/mod_dashboard.php?login=${encodeURIComponent(login)}`;
+      }
     }
 
     // Helper to build auth params for API calls
@@ -1129,6 +1213,21 @@ if ($currentUser) {
         document.getElementById('currentPlaylistName').textContent = currentPlaylist.name;
         document.getElementById('currentPlaylist').style.display = 'block';
 
+        // Hide edit controls for mods without manage_playlists permission
+        const canManagePlaylists = hasPermission('manage_playlists');
+        const playlistControls = document.querySelector('#currentPlaylist h3 > div');
+        if (playlistControls) {
+          // Keep play button visible, hide shuffle/rename/delete for non-managers
+          const buttons = playlistControls.querySelectorAll('button');
+          buttons.forEach(btn => {
+            const title = btn.getAttribute('title') || '';
+            // Only show edit buttons for those with manage_playlists
+            if (title === 'Shuffle' || title === 'Rename' || title === 'Delete') {
+              btn.style.display = canManagePlaylists ? 'inline-block' : 'none';
+            }
+          });
+        }
+
         renderPlaylistClips();
         renderPlaylists();
       } catch (err) {
@@ -1147,23 +1246,25 @@ if ($currentUser) {
       const container = document.getElementById('playlistClips');
       const clips = currentPlaylist?.clips || [];
       const totalDuration = currentPlaylist?.total_duration || 0;
+      const canManagePlaylists = hasPermission('manage_playlists');
 
       let html = '';
       if (clips.length > 0) {
         // Show total duration header
+        const reorderText = canManagePlaylists ? ' - drag to reorder' : '';
         html += `<div style="margin-bottom:8px;padding:6px;background:#1a1a1d;border-radius:4px;font-size:12px;color:#adadb8;">
-          Total: ${formatDuration(totalDuration)} (${clips.length} clips) - drag to reorder
+          Total: ${formatDuration(totalDuration)} (${clips.length} clips)${reorderText}
         </div>`;
 
         html += clips.map((c, i) => `
-          <div class="playlist-clip" draggable="true" data-index="${i}" data-seq="${c.seq}">
-            <span class="drag-handle" title="Drag to reorder">⋮⋮</span>
+          <div class="playlist-clip" draggable="${canManagePlaylists}" data-index="${i}" data-seq="${c.seq}">
+            ${canManagePlaylists ? '<span class="drag-handle" title="Drag to reorder">⋮⋮</span>' : ''}
             <div style="flex:1;min-width:0;">
               <span class="seq">#${c.seq}</span>
               <span style="color:#adadb8;font-size:11px;margin-left:4px;">${c.duration ? formatDuration(c.duration) : ''}</span>
               <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml((c.title || '').substring(0, 40))}</div>
             </div>
-            <button class="remove-btn" onclick="removeFromPlaylist(${c.seq})">×</button>
+            ${canManagePlaylists ? `<button class="remove-btn" onclick="removeFromPlaylist(${c.seq})">×</button>` : ''}
           </div>
         `).join('');
       } else {
@@ -1171,7 +1272,9 @@ if ($currentUser) {
       }
 
       container.innerHTML = html;
-      initPlaylistDragDrop();
+      if (canManagePlaylists) {
+        initPlaylistDragDrop();
+      }
     }
 
     async function addSelectedToPlaylist() {

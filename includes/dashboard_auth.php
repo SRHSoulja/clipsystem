@@ -27,8 +27,28 @@ class DashboardAuth {
         $this->ensureTableExists();
     }
 
+    // Default permissions granted when a mod is added
+    const DEFAULT_MOD_PERMISSIONS = [
+        'view_dashboard',
+        'manage_playlists',
+        'block_clips'
+    ];
+
+    // All available permissions
+    const ALL_PERMISSIONS = [
+        'view_dashboard' => 'Access dashboard',
+        'manage_playlists' => 'Create/edit playlists',
+        'block_clips' => 'Hide individual clips',
+        'edit_hud' => 'Change overlay positions',
+        'edit_voting' => 'Toggle voting settings',
+        'edit_weighting' => 'Modify clip weights',
+        'edit_bot_settings' => 'Bot response mode',
+        'view_stats' => 'Access stats tab',
+        'toggle_commands' => 'Enable/disable commands'
+    ];
+
     /**
-     * Create streamers table if it doesn't exist
+     * Create tables if they don't exist
      */
     private function ensureTableExists() {
         if (!$this->pdo) return;
@@ -45,8 +65,22 @@ class DashboardAuth {
             $this->pdo->exec("CREATE INDEX IF NOT EXISTS idx_streamers_key ON streamers(streamer_key)");
             // Add instance column if it doesn't exist (for existing tables)
             $this->pdo->exec("ALTER TABLE streamers ADD COLUMN IF NOT EXISTS instance VARCHAR(32)");
+
+            // Create mod_permissions table
+            $this->pdo->exec("
+                CREATE TABLE IF NOT EXISTS mod_permissions (
+                    id SERIAL PRIMARY KEY,
+                    channel_login VARCHAR(64) NOT NULL,
+                    mod_username VARCHAR(64) NOT NULL,
+                    permission VARCHAR(64) NOT NULL,
+                    granted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(channel_login, mod_username, permission)
+                )
+            ");
+            $this->pdo->exec("CREATE INDEX IF NOT EXISTS idx_mod_permissions_channel ON mod_permissions(channel_login)");
+            $this->pdo->exec("CREATE INDEX IF NOT EXISTS idx_mod_permissions_mod ON mod_permissions(mod_username)");
         } catch (PDOException $e) {
-            // Table might already exist, ignore
+            // Tables might already exist, ignore
         }
     }
 
@@ -58,26 +92,192 @@ class DashboardAuth {
         $this->login = $login;
     }
 
+    // Map actions to permission names
+    private static $actionToPermission = [
+        'view' => 'view_dashboard',
+        'change_hud' => 'edit_hud',
+        'toggle_voting' => 'edit_voting',
+        'toggle_commands' => 'toggle_commands',
+        'block_clip' => 'block_clips',
+        'add_blocked_words' => null, // Streamer only
+        'add_blocked_clippers' => null, // Streamer only
+        'refresh_clips' => null, // Streamer only
+        'manage_playlists' => 'manage_playlists',
+        'manage_mods' => null, // Streamer only
+        'access_other_channels' => null, // Admin only
+        'edit_weighting' => 'edit_weighting',
+        'edit_bot_settings' => 'edit_bot_settings',
+        'view_stats' => 'view_stats',
+    ];
+
     /**
      * Check if current role can perform an action
+     * For mods, checks the mod_permissions table
      */
-    public function canDo($action) {
-        $permissions = [
-            'view' => self::ROLE_MOD,
-            'change_hud' => self::ROLE_MOD,
-            'toggle_voting' => self::ROLE_MOD,
-            'toggle_commands' => self::ROLE_STREAMER,
-            'block_clip' => self::ROLE_MOD,
-            'add_blocked_words' => self::ROLE_STREAMER,
-            'add_blocked_clippers' => self::ROLE_STREAMER,
-            'refresh_clips' => self::ROLE_STREAMER,
-            'manage_playlists' => self::ROLE_MOD,
-            'manage_mods' => self::ROLE_STREAMER,
-            'access_other_channels' => self::ROLE_ADMIN,
-        ];
+    public function canDo($action, $channelLogin = null) {
+        // Streamer-only actions
+        $streamerOnly = ['add_blocked_words', 'add_blocked_clippers', 'refresh_clips', 'manage_mods'];
+        if (in_array($action, $streamerOnly)) {
+            return $this->role >= self::ROLE_STREAMER;
+        }
 
-        $required = $permissions[$action] ?? self::ROLE_ADMIN;
-        return $this->role >= $required;
+        // Admin-only actions
+        if ($action === 'access_other_channels') {
+            return $this->role >= self::ROLE_ADMIN;
+        }
+
+        // Admin and Streamer always have full access
+        if ($this->role >= self::ROLE_STREAMER) {
+            return true;
+        }
+
+        // For mods, check the mod_permissions table
+        if ($this->role === self::ROLE_MOD) {
+            $permName = self::$actionToPermission[$action] ?? null;
+            if (!$permName) {
+                return false; // Unknown action or not allowed for mods
+            }
+            $channel = $channelLogin ?: $this->login;
+            return $this->hasModPermission($channel, $permName);
+        }
+
+        return false;
+    }
+
+    /**
+     * Check if a mod has a specific permission for a channel
+     */
+    public function hasModPermission($channelLogin, $permission, $modUsername = null) {
+        if (!$this->pdo) return false;
+
+        // Use the current user's OAuth info if mod username not specified
+        if (!$modUsername) {
+            require_once __DIR__ . '/twitch_oauth.php';
+            $user = getCurrentUser();
+            if (!$user) return false;
+            $modUsername = strtolower($user['login']);
+        }
+
+        try {
+            $stmt = $this->pdo->prepare("
+                SELECT 1 FROM mod_permissions
+                WHERE channel_login = ? AND mod_username = ? AND permission = ?
+            ");
+            $stmt->execute([strtolower($channelLogin), strtolower($modUsername), $permission]);
+            return $stmt->fetch() !== false;
+        } catch (PDOException $e) {
+            return false;
+        }
+    }
+
+    /**
+     * Get all permissions for a mod on a channel
+     */
+    public function getModPermissions($channelLogin, $modUsername) {
+        if (!$this->pdo) return [];
+
+        try {
+            $stmt = $this->pdo->prepare("
+                SELECT permission FROM mod_permissions
+                WHERE channel_login = ? AND mod_username = ?
+            ");
+            $stmt->execute([strtolower($channelLogin), strtolower($modUsername)]);
+            return $stmt->fetchAll(PDO::FETCH_COLUMN);
+        } catch (PDOException $e) {
+            return [];
+        }
+    }
+
+    /**
+     * Grant a permission to a mod
+     */
+    public function grantModPermission($channelLogin, $modUsername, $permission) {
+        if (!$this->pdo) return false;
+        if (!isset(self::ALL_PERMISSIONS[$permission])) return false;
+
+        try {
+            $stmt = $this->pdo->prepare("
+                INSERT INTO mod_permissions (channel_login, mod_username, permission)
+                VALUES (?, ?, ?)
+                ON CONFLICT (channel_login, mod_username, permission) DO NOTHING
+            ");
+            $stmt->execute([strtolower($channelLogin), strtolower($modUsername), $permission]);
+            return true;
+        } catch (PDOException $e) {
+            return false;
+        }
+    }
+
+    /**
+     * Revoke a permission from a mod
+     */
+    public function revokeModPermission($channelLogin, $modUsername, $permission) {
+        if (!$this->pdo) return false;
+
+        try {
+            $stmt = $this->pdo->prepare("
+                DELETE FROM mod_permissions
+                WHERE channel_login = ? AND mod_username = ? AND permission = ?
+            ");
+            $stmt->execute([strtolower($channelLogin), strtolower($modUsername), $permission]);
+            return true;
+        } catch (PDOException $e) {
+            return false;
+        }
+    }
+
+    /**
+     * Grant default permissions when adding a mod
+     */
+    public function grantDefaultModPermissions($channelLogin, $modUsername) {
+        foreach (self::DEFAULT_MOD_PERMISSIONS as $perm) {
+            $this->grantModPermission($channelLogin, $modUsername, $perm);
+        }
+    }
+
+    /**
+     * Remove all permissions for a mod (when removing them)
+     */
+    public function revokeAllModPermissions($channelLogin, $modUsername) {
+        if (!$this->pdo) return false;
+
+        try {
+            $stmt = $this->pdo->prepare("
+                DELETE FROM mod_permissions
+                WHERE channel_login = ? AND mod_username = ?
+            ");
+            $stmt->execute([strtolower($channelLogin), strtolower($modUsername)]);
+            return true;
+        } catch (PDOException $e) {
+            return false;
+        }
+    }
+
+    /**
+     * Get all mods with their permissions for a channel
+     */
+    public function getChannelModsWithPermissions($channelLogin) {
+        if (!$this->pdo) return [];
+
+        try {
+            // Get all mods from channel_mods table
+            $stmt = $this->pdo->prepare("
+                SELECT mod_username, added_at FROM channel_mods
+                WHERE channel_login = ?
+                ORDER BY mod_username
+            ");
+            $stmt->execute([strtolower($channelLogin)]);
+            $mods = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // Get permissions for each mod
+            foreach ($mods as &$mod) {
+                $mod['permissions'] = $this->getModPermissions($channelLogin, $mod['mod_username']);
+            }
+
+            return $mods;
+        } catch (PDOException $e) {
+            return [];
+        }
     }
 
     public function getRole() { return $this->role; }

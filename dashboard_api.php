@@ -117,7 +117,8 @@ if ($action === 'my_channels') {
             "channels" => $channels
         ]);
     } catch (PDOException $e) {
-        json_error("Database error: " . $e->getMessage(), 500);
+        error_log("Dashboard API DB error: " . $e->getMessage());
+            json_error("Database error occurred", 500);
     }
 }
 
@@ -231,7 +232,8 @@ switch ($action) {
                 "debug_login" => $login  // Temporary debug
             ]);
         } catch (PDOException $e) {
-            json_error("Database error: " . $e->getMessage(), 500);
+            error_log("Dashboard API DB error: " . $e->getMessage());
+            json_error("Database error occurred", 500);
         }
         break;
 
@@ -294,7 +296,8 @@ switch ($action) {
 
             json_response(["success" => true]);
         } catch (PDOException $e) {
-            json_error("Database error: " . $e->getMessage(), 500);
+            error_log("Dashboard API DB error: " . $e->getMessage());
+            json_error("Database error occurred", 500);
         }
         break;
 
@@ -304,36 +307,37 @@ switch ($action) {
         break;
 
     case 'get_mods':
-        if (!$auth->canDo('change_mod_password')) {
+        if (!$auth->canDo('manage_mods')) {
             json_error("Permission denied", 403);
         }
 
         try {
-            $stmt = $pdo->prepare("
-                SELECT mod_username, added_by, added_at
-                FROM channel_mods
-                WHERE channel_login = ?
-                ORDER BY added_at DESC
-            ");
-            $stmt->execute([$login]);
-            $mods = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            // Get mods with their permissions
+            $mods = $auth->getChannelModsWithPermissions($login);
 
-            json_response(["success" => true, "mods" => $mods]);
+            json_response([
+                "success" => true,
+                "mods" => $mods,
+                "all_permissions" => DashboardAuth::ALL_PERMISSIONS,
+                "default_permissions" => DashboardAuth::DEFAULT_MOD_PERMISSIONS
+            ]);
         } catch (PDOException $e) {
-            json_error("Database error: " . $e->getMessage(), 500);
+            error_log("Dashboard API DB error: " . $e->getMessage());
+            json_error("Database error occurred", 500);
         }
         break;
 
     case 'add_mod':
-        if (!$auth->canDo('change_mod_password')) {
+        if (!$auth->canDo('manage_mods')) {
             json_error("Permission denied", 403);
         }
 
         $modUsername = strtolower(trim($_GET['mod_username'] ?? $_POST['mod_username'] ?? ''));
         $modUsername = preg_replace("/[^a-z0-9_]/", "", $modUsername);
 
-        if (!$modUsername) {
-            json_error("Invalid mod username");
+        // Validate username format (Twitch usernames are 4-25 chars)
+        if (!$modUsername || strlen($modUsername) < 3 || strlen($modUsername) > 25) {
+            json_error("Invalid mod username - must be 3-25 characters");
         }
 
         // Can't add yourself as a mod
@@ -351,24 +355,26 @@ switch ($action) {
             ");
             $stmt->execute([$login, $modUsername, $addedBy]);
 
-            // Return updated list
-            $stmt = $pdo->prepare("
-                SELECT mod_username, added_by, added_at
-                FROM channel_mods
-                WHERE channel_login = ?
-                ORDER BY added_at DESC
-            ");
-            $stmt->execute([$login]);
-            $mods = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            // Grant default permissions to the new mod
+            $auth->grantDefaultModPermissions($login, $modUsername);
 
-            json_response(["success" => true, "message" => "Mod added: $modUsername", "mods" => $mods]);
+            // Return updated list with permissions
+            $mods = $auth->getChannelModsWithPermissions($login);
+
+            json_response([
+                "success" => true,
+                "message" => "Mod added: $modUsername",
+                "mods" => $mods,
+                "all_permissions" => DashboardAuth::ALL_PERMISSIONS
+            ]);
         } catch (PDOException $e) {
-            json_error("Database error: " . $e->getMessage(), 500);
+            error_log("Dashboard API DB error: " . $e->getMessage());
+            json_error("Database error occurred", 500);
         }
         break;
 
     case 'remove_mod':
-        if (!$auth->canDo('change_mod_password')) {
+        if (!$auth->canDo('manage_mods')) {
             json_error("Permission denied", 403);
         }
 
@@ -379,22 +385,173 @@ switch ($action) {
         }
 
         try {
+            // Remove mod from channel_mods
             $stmt = $pdo->prepare("DELETE FROM channel_mods WHERE channel_login = ? AND mod_username = ?");
             $stmt->execute([$login, $modUsername]);
 
-            // Return updated list
-            $stmt = $pdo->prepare("
-                SELECT mod_username, added_by, added_at
-                FROM channel_mods
-                WHERE channel_login = ?
-                ORDER BY added_at DESC
-            ");
-            $stmt->execute([$login]);
-            $mods = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            // Also remove all their permissions
+            $auth->revokeAllModPermissions($login, $modUsername);
 
-            json_response(["success" => true, "message" => "Mod removed: $modUsername", "mods" => $mods]);
+            // Return updated list
+            $mods = $auth->getChannelModsWithPermissions($login);
+
+            json_response([
+                "success" => true,
+                "message" => "Mod removed: $modUsername",
+                "mods" => $mods
+            ]);
         } catch (PDOException $e) {
-            json_error("Database error: " . $e->getMessage(), 500);
+            error_log("Dashboard API DB error: " . $e->getMessage());
+            json_error("Database error occurred", 500);
+        }
+        break;
+
+    case 'set_mod_permission':
+        if (!$auth->canDo('manage_mods')) {
+            json_error("Permission denied", 403);
+        }
+
+        $modUsername = strtolower(trim($_GET['mod_username'] ?? $_POST['mod_username'] ?? ''));
+        $permission = trim($_GET['permission'] ?? $_POST['permission'] ?? '');
+        $granted = filter_var($_GET['granted'] ?? $_POST['granted'] ?? true, FILTER_VALIDATE_BOOLEAN);
+
+        if (!$modUsername) {
+            json_error("Missing mod username");
+        }
+
+        if (!isset(DashboardAuth::ALL_PERMISSIONS[$permission])) {
+            json_error("Invalid permission: $permission");
+        }
+
+        try {
+            if ($granted) {
+                $auth->grantModPermission($login, $modUsername, $permission);
+            } else {
+                $auth->revokeModPermission($login, $modUsername, $permission);
+            }
+
+            // Return updated mod info
+            $permissions = $auth->getModPermissions($login, $modUsername);
+
+            json_response([
+                "success" => true,
+                "mod_username" => $modUsername,
+                "permission" => $permission,
+                "granted" => $granted,
+                "permissions" => $permissions
+            ]);
+        } catch (PDOException $e) {
+            error_log("Dashboard API DB error: " . $e->getMessage());
+            json_error("Database error occurred", 500);
+        }
+        break;
+
+    case 'get_my_permissions':
+        // Get current user's permissions for a channel (no special auth needed, just OAuth)
+        if (!$currentUser) {
+            json_error("Must be logged in", 401);
+        }
+
+        if (!$login) {
+            json_error("Missing channel login");
+        }
+
+        try {
+            $myUsername = strtolower($currentUser['login']);
+
+            // Check if user is the channel owner
+            if ($myUsername === strtolower($login)) {
+                json_response([
+                    "success" => true,
+                    "role" => "streamer",
+                    "permissions" => array_keys(DashboardAuth::ALL_PERMISSIONS)
+                ]);
+            }
+
+            // Check if super admin
+            if (isSuperAdmin()) {
+                json_response([
+                    "success" => true,
+                    "role" => "admin",
+                    "permissions" => array_keys(DashboardAuth::ALL_PERMISSIONS)
+                ]);
+            }
+
+            // Check if mod
+            $stmt = $pdo->prepare("SELECT 1 FROM channel_mods WHERE channel_login = ? AND mod_username = ?");
+            $stmt->execute([$login, $myUsername]);
+            if (!$stmt->fetch()) {
+                json_response([
+                    "success" => true,
+                    "role" => "none",
+                    "permissions" => []
+                ]);
+            }
+
+            // Get mod permissions
+            $permissions = $auth->getModPermissions($login, $myUsername);
+
+            json_response([
+                "success" => true,
+                "role" => "mod",
+                "permissions" => $permissions
+            ]);
+        } catch (PDOException $e) {
+            error_log("Dashboard API DB error: " . $e->getMessage());
+            json_error("Database error occurred", 500);
+        }
+        break;
+
+    case 'get_accessible_channels':
+        // Get all channels the current user can access (for channel switcher dropdown)
+        if (!$currentUser) {
+            json_error("Must be logged in", 401);
+        }
+
+        try {
+            $myUsername = strtolower($currentUser['login']);
+            $channels = [];
+
+            // Check if user is an archived streamer (has own channel)
+            $stmt = $pdo->prepare("SELECT COUNT(*) as clip_count FROM clips WHERE login = ?");
+            $stmt->execute([$myUsername]);
+            $ownClips = $stmt->fetch();
+            if ($ownClips && $ownClips['clip_count'] > 0) {
+                $channels[] = [
+                    'login' => $myUsername,
+                    'role' => 'streamer',
+                    'clip_count' => (int)$ownClips['clip_count']
+                ];
+            }
+
+            // Get channels where user is a mod
+            $stmt = $pdo->prepare("
+                SELECT cm.channel_login,
+                       (SELECT COUNT(*) FROM clips WHERE login = cm.channel_login) as clip_count
+                FROM channel_mods cm
+                WHERE cm.mod_username = ?
+                ORDER BY cm.channel_login
+            ");
+            $stmt->execute([$myUsername]);
+            while ($row = $stmt->fetch()) {
+                // Don't duplicate if it's their own channel
+                if ($row['channel_login'] !== $myUsername) {
+                    $channels[] = [
+                        'login' => $row['channel_login'],
+                        'role' => 'mod',
+                        'clip_count' => (int)$row['clip_count']
+                    ];
+                }
+            }
+
+            json_response([
+                "success" => true,
+                "is_super_admin" => isSuperAdmin(),
+                "channels" => $channels
+            ]);
+        } catch (PDOException $e) {
+            error_log("Dashboard API DB error: " . $e->getMessage());
+            json_error("Database error occurred", 500);
         }
         break;
 
@@ -530,7 +687,8 @@ switch ($action) {
                 "recent_votes" => $recentVotes
             ]);
         } catch (PDOException $e) {
-            json_error("Database error: " . $e->getMessage(), 500);
+            error_log("Dashboard API DB error: " . $e->getMessage());
+            json_error("Database error occurred", 500);
         }
         break;
 

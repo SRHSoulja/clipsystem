@@ -1,8 +1,12 @@
 <?php
 /**
- * my_channels.php - Shows mods which channels they have access to
+ * my_channels.php - Dashboard Hub
  *
- * Requires Twitch OAuth login. Shows list of channels where user is a mod.
+ * Central entry point for all dashboard access:
+ * - Super admins: Access to all channels + admin panel
+ * - Archived streamers: Access to their own channel dashboard
+ * - Mods: Access to channels they moderate
+ * - Others: Helpful message about getting access
  */
 header("Content-Type: text/html; charset=utf-8");
 header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
@@ -13,13 +17,70 @@ require_once __DIR__ . '/includes/twitch_oauth.php';
 
 $currentUser = getCurrentUser();
 $isSuperAdmin = $currentUser ? isSuperAdmin() : false;
+$pdo = get_db_connection();
+
+// Determine user's access rights
+$isArchivedStreamer = false;
+$ownClipCount = 0;
+$modChannels = [];
+
+if ($currentUser && $pdo) {
+    $userLogin = strtolower($currentUser['login']);
+
+    // Check if user is an archived streamer
+    try {
+        $stmt = $pdo->prepare("SELECT COUNT(*) as clip_count FROM clips WHERE login = ?");
+        $stmt->execute([$userLogin]);
+        $result = $stmt->fetch();
+        if ($result && $result['clip_count'] > 0) {
+            $isArchivedStreamer = true;
+            $ownClipCount = (int)$result['clip_count'];
+        }
+    } catch (PDOException $e) {
+        // Ignore
+    }
+
+    // Get channels user moderates
+    try {
+        $stmt = $pdo->prepare("
+            SELECT cm.channel_login, cm.added_at,
+                   (SELECT COUNT(*) FROM clips WHERE login = cm.channel_login) as clip_count
+            FROM channel_mods cm
+            WHERE cm.mod_username = ?
+            ORDER BY cm.channel_login ASC
+        ");
+        $stmt->execute([$userLogin]);
+        $modChannels = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        // Table might not exist
+    }
+}
+
+// Get list of all archived streamers for super admin
+$allStreamers = [];
+if ($isSuperAdmin && $pdo) {
+    try {
+        $stmt = $pdo->query("
+            SELECT login, COUNT(*) as clip_count
+            FROM clips
+            WHERE blocked = FALSE
+            GROUP BY login
+            ORDER BY login ASC
+        ");
+        $allStreamers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        // Ignore
+    }
+}
+
+$hasAnyAccess = $isSuperAdmin || $isArchivedStreamer || count($modChannels) > 0;
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Channels - ClipArchive</title>
+    <title>Dashboard Hub - ClipArchive</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -37,49 +98,67 @@ $isSuperAdmin = $currentUser ? isSuperAdmin() : false;
             align-items: center;
             border-bottom: 1px solid #3a3a3d;
         }
-        .header h1 { font-size: 20px; color: #9147ff; }
+        .header h1 {
+            font-size: 20px;
+            color: #9147ff;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .header h1 a {
+            color: #9147ff;
+            text-decoration: none;
+        }
         .header .user-info {
             display: flex;
             align-items: center;
             gap: 16px;
         }
-        .header .badge {
+        .badge {
             background: #9147ff;
             padding: 4px 8px;
             border-radius: 4px;
             font-size: 12px;
             text-transform: uppercase;
         }
-        .header .badge.admin { background: #eb0400; }
+        .badge.admin { background: #eb0400; }
+        .badge.streamer { background: #00a67e; }
+        .badge.mod { background: #bf94ff; }
 
         .container {
-            max-width: 800px;
+            max-width: 900px;
             margin: 0 auto;
             padding: 24px;
         }
 
         .login-prompt {
             text-align: center;
-            padding: 60px 20px;
+            padding: 80px 20px;
         }
         .login-prompt h2 {
             margin-bottom: 16px;
             color: #efeff1;
+            font-size: 28px;
         }
         .login-prompt p {
             color: #adadb8;
             margin-bottom: 24px;
+            font-size: 16px;
         }
         .login-btn {
-            display: inline-block;
-            padding: 12px 32px;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 14px 32px;
             background: #9147ff;
             color: white;
             text-decoration: none;
-            border-radius: 4px;
+            border-radius: 6px;
             font-size: 16px;
+            font-weight: 500;
         }
         .login-btn:hover { background: #772ce8; }
+        .login-btn svg { width: 24px; height: 24px; }
 
         .card {
             background: #18181b;
@@ -91,6 +170,9 @@ $isSuperAdmin = $currentUser ? isSuperAdmin() : false;
             margin-bottom: 16px;
             color: #efeff1;
             font-size: 18px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
         .card p {
             color: #adadb8;
@@ -110,15 +192,20 @@ $isSuperAdmin = $currentUser ? isSuperAdmin() : false;
             justify-content: space-between;
             align-items: center;
         }
+        .channel-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
         .channel-name {
             font-size: 16px;
             font-weight: 500;
             color: #efeff1;
         }
-        .channel-since {
+        .channel-meta {
             font-size: 12px;
             color: #666;
-            margin-top: 4px;
+            margin-top: 2px;
         }
         .channel-actions {
             display: flex;
@@ -132,11 +219,14 @@ $isSuperAdmin = $currentUser ? isSuperAdmin() : false;
             cursor: pointer;
             text-decoration: none;
             color: white;
+            transition: background 0.2s;
         }
         .btn-primary { background: #9147ff; }
         .btn-primary:hover { background: #772ce8; }
         .btn-secondary { background: #3a3a3d; }
         .btn-secondary:hover { background: #464649; }
+        .btn-danger { background: #eb0400; }
+        .btn-danger:hover { background: #c40300; }
 
         .empty-state {
             text-align: center;
@@ -162,9 +252,16 @@ $isSuperAdmin = $currentUser ? isSuperAdmin() : false;
             color: rgba(255,255,255,0.8);
             margin-bottom: 16px;
         }
+        .admin-controls {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
         .admin-input-row {
             display: flex;
             gap: 8px;
+            flex: 1;
+            min-width: 300px;
         }
         .admin-input-row input {
             flex: 1;
@@ -177,27 +274,108 @@ $isSuperAdmin = $currentUser ? isSuperAdmin() : false;
         }
         .admin-input-row input::placeholder { color: rgba(255,255,255,0.5); }
 
+        .no-access {
+            text-align: center;
+            padding: 60px 20px;
+        }
+        .no-access h2 {
+            margin-bottom: 16px;
+            color: #efeff1;
+        }
+        .no-access p {
+            color: #adadb8;
+            margin-bottom: 12px;
+            max-width: 500px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .no-access .info-box {
+            background: #26262c;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 24px;
+            max-width: 500px;
+            margin-left: auto;
+            margin-right: auto;
+            text-align: left;
+        }
+        .no-access .info-box h3 {
+            margin-bottom: 12px;
+            color: #9147ff;
+        }
+        .no-access .info-box ul {
+            color: #adadb8;
+            padding-left: 20px;
+        }
+        .no-access .info-box li {
+            margin-bottom: 8px;
+        }
+
         .logout-link {
             color: #adadb8;
             text-decoration: none;
         }
         .logout-link:hover { color: #efeff1; }
+
+        .streamer-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 12px;
+            margin-top: 12px;
+        }
+        .streamer-card {
+            background: #26262c;
+            border-radius: 8px;
+            padding: 12px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .streamer-card:hover {
+            background: #2f2f35;
+        }
+        .streamer-card a {
+            color: #efeff1;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        .streamer-card .clip-count {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .home-link {
+            color: #adadb8;
+            text-decoration: none;
+            font-size: 14px;
+        }
+        .home-link:hover { color: #9147ff; }
     </style>
 </head>
 <body>
     <?php if (!$currentUser): ?>
     <div class="login-prompt">
-        <h2>My Channels</h2>
-        <p>Login with Twitch to see which channels you can moderate.</p>
-        <a href="/auth/login.php?return=<?= urlencode('/my_channels.php') ?>" class="login-btn">Login with Twitch</a>
+        <h2>Dashboard Hub</h2>
+        <p>Login with Twitch to access your channel dashboard or channels you moderate.</p>
+        <a href="/auth/login.php?return=<?= urlencode('/my_channels.php') ?>" class="login-btn">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.64 5.93h1.43v4.28h-1.43m3.93-4.28H17v4.28h-1.43M7 2L3.43 5.57v12.86h4.28V22l3.58-3.57h2.85L20.57 12V2m-1.43 9.29l-2.85 2.85h-2.86l-2.5 2.5v-2.5H7.71V3.43h11.43z"/></svg>
+            Login with Twitch
+        </a>
     </div>
     <?php else: ?>
     <div class="header">
-        <h1>My Channels</h1>
+        <h1>
+            <a href="/">ClipArchive</a>
+            <span style="color: #666; font-weight: normal;">/ Dashboard Hub</span>
+        </h1>
         <div class="user-info">
             <span>Logged in as <strong><?= htmlspecialchars($currentUser['display_name']) ?></strong></span>
             <?php if ($isSuperAdmin): ?>
             <span class="badge admin">Super Admin</span>
+            <?php elseif ($isArchivedStreamer): ?>
+            <span class="badge streamer">Streamer</span>
+            <?php elseif (count($modChannels) > 0): ?>
+            <span class="badge mod">Mod</span>
             <?php endif; ?>
             <a href="/auth/logout.php" class="logout-link">Logout</a>
         </div>
@@ -207,107 +385,115 @@ $isSuperAdmin = $currentUser ? isSuperAdmin() : false;
         <?php if ($isSuperAdmin): ?>
         <div class="super-admin-section">
             <h2>Super Admin Access</h2>
-            <p>You have access to all channels. Enter a channel name to go directly to their dashboard.</p>
-            <div class="admin-input-row">
-                <input type="text" id="adminChannelInput" placeholder="Enter channel name...">
-                <button class="btn btn-secondary" onclick="goToModDashboard()">Mod Dashboard</button>
-                <button class="btn btn-secondary" onclick="goToStreamerDashboard()">Streamer Dashboard</button>
+            <p>You have access to all channels and the admin panel.</p>
+            <div class="admin-controls">
+                <div class="admin-input-row">
+                    <input type="text" id="adminChannelInput" placeholder="Enter channel name...">
+                    <button class="btn btn-secondary" onclick="goToChannel('mod')">Mod Dashboard</button>
+                    <button class="btn btn-secondary" onclick="goToChannel('streamer')">Streamer Dashboard</button>
+                </div>
+                <a href="/admin.php" class="btn btn-danger">Admin Panel</a>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>All Archived Streamers (<?= count($allStreamers) ?>)</h2>
+            <div class="streamer-grid">
+                <?php foreach ($allStreamers as $streamer): ?>
+                <div class="streamer-card">
+                    <a href="/dashboard.php?login=<?= urlencode($streamer['login']) ?>"><?= htmlspecialchars($streamer['login']) ?></a>
+                    <span class="clip-count"><?= number_format($streamer['clip_count']) ?> clips</span>
+                </div>
+                <?php endforeach; ?>
             </div>
         </div>
         <?php endif; ?>
 
+        <?php if ($isArchivedStreamer): ?>
         <div class="card">
-            <h2>Your Own Channel</h2>
+            <h2>
+                <span class="badge streamer" style="font-size: 10px;">OWNER</span>
+                Your Channel
+            </h2>
             <div class="channel-list">
                 <div class="channel-item">
-                    <div>
-                        <div class="channel-name"><?= htmlspecialchars($currentUser['display_name']) ?></div>
-                        <div class="channel-since">Your channel</div>
+                    <div class="channel-info">
+                        <div>
+                            <div class="channel-name"><?= htmlspecialchars($currentUser['display_name']) ?></div>
+                            <div class="channel-meta"><?= number_format($ownClipCount) ?> clips archived</div>
+                        </div>
                     </div>
                     <div class="channel-actions">
-                        <a href="/mod_dashboard.php?login=<?= urlencode($currentUser['login']) ?>" class="btn btn-primary">Mod Dashboard</a>
-                        <a href="/dashboard.php?login=<?= urlencode($currentUser['login']) ?>" class="btn btn-secondary">Streamer Dashboard</a>
+                        <a href="/dashboard.php?login=<?= urlencode($currentUser['login']) ?>" class="btn btn-primary">Streamer Dashboard</a>
+                        <a href="/mod_dashboard.php?login=<?= urlencode($currentUser['login']) ?>" class="btn btn-secondary">Playlist Manager</a>
                     </div>
                 </div>
             </div>
         </div>
+        <?php endif; ?>
 
+        <?php if (count($modChannels) > 0): ?>
         <div class="card">
-            <h2>Channels You Moderate</h2>
-            <div id="channelList">
-                <div class="empty-state">
-                    <p>Loading...</p>
+            <h2>
+                <span class="badge mod" style="font-size: 10px;">MOD</span>
+                Channels You Moderate
+            </h2>
+            <div class="channel-list">
+                <?php foreach ($modChannels as $ch): ?>
+                <div class="channel-item">
+                    <div class="channel-info">
+                        <div>
+                            <div class="channel-name"><?= htmlspecialchars($ch['channel_login']) ?></div>
+                            <div class="channel-meta">
+                                <?= number_format($ch['clip_count']) ?> clips
+                                &middot; Added <?= date('M j, Y', strtotime($ch['added_at'])) ?>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="channel-actions">
+                        <a href="/mod_dashboard.php?login=<?= urlencode($ch['channel_login']) ?>" class="btn btn-primary">Mod Dashboard</a>
+                    </div>
                 </div>
+                <?php endforeach; ?>
             </div>
+        </div>
+        <?php endif; ?>
+
+        <?php if (!$hasAnyAccess): ?>
+        <div class="no-access">
+            <h2>No Dashboard Access Yet</h2>
+            <p>You don't currently have access to any channel dashboards.</p>
+
+            <div class="info-box">
+                <h3>How to get access:</h3>
+                <ul>
+                    <li><strong>As a streamer:</strong> Contact the ClipArchive team to get your clips archived</li>
+                    <li><strong>As a mod:</strong> Ask a streamer to add your Twitch username to their mod list in their dashboard settings</li>
+                </ul>
+            </div>
+        </div>
+        <?php endif; ?>
+
+        <div style="text-align: center; margin-top: 32px;">
+            <a href="/" class="home-link">&larr; Back to Home</a>
         </div>
     </div>
 
     <script>
-        async function loadChannels() {
-            try {
-                const res = await fetch('/dashboard_api.php?action=my_channels');
-                const data = await res.json();
-
-                const container = document.getElementById('channelList');
-
-                if (!data.success) {
-                    container.innerHTML = '<div class="empty-state"><p>Error loading channels</p></div>';
-                    return;
-                }
-
-                if (!data.channels || data.channels.length === 0) {
-                    container.innerHTML = `
-                        <div class="empty-state">
-                            <h3>No channels yet</h3>
-                            <p>You haven't been added as a mod to any channels.<br>
-                            Ask a streamer to add your username in their dashboard settings.</p>
-                        </div>
-                    `;
-                    return;
-                }
-
-                container.innerHTML = '<div class="channel-list">' + data.channels.map(ch => `
-                    <div class="channel-item">
-                        <div>
-                            <div class="channel-name">${escapeHtml(ch.channel_login)}</div>
-                            <div class="channel-since">Added ${new Date(ch.added_at).toLocaleDateString()}</div>
-                        </div>
-                        <div class="channel-actions">
-                            <a href="/mod_dashboard.php?login=${encodeURIComponent(ch.channel_login)}" class="btn btn-primary">Mod Dashboard</a>
-                        </div>
-                    </div>
-                `).join('') + '</div>';
-            } catch (e) {
-                console.error('Error loading channels:', e);
-                document.getElementById('channelList').innerHTML = '<div class="empty-state"><p>Error loading channels</p></div>';
-            }
-        }
-
-        function escapeHtml(str) {
-            const div = document.createElement('div');
-            div.textContent = str;
-            return div.innerHTML;
-        }
-
-        function goToModDashboard() {
+        function goToChannel(type) {
             const channel = document.getElementById('adminChannelInput')?.value.trim().toLowerCase();
-            if (channel) {
+            if (!channel) return;
+
+            if (type === 'mod') {
                 window.location.href = `/mod_dashboard.php?login=${encodeURIComponent(channel)}`;
-            }
-        }
-
-        function goToStreamerDashboard() {
-            const channel = document.getElementById('adminChannelInput')?.value.trim().toLowerCase();
-            if (channel) {
+            } else {
                 window.location.href = `/dashboard.php?login=${encodeURIComponent(channel)}`;
             }
         }
 
         document.getElementById('adminChannelInput')?.addEventListener('keypress', e => {
-            if (e.key === 'Enter') goToModDashboard();
+            if (e.key === 'Enter') goToChannel('streamer');
         });
-
-        loadChannels();
     </script>
     <?php endif; ?>
 </body>
