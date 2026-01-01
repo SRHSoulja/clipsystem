@@ -87,13 +87,14 @@ if ($action === 'status') {
     $channel = strtolower(trim($_GET['channel'] ?? $_POST['channel'] ?? ''));
     $channel = preg_replace('/[^a-z0-9_]/', '', $channel);
 
+    // Default to current user's channel if not specified
+    if (!$channel) {
+        $channel = strtolower($currentUser['login']);
+    }
+
     // Users can only check their own channel unless super admin
     if ($channel !== strtolower($currentUser['login']) && !isSuperAdmin()) {
         json_error("You can only check your own channel", 403);
-    }
-
-    if (!$channel) {
-        $channel = strtolower($currentUser['login']);
     }
 
     try {
