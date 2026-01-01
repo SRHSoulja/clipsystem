@@ -202,7 +202,8 @@ if ($currentUser) {
         .btn-primary:hover { background: #772ce8; }
         .btn-secondary { background: #3a3a3d; color: #efeff1; }
         .btn-secondary:hover { background: #464649; }
-        .btn-danger { background: #eb0400; color: white; }
+        .btn-danger { background: #ff4757; color: white; }
+        .btn-danger:hover { background: #ee5a24; }
 
         /* Position Picker */
         .position-picker {
@@ -686,6 +687,7 @@ if ($currentUser) {
             <input type="text" id="adminChannelInput" placeholder="Enter channel name..." style="padding: 8px 12px; border-radius: 4px; border: none; background: rgba(0,0,0,0.3); color: white; width: 200px;">
             <button onclick="goToChannel()" style="padding: 8px 16px; background: rgba(0,0,0,0.3); border: none; color: white; border-radius: 4px; cursor: pointer;">Go to Dashboard</button>
             <button onclick="goToModDashboard()" style="padding: 8px 16px; background: rgba(0,0,0,0.3); border: none; color: white; border-radius: 4px; cursor: pointer;">Go to Mod Dashboard</button>
+            <a href="/admin.php" style="padding: 8px 16px; background: rgba(255,255,255,0.2); border: none; color: white; border-radius: 4px; text-decoration: none; font-weight: bold;">⚙️ Admin Dashboard</a>
             <a href="/auth/logout.php" style="margin-left: auto; color: white; text-decoration: none; opacity: 0.8;">Logout</a>
         </div>
         <?php endif; ?>
@@ -738,6 +740,25 @@ if ($currentUser) {
                         <span class="toggle-slider"></span>
                     </label>
                     <span>Show vote confirmation in chat</span>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Chat Bot</h3>
+                <p style="color: #adadb8; margin-bottom: 12px; font-size: 13px;">
+                    The FloppyJimmie bot enables chat commands like !cclip, !like, !dislike, !cfind and more.
+                </p>
+                <div id="botStatusContainer" style="display: flex; align-items: center; gap: 16px; margin-bottom: 16px;">
+                    <span id="botStatusIndicator" style="width: 12px; height: 12px; border-radius: 50%; background: #666;"></span>
+                    <span id="botStatusText">Checking bot status...</span>
+                </div>
+                <div style="display: flex; gap: 12px;">
+                    <button id="inviteBotBtn" onclick="inviteBot()" class="btn" style="display: none;">
+                        Invite Bot to Channel
+                    </button>
+                    <button id="removeBotBtn" onclick="removeBot()" class="btn btn-danger" style="display: none;">
+                        Remove Bot from Channel
+                    </button>
                 </div>
             </div>
 
@@ -1449,6 +1470,9 @@ if ($currentUser) {
                     document.getElementById('statActive').textContent = Number(data.stats.active).toLocaleString();
                     document.getElementById('statBlocked').textContent = Number(data.stats.blocked).toLocaleString();
                 }
+
+                // Check bot status
+                checkBotStatus();
             } catch (e) {
                 console.error('Error loading settings:', e);
             }
@@ -1558,6 +1582,93 @@ if ($currentUser) {
             if (success) {
                 showToast('success', 'Silent Mode ' + (enabled ? 'Enabled' : 'Disabled'), 'Bot responses will ' + (enabled ? 'now start with ! to hide from on-screen chat' : 'appear normally in chat'));
             }
+        }
+
+        // Bot management functions
+        let botIsActive = false;
+
+        async function checkBotStatus() {
+            try {
+                const res = await fetch(`/bot_api.php?action=status&channel=${encodeURIComponent(streamerLogin)}`);
+                const data = await res.json();
+
+                botIsActive = data.bot_active === true;
+                updateBotStatusUI();
+            } catch (e) {
+                console.error('Failed to check bot status:', e);
+                document.getElementById('botStatusText').textContent = 'Unable to check bot status';
+            }
+        }
+
+        function updateBotStatusUI() {
+            const indicator = document.getElementById('botStatusIndicator');
+            const text = document.getElementById('botStatusText');
+            const inviteBtn = document.getElementById('inviteBotBtn');
+            const removeBtn = document.getElementById('removeBotBtn');
+
+            if (botIsActive) {
+                indicator.style.background = '#00ad03';
+                text.textContent = 'Bot is active in your channel';
+                inviteBtn.style.display = 'none';
+                removeBtn.style.display = 'inline-block';
+            } else {
+                indicator.style.background = '#ff4757';
+                text.textContent = 'Bot is not in your channel';
+                inviteBtn.style.display = 'inline-block';
+                removeBtn.style.display = 'none';
+            }
+        }
+
+        async function inviteBot() {
+            const btn = document.getElementById('inviteBotBtn');
+            btn.disabled = true;
+            btn.textContent = 'Inviting...';
+
+            try {
+                const res = await fetch(`/bot_api.php?action=add&channel=${encodeURIComponent(streamerLogin)}`);
+                const data = await res.json();
+
+                if (data.success) {
+                    showToast('success', 'Bot Invited', 'The bot will join your channel shortly');
+                    botIsActive = true;
+                    updateBotStatusUI();
+                } else {
+                    showToast('error', 'Error', data.error || 'Failed to invite bot');
+                }
+            } catch (e) {
+                showToast('error', 'Error', 'Failed to invite bot');
+            }
+
+            btn.disabled = false;
+            btn.textContent = 'Invite Bot to Channel';
+        }
+
+        async function removeBot() {
+            if (!confirm('Are you sure you want to remove the bot from your channel?')) {
+                return;
+            }
+
+            const btn = document.getElementById('removeBotBtn');
+            btn.disabled = true;
+            btn.textContent = 'Removing...';
+
+            try {
+                const res = await fetch(`/bot_api.php?action=remove&channel=${encodeURIComponent(streamerLogin)}`);
+                const data = await res.json();
+
+                if (data.success) {
+                    showToast('success', 'Bot Removed', 'The bot will leave your channel shortly');
+                    botIsActive = false;
+                    updateBotStatusUI();
+                } else {
+                    showToast('error', 'Error', data.error || 'Failed to remove bot');
+                }
+            } catch (e) {
+                showToast('error', 'Error', 'Failed to remove bot');
+            }
+
+            btn.disabled = false;
+            btn.textContent = 'Remove Bot from Channel';
         }
 
         async function addBlockedWord() {

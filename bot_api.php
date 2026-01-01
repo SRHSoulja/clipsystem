@@ -77,10 +77,44 @@ if ($action === 'list' || $action === '') {
     }
 }
 
-// All other actions require super admin OAuth
+// Check bot status for a channel - requires OAuth (streamer checking their own channel)
+if ($action === 'status') {
+    $currentUser = getCurrentUser();
+    if (!$currentUser) {
+        json_error("Unauthorized - please log in", 401);
+    }
+
+    $channel = strtolower(trim($_GET['channel'] ?? $_POST['channel'] ?? ''));
+    $channel = preg_replace('/[^a-z0-9_]/', '', $channel);
+
+    // Users can only check their own channel unless super admin
+    if ($channel !== strtolower($currentUser['login']) && !isSuperAdmin()) {
+        json_error("You can only check your own channel", 403);
+    }
+
+    if (!$channel) {
+        $channel = strtolower($currentUser['login']);
+    }
+
+    try {
+        $stmt = $pdo->prepare("SELECT active FROM bot_channels WHERE channel_login = ?");
+        $stmt->execute([$channel]);
+        $row = $stmt->fetch();
+
+        json_response([
+            "success" => true,
+            "channel" => $channel,
+            "bot_active" => $row && $row['active'] ? true : false
+        ]);
+    } catch (PDOException $e) {
+        json_error("Database error: " . $e->getMessage(), 500);
+    }
+}
+
+// Add/remove actions - streamers can manage their own channel, super admins can manage any
 $currentUser = getCurrentUser();
-if (!$currentUser || !isSuperAdmin()) {
-    json_error("Unauthorized - super admin access required", 401);
+if (!$currentUser) {
+    json_error("Unauthorized - please log in", 401);
 }
 
 switch ($action) {
@@ -88,17 +122,24 @@ switch ($action) {
         $channel = strtolower(trim($_GET['channel'] ?? $_POST['channel'] ?? ''));
         $channel = preg_replace('/[^a-z0-9_]/', '', $channel);
 
+        // Default to current user's channel if not specified
         if (!$channel) {
-            json_error("Missing channel name");
+            $channel = strtolower($currentUser['login']);
+        }
+
+        // Users can only add their own channel unless super admin
+        if ($channel !== strtolower($currentUser['login']) && !isSuperAdmin()) {
+            json_error("You can only invite the bot to your own channel", 403);
         }
 
         try {
+            $addedBy = $currentUser['login'];
             $stmt = $pdo->prepare("
                 INSERT INTO bot_channels (channel_login, added_by, active)
-                VALUES (?, 'admin', TRUE)
-                ON CONFLICT (channel_login) DO UPDATE SET active = TRUE, added_at = CURRENT_TIMESTAMP
+                VALUES (?, ?, TRUE)
+                ON CONFLICT (channel_login) DO UPDATE SET active = TRUE, added_by = ?, added_at = CURRENT_TIMESTAMP
             ");
-            $stmt->execute([$channel]);
+            $stmt->execute([$channel, $addedBy, $addedBy]);
 
             json_response([
                 "success" => true,
@@ -114,8 +155,14 @@ switch ($action) {
         $channel = strtolower(trim($_GET['channel'] ?? $_POST['channel'] ?? ''));
         $channel = preg_replace('/[^a-z0-9_]/', '', $channel);
 
+        // Default to current user's channel if not specified
         if (!$channel) {
-            json_error("Missing channel name");
+            $channel = strtolower($currentUser['login']);
+        }
+
+        // Users can only remove their own channel unless super admin
+        if ($channel !== strtolower($currentUser['login']) && !isSuperAdmin()) {
+            json_error("You can only remove the bot from your own channel", 403);
         }
 
         try {
@@ -124,7 +171,12 @@ switch ($action) {
             $stmt->execute([$channel]);
 
             if ($stmt->rowCount() === 0) {
-                json_error("Channel not found", 404);
+                // Channel wasn't in the list, but that's fine - treat as success
+                json_response([
+                    "success" => true,
+                    "message" => "Bot is not in #{$channel}",
+                    "channel" => $channel
+                ]);
             }
 
             json_response([
@@ -138,7 +190,11 @@ switch ($action) {
         break;
 
     case 'list_all':
-        // List all channels including inactive ones (admin only)
+        // List all channels including inactive ones (super admin only)
+        if (!isSuperAdmin()) {
+            json_error("Super admin access required", 403);
+        }
+
         try {
             $stmt = $pdo->prepare("
                 SELECT channel_login, added_by, added_at, active
