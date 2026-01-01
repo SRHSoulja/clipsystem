@@ -547,7 +547,10 @@ const commands = {
   // !cfind <query> - Search clips by title/clipper/game
   async cfind(channel, tags, args) {
     const login = getClipChannel(channel);
-    const query = args.join(' ').trim();
+    // Filter out empty args and invisible Unicode chars (Twitch adds these to duplicate messages)
+    // \u034f = Combining Grapheme Joiner, \u200B-\u200D = zero-width chars, \uFEFF = BOM
+    const cleanArgs = args.filter(a => a && a.replace(/[\u034f\u200B-\u200D\uFEFF\s]/g, ''));
+    const query = cleanArgs.join(' ').trim();
 
     try {
       const url = `${config.apiBaseUrl}/cfind.php?login=${encodeURIComponent(login)}&key=${encodeURIComponent(config.adminKey)}&q=${encodeURIComponent(query)}`;
