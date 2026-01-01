@@ -73,7 +73,8 @@ if ($action === 'list' || $action === '') {
             "details" => $channels
         ]);
     } catch (PDOException $e) {
-        json_error("Database error: " . $e->getMessage(), 500);
+        error_log("Bot API DB error: " . $e->getMessage());
+        json_error("Database error occurred", 500);
     }
 }
 
@@ -108,7 +109,8 @@ if ($action === 'status') {
             "bot_active" => $row && $row['active'] ? true : false
         ]);
     } catch (PDOException $e) {
-        json_error("Database error: " . $e->getMessage(), 500);
+        error_log("Bot API DB error: " . $e->getMessage());
+        json_error("Database error occurred", 500);
     }
 }
 
@@ -148,7 +150,8 @@ switch ($action) {
                 "channel" => $channel
             ]);
         } catch (PDOException $e) {
-            json_error("Database error: " . $e->getMessage(), 500);
+            error_log("Bot API DB error: " . $e->getMessage());
+        json_error("Database error occurred", 500);
         }
         break;
 
@@ -186,7 +189,8 @@ switch ($action) {
                 "channel" => $channel
             ]);
         } catch (PDOException $e) {
-            json_error("Database error: " . $e->getMessage(), 500);
+            error_log("Bot API DB error: " . $e->getMessage());
+        json_error("Database error occurred", 500);
         }
         break;
 
@@ -210,7 +214,8 @@ switch ($action) {
                 "channels" => $channels
             ]);
         } catch (PDOException $e) {
-            json_error("Database error: " . $e->getMessage(), 500);
+            error_log("Bot API DB error: " . $e->getMessage());
+        json_error("Database error occurred", 500);
         }
         break;
 

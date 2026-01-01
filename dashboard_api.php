@@ -118,7 +118,7 @@ if ($action === 'my_channels') {
         ]);
     } catch (PDOException $e) {
         error_log("Dashboard API DB error: " . $e->getMessage());
-            json_error("Database error occurred", 500);
+        json_error("Database error occurred", 500);
     }
 }
 
@@ -228,8 +228,7 @@ switch ($action) {
                 "settings" => $settings,
                 "stats" => $stats,
                 "role" => $auth->getRoleName(),
-                "instance" => $instance,
-                "debug_login" => $login  // Temporary debug
+                "instance" => $instance
             ]);
         } catch (PDOException $e) {
             error_log("Dashboard API DB error: " . $e->getMessage());
