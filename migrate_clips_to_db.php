@@ -341,10 +341,8 @@ if ($needsContinue) {
     try {
         require_once __DIR__ . '/includes/dashboard_auth.php';
         $auth = new DashboardAuth();
-        $existingKey = $auth->getStreamerKey($login);
-        if (!$existingKey) {
-            $newKey = $auth->createStreamer($login);
-            if ($newKey) {
+        if (!$auth->streamerExists($login)) {
+            if ($auth->createStreamer($login)) {
                 echo "  ✓ Dashboard access created for '$login'\n";
             }
         } else {
