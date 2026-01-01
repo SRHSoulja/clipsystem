@@ -40,6 +40,11 @@ $auth = new DashboardAuth();
 $authenticated = false;
 $currentUser = getCurrentUser();
 
+// Debug logging for auth issues
+error_log("Dashboard API - Action: $action, Login param: $login");
+error_log("Dashboard API - CurrentUser: " . ($currentUser ? $currentUser['login'] : 'NULL'));
+error_log("Dashboard API - isSuperAdmin: " . (($currentUser && isSuperAdmin()) ? 'YES' : 'NO'));
+
 // Try OAuth super admin authentication first
 if ($currentUser && isSuperAdmin()) {
     // Super admin via OAuth - grant admin role
@@ -79,6 +84,9 @@ if (!$authenticated && $currentUser && $login) {
 
 // Special case: login check doesn't require auth
 if ($action === 'check_login') {
+    // Debug: log the final auth result
+    error_log("Dashboard API - check_login result: authenticated=" . ($authenticated ? 'true' : 'false') . ", role=" . $auth->getRoleName() . ", login=" . $auth->getLogin());
+
     // Just verify if the login/key is valid (or OAuth session)
     json_response([
         "authenticated" => $authenticated,
