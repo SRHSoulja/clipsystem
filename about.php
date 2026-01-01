@@ -122,7 +122,6 @@ $currentUser = getCurrentUser();
         <li><strong>!ccat game</strong> - Filter to only show clips from a specific game</li>
         <li><strong>!cremove / !cadd</strong> - Remove or restore clips from the rotation</li>
         <li><strong>!ctop</strong> - Display the top-voted clips on screen</li>
-        <li><strong>!cvote</strong> - Clear votes for a clip</li>
         <li><strong>!chud</strong> - Move the HUD overlay to any corner</li>
       </ul>
     </div>
@@ -132,10 +131,11 @@ $currentUser = getCurrentUser();
       <p>Viewers can interact with clips through voting:</p>
       <ul style="color: #adadb8; margin-top: 10px;">
         <li><strong>!like / !dislike</strong> - Vote on the current clip or any clip by number</li>
+        <li><strong>!cvote</strong> - Clear your own vote on a clip, or <code>!cvote clear</code> to remove all your votes</li>
         <li><strong>!cclip</strong> - See info about the currently playing clip</li>
         <li><strong>!cfind</strong> - Search clips by title, clipper, or game</li>
       </ul>
-      <p style="margin-top: 10px;">Voting can be enabled/disabled per-channel by admins.</p>
+      <p style="margin-top: 10px;">Voting can be enabled/disabled per-channel by streamers.</p>
     </div>
 
     <div class="feature-box">
