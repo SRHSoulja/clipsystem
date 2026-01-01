@@ -138,6 +138,21 @@ class TwitchAPI {
   }
 
   /**
+   * Get full user info including profile image
+   */
+  public function getUserInfo(string $username): ?array {
+    $username = strtolower(trim($username));
+    $url = "https://api.twitch.tv/helix/users?login=" . urlencode($username);
+
+    $data = $this->apiRequest($url);
+    if (!$data || empty($data['data'])) {
+      return null;
+    }
+
+    return $data['data'][0] ?? null;
+  }
+
+  /**
    * Get game ID from game name
    */
   public function getGameId(string $gameName): ?string {

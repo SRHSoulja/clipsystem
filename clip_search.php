@@ -94,6 +94,31 @@ if ($pdo) {
         $streamerProfileImage = $imgResult['profile_image_url'];
       }
     }
+
+    // If no profile image in DB, fetch from Twitch API and cache it
+    if (empty($streamerProfileImage) && $hasArchivedClips) {
+      $twitchApi = new TwitchAPI();
+      if ($twitchApi->isConfigured()) {
+        $userInfo = $twitchApi->getUserInfo($login);
+        if ($userInfo && !empty($userInfo['profile_image_url'])) {
+          $streamerProfileImage = $userInfo['profile_image_url'];
+          // Cache it in the database for next time
+          try {
+            $cacheStmt = $pdo->prepare("
+              INSERT INTO channel_settings (login, profile_image_url, profile_image_updated_at)
+              VALUES (?, ?, NOW())
+              ON CONFLICT (login) DO UPDATE SET
+                profile_image_url = EXCLUDED.profile_image_url,
+                profile_image_updated_at = EXCLUDED.profile_image_updated_at
+            ");
+            $cacheStmt->execute([$login, $streamerProfileImage]);
+          } catch (PDOException $e) {
+            // Non-critical - just log
+            error_log("Failed to cache profile image for $login: " . $e->getMessage());
+          }
+        }
+      }
+    }
   } catch (PDOException $e) {
     // Ignore - will fall through to live mode
   }
