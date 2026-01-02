@@ -408,8 +408,18 @@ if (count($newClips) > 0) {
   });
 
   echo "\nInserting " . count($newClips) . " new clips into database...\n";
-  // Note: Twitch's API doesn't guarantee returning all clips every time.
-  // Running backfill multiple times may find clips that weren't returned before.
+
+  // DEBUG: Verify these clips don't already exist in DB
+  foreach ($newClips as $nc) {
+    $checkStmt = $pdo->prepare("SELECT clip_id FROM clips WHERE login = ? AND clip_id = ?");
+    $checkStmt->execute([$login, $nc['clip_id']]);
+    $exists = $checkStmt->fetch();
+    if ($exists) {
+      echo "  ⚠️ BUG: {$nc['clip_id']} already in DB but not in existingClipIds!\n";
+    } else {
+      echo "  + {$nc['clip_id']} (genuinely new)\n";
+    }
+  }
 
   $pdo->beginTransaction();
   $nextSeq = $maxSeq + 1;
