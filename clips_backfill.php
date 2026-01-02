@@ -225,14 +225,28 @@ if (!$freshMode || $startWindow > 1) {
 }
 
 // Load existing clip IDs to avoid duplicates
+// In fresh mode, check staging table (clips are staged first, then merged at end)
+// In normal mode, check both staging and clips table
 $existingClipIds = [];
 try {
-  $stmt = $pdo->prepare("SELECT clip_id FROM clips WHERE login = ?");
+  // Always check staging table (clips being collected this run)
+  $stmt = $pdo->prepare("SELECT clip_id FROM clips_staging WHERE login = ?");
   $stmt->execute([$login]);
   while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
     $existingClipIds[$row['clip_id']] = true;
   }
-  echo "Existing clips in DB: " . count($existingClipIds) . "\n";
+  $stagingCount = count($existingClipIds);
+
+  // In non-fresh mode, also check final clips table
+  if (!$freshMode) {
+    $stmt = $pdo->prepare("SELECT clip_id FROM clips WHERE login = ?");
+    $stmt->execute([$login]);
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+      $existingClipIds[$row['clip_id']] = true;
+    }
+  }
+
+  echo "Existing clips to skip: " . count($existingClipIds) . " (staging: $stagingCount)\n";
 } catch (PDOException $e) {}
 
 // Load blocklist
@@ -475,7 +489,6 @@ try {
 } catch (PDOException $e) {}
 
 echo "\nTotal clips in staging: $stagingCount\n";
-echo "Clips already in final DB: " . count($existingClipIds) . "\n";
 
 // Calculate next window for continuation
 $nextWindow = $stoppedEarly ? $w : ($w > $totalWindows ? 0 : $w);
