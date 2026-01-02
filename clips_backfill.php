@@ -168,13 +168,34 @@ try {
   $pdo->exec("CREATE INDEX IF NOT EXISTS idx_clips_blocked ON clips(login, blocked)");
 
   echo "Database table ready.\n";
+
+  // Create staging table for collecting clips across chunks
+  // This ensures consistency - we collect ALL clips first, then merge at the end
+  $pdo->exec("
+    CREATE TABLE IF NOT EXISTS clips_staging (
+      login VARCHAR(64) NOT NULL,
+      clip_id VARCHAR(255) NOT NULL,
+      title TEXT,
+      duration INTEGER,
+      created_at TIMESTAMP,
+      view_count INTEGER DEFAULT 0,
+      game_id VARCHAR(64),
+      video_id VARCHAR(64),
+      vod_offset INTEGER,
+      thumbnail_url TEXT,
+      creator_name VARCHAR(64),
+      blocked BOOLEAN DEFAULT FALSE,
+      PRIMARY KEY (login, clip_id)
+    )
+  ");
+  echo "Staging table ready.\n";
 } catch (PDOException $e) {
   http_response_code(500);
   echo "ERROR creating table: " . $e->getMessage() . "\n";
   exit;
 }
 
-// Fresh mode: delete existing clips on first window
+// Fresh mode: delete existing clips AND clear staging on first window
 if ($freshMode && $startWindow === 1) {
   echo "🔄 FRESH MODE: Deleting existing clips for $login...\n";
   try {
@@ -182,6 +203,11 @@ if ($freshMode && $startWindow === 1) {
     $deleteStmt->execute([$login]);
     $deleted = $deleteStmt->rowCount();
     echo "  Deleted $deleted existing clips.\n";
+
+    // Also clear staging table for this login
+    $deleteStmt = $pdo->prepare("DELETE FROM clips_staging WHERE login = ?");
+    $deleteStmt->execute([$login]);
+    echo "  Cleared staging table.\n";
   } catch (PDOException $e) {
     echo "  Warning: Could not delete existing clips: " . $e->getMessage() . "\n";
   }
@@ -282,13 +308,13 @@ $totalInserted = 0;
 $totalAlreadyExist = 0;
 $totalErrors = 0;
 
-// Prepare batch insert statement - DO NOTHING on conflict to avoid false "inserts"
-$insertSql = "
-  INSERT INTO clips (login, clip_id, seq, title, duration, created_at, view_count, game_id, video_id, vod_offset, thumbnail_url, creator_name, blocked)
-  VALUES (:login, :clip_id, :seq, :title, :duration, :created_at, :view_count, :game_id, :video_id, :vod_offset, :thumbnail_url, :creator_name, :blocked)
+// Prepare staging insert statement - upsert to handle duplicates from API
+$stagingSql = "
+  INSERT INTO clips_staging (login, clip_id, title, duration, created_at, view_count, game_id, video_id, vod_offset, thumbnail_url, creator_name, blocked)
+  VALUES (:login, :clip_id, :title, :duration, :created_at, :view_count, :game_id, :video_id, :vod_offset, :thumbnail_url, :creator_name, :blocked)
   ON CONFLICT (login, clip_id) DO NOTHING
 ";
-$insertStmt = $pdo->prepare($insertSql);
+$stagingStmt = $pdo->prepare($stagingSql);
 
 // Collect clips for this chunk to assign seq numbers properly
 $newClips = [];
@@ -397,44 +423,19 @@ for ($w = $startWindow; $w <= $endWindow; $w++) {
   $windowsProcessed++;
 }
 
-// Sort new clips by created_at (oldest first) and assign seq numbers
+// Insert clips into staging table (not final clips table yet)
 if (count($newClips) > 0) {
-  usort($newClips, function($a, $b) {
-    return strcmp($a['created_at_raw'], $b['created_at_raw']);
-  });
+  echo "\nStaging " . count($newClips) . " clips from this chunk...\n";
 
-  echo "\nInserting " . count($newClips) . " new clips into database...\n";
-
-  // Double-check against DB to catch any duplicates our in-memory check missed
-  $clipIdsToCheck = array_column($newClips, 'clip_id');
-  $placeholders = implode(',', array_fill(0, count($clipIdsToCheck), '?'));
-  $checkStmt = $pdo->prepare("SELECT clip_id FROM clips WHERE login = ? AND clip_id IN ($placeholders)");
-  $checkStmt->execute(array_merge([$login], $clipIdsToCheck));
-  $alreadyInDb = array_flip($checkStmt->fetchAll(PDO::FETCH_COLUMN));
-
-  // Filter out any clips that are actually already in DB
-  if (count($alreadyInDb) > 0) {
-    echo "  Note: " . count($alreadyInDb) . " clips were already in DB (Twitch API inconsistency)\n";
-    $newClips = array_filter($newClips, function($clip) use ($alreadyInDb) {
-      return !isset($alreadyInDb[$clip['clip_id']]);
-    });
-    $newClips = array_values($newClips); // Re-index array
-    echo "  Proceeding with " . count($newClips) . " genuinely new clips\n";
-  }
-
-  if (count($newClips) === 0) {
-    echo "  No new clips to insert.\n";
-  } else {
-    $pdo->beginTransaction();
-  $nextSeq = $maxSeq + 1;
+  $pdo->beginTransaction();
   $batchCount = 0;
+  $stagedThisChunk = 0;
 
   foreach ($newClips as $clip) {
     try {
-      $insertStmt->execute([
+      $stagingStmt->execute([
         ':login' => $login,
         ':clip_id' => $clip['clip_id'],
-        ':seq' => $nextSeq,
         ':title' => $clip['title'],
         ':duration' => $clip['duration'],
         ':created_at' => $clip['created_at'],
@@ -447,32 +448,88 @@ if (count($newClips) > 0) {
         ':blocked' => $clip['blocked'] ? 't' : 'f',
       ]);
 
-      if ($insertStmt->rowCount() > 0) {
-        $totalInserted++;
-        $nextSeq++;
+      if ($stagingStmt->rowCount() > 0) {
+        $stagedThisChunk++;
       }
 
       $batchCount++;
       if ($batchCount % 100 === 0) {
         $pdo->commit();
         $pdo->beginTransaction();
-        echo "  Progress: $batchCount/" . count($newClips) . " inserted\n";
       }
     } catch (PDOException $e) {
-      // Log the actual error for debugging
-      $errMsg = $e->getMessage();
-      if (strpos($errMsg, 'clips_login_seq_key') !== false) {
-        // Seq conflict - get fresh max seq and retry
-        echo "  ⚠️ Seq conflict at seq=$nextSeq, refreshing...\n";
-        $pdo->rollBack();
-        $stmt = $pdo->prepare("SELECT COALESCE(MAX(seq), 0) FROM clips WHERE login = ?");
-        $stmt->execute([$login]);
-        $nextSeq = (int)$stmt->fetchColumn() + 1;
-        $pdo->beginTransaction();
-        // Retry this clip
+      $totalErrors++;
+    }
+  }
+
+  $pdo->commit();
+  echo "  Staged: $stagedThisChunk clips\n";
+}
+
+// Get staging count
+$stagingCount = 0;
+try {
+  $stmt = $pdo->prepare("SELECT COUNT(*) FROM clips_staging WHERE login = ?");
+  $stmt->execute([$login]);
+  $stagingCount = (int)$stmt->fetchColumn();
+} catch (PDOException $e) {}
+
+echo "\nTotal clips in staging: $stagingCount\n";
+echo "Clips already in final DB: " . count($existingClipIds) . "\n";
+
+// Calculate next window for continuation
+$nextWindow = $stoppedEarly ? $w : ($w > $totalWindows ? 0 : $w);
+
+// Determine if we need to continue
+$needsContinue = $isWeb && $nextWindow > 0 && $nextWindow <= $totalWindows;
+$freshParam = $freshMode ? "&fresh=1" : "";
+$nextUrl = $needsContinue ? "clips_backfill.php?login=$login&years=$years&window=$nextWindow&maxwin=$maxWindows$freshParam" : null;
+
+echo "\n=== Chunk Complete ===\n";
+echo "Windows processed: $windowsProcessed\n";
+
+if ($needsContinue) {
+  echo "\n🔄 AUTO-CONTINUING in 2 seconds...\n";
+  echo "Next: window $nextWindow to " . min($totalWindows, $nextWindow + $maxWindows - 1) . " of $totalWindows\n";
+} else {
+  echo "\n✅ All windows fetched! Moving clips from staging to final table...\n";
+
+  // Now move all staged clips to the final clips table with proper seq numbers
+  try {
+    // Get clips from staging that aren't already in clips table
+    $stmt = $pdo->prepare("
+      SELECT s.* FROM clips_staging s
+      LEFT JOIN clips c ON s.login = c.login AND s.clip_id = c.clip_id
+      WHERE s.login = ? AND c.id IS NULL
+      ORDER BY s.created_at ASC
+    ");
+    $stmt->execute([$login]);
+    $stagedClips = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    echo "  Found " . count($stagedClips) . " new clips to insert\n";
+
+    if (count($stagedClips) > 0) {
+      // Get current max seq
+      $stmt = $pdo->prepare("SELECT COALESCE(MAX(seq), 0) FROM clips WHERE login = ?");
+      $stmt->execute([$login]);
+      $nextSeq = (int)$stmt->fetchColumn() + 1;
+
+      // Insert with seq numbers
+      $insertSql = "
+        INSERT INTO clips (login, clip_id, seq, title, duration, created_at, view_count, game_id, video_id, vod_offset, thumbnail_url, creator_name, blocked)
+        VALUES (:login, :clip_id, :seq, :title, :duration, :created_at, :view_count, :game_id, :video_id, :vod_offset, :thumbnail_url, :creator_name, :blocked)
+        ON CONFLICT (login, clip_id) DO NOTHING
+      ";
+      $insertStmt = $pdo->prepare($insertSql);
+
+      $pdo->beginTransaction();
+      $inserted = 0;
+      $batchCount = 0;
+
+      foreach ($stagedClips as $clip) {
         try {
           $insertStmt->execute([
-            ':login' => $login,
+            ':login' => $clip['login'],
             ':clip_id' => $clip['clip_id'],
             ':seq' => $nextSeq,
             ':title' => $clip['title'],
@@ -486,62 +543,42 @@ if (count($newClips) > 0) {
             ':creator_name' => $clip['creator_name'],
             ':blocked' => $clip['blocked'] ? 't' : 'f',
           ]);
+
           if ($insertStmt->rowCount() > 0) {
-            $totalInserted++;
+            $inserted++;
             $nextSeq++;
           }
-        } catch (PDOException $e2) {
-          $totalErrors++;
-          echo "  ❌ Failed even after seq refresh: " . $e2->getMessage() . "\n";
-        }
-      } else {
-        $totalErrors++;
-        // Only log non-duplicate errors
-        if (strpos($errMsg, 'clips_login_clip_id_key') === false) {
-          echo "  ❌ Insert error: $errMsg\n";
+
+          $batchCount++;
+          if ($batchCount % 500 === 0) {
+            $pdo->commit();
+            $pdo->beginTransaction();
+            echo "  Progress: $batchCount/" . count($stagedClips) . " processed\n";
+          }
+        } catch (PDOException $e) {
+          // Seq conflict - refresh and continue
+          if (strpos($e->getMessage(), 'clips_login_seq_key') !== false) {
+            $pdo->rollBack();
+            $stmt = $pdo->prepare("SELECT COALESCE(MAX(seq), 0) FROM clips WHERE login = ?");
+            $stmt->execute([$login]);
+            $nextSeq = (int)$stmt->fetchColumn() + 1;
+            $pdo->beginTransaction();
+          }
         }
       }
+
+      $pdo->commit();
+      echo "  ✓ Inserted $inserted clips into final table\n";
     }
+
+    // Clear staging table for this login
+    $stmt = $pdo->prepare("DELETE FROM clips_staging WHERE login = ?");
+    $stmt->execute([$login]);
+    echo "  ✓ Cleared staging table\n";
+
+  } catch (PDOException $e) {
+    echo "  ❌ Error moving clips: " . $e->getMessage() . "\n";
   }
-
-  $pdo->commit();
-  echo "  Done! Inserted: $totalInserted\n";
-  if ($totalErrors > 0) {
-    echo "  Errors: $totalErrors\n";
-  }
-  } // end else (newClips > 0)
-}
-
-echo "\nAPI returned " . ($totalInserted + $totalAlreadyExist) . " clips (" . $totalAlreadyExist . " already in DB)\n";
-
-// Calculate next window for continuation
-$nextWindow = $stoppedEarly ? $w : ($w > $totalWindows ? 0 : $w);
-
-// Determine if we need to continue
-$needsContinue = $isWeb && $nextWindow > 0 && $nextWindow <= $totalWindows;
-$freshParam = $freshMode ? "&fresh=1" : "";
-$nextUrl = $needsContinue ? "clips_backfill.php?login=$login&years=$years&window=$nextWindow&maxwin=$maxWindows$freshParam" : null;
-
-// Success URL - redirect to admin with success message
-$finalClipCount = 0;
-try {
-  $stmt = $pdo->prepare("SELECT COUNT(*) FROM clips WHERE login = ?");
-  $stmt->execute([$login]);
-  $finalClipCount = (int)$stmt->fetchColumn();
-} catch (PDOException $e) {}
-
-$successUrl = "admin.php?success=" . urlencode($login) . "&clips=" . $finalClipCount;
-
-echo "\n=== Chunk Complete ===\n";
-echo "Windows processed: $windowsProcessed\n";
-echo "Clips inserted this chunk: $totalInserted\n";
-echo "Total clips in database: $finalClipCount\n";
-
-if ($needsContinue) {
-  echo "\n🔄 AUTO-CONTINUING in 2 seconds...\n";
-  echo "Next: window $nextWindow to " . min($totalWindows, $nextWindow + $maxWindows - 1) . " of $totalWindows\n";
-} else {
-  echo "\n✅ Backfill complete!\n";
 
   // Create streamer entry for dashboard access
   echo "\n🔑 Setting up dashboard access...\n";
@@ -578,7 +615,28 @@ if ($needsContinue) {
   }
 
   echo "\n💡 Streamer can access their dashboard at /dashboard/$login\n";
+
+  // Get final count after all clips moved from staging
+  $finalClipCount = 0;
+  try {
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM clips WHERE login = ?");
+    $stmt->execute([$login]);
+    $finalClipCount = (int)$stmt->fetchColumn();
+  } catch (PDOException $e) {}
+
+  echo "\n📊 Final clip count: $finalClipCount\n";
 }
+
+// Build success URL
+$finalClipCount = $finalClipCount ?? 0;
+if (!isset($finalClipCount) || $finalClipCount === 0) {
+  try {
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM clips WHERE login = ?");
+    $stmt->execute([$login]);
+    $finalClipCount = (int)$stmt->fetchColumn();
+  } catch (PDOException $e) {}
+}
+$successUrl = "admin.php?success=" . urlencode($login) . "&clips=" . $finalClipCount;
 
 // Get buffered output and send with proper headers
 $output = ob_get_clean();
