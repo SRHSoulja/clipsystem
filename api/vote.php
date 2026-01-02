@@ -256,20 +256,26 @@ try {
         ");
         $stmt->execute([$streamer, $clipId, $username, $voteDir]);
 
-        // Ensure votes aggregate row exists and update
-        $stmt = $pdo->prepare("
-          INSERT INTO votes (login, clip_id, seq, title, up_votes, down_votes, created_at, updated_at)
-          VALUES (?, ?, ?, ?, 0, 0, NOW(), NOW())
-          ON CONFLICT (login, clip_id) DO NOTHING
-        ");
-        $stmt->execute([$streamer, $clipId, $seq, $clipTitle]);
-
-        // Update the new vote count
+        // Atomic upsert: create row with vote count OR increment existing
+        // This prevents race condition where row exists with 0 count before increment
         if ($voteDir === 'up') {
-          $pdo->prepare("UPDATE votes SET up_votes = up_votes + 1, updated_at = NOW() WHERE login = ? AND clip_id = ?")->execute([$streamer, $clipId]);
+          $stmt = $pdo->prepare("
+            INSERT INTO votes (login, clip_id, seq, title, up_votes, down_votes, created_at, updated_at)
+            VALUES (?, ?, ?, ?, 1, 0, NOW(), NOW())
+            ON CONFLICT (login, clip_id) DO UPDATE SET
+              up_votes = votes.up_votes + 1,
+              updated_at = NOW()
+          ");
         } else {
-          $pdo->prepare("UPDATE votes SET down_votes = down_votes + 1, updated_at = NOW() WHERE login = ? AND clip_id = ?")->execute([$streamer, $clipId]);
+          $stmt = $pdo->prepare("
+            INSERT INTO votes (login, clip_id, seq, title, up_votes, down_votes, created_at, updated_at)
+            VALUES (?, ?, ?, ?, 0, 1, NOW(), NOW())
+            ON CONFLICT (login, clip_id) DO UPDATE SET
+              down_votes = votes.down_votes + 1,
+              updated_at = NOW()
+          ");
         }
+        $stmt->execute([$streamer, $clipId, $seq, $clipTitle]);
 
         $pdo->commit();
 
