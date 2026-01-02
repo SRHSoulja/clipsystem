@@ -409,16 +409,22 @@ if (count($newClips) > 0) {
 
   echo "\nInserting " . count($newClips) . " new clips into database...\n";
 
-  // DEBUG: Verify these clips don't already exist in DB
-  foreach ($newClips as $nc) {
-    $checkStmt = $pdo->prepare("SELECT clip_id FROM clips WHERE login = ? AND clip_id = ?");
-    $checkStmt->execute([$login, $nc['clip_id']]);
-    $exists = $checkStmt->fetch();
-    if ($exists) {
-      echo "  ⚠️ BUG: {$nc['clip_id']} already in DB but not in existingClipIds!\n";
-    } else {
-      echo "  + {$nc['clip_id']} (genuinely new)\n";
+  // DEBUG: Check ALL clips against DB to find duplicates
+  $clipIdsToCheck = array_column($newClips, 'clip_id');
+  $placeholders = implode(',', array_fill(0, count($clipIdsToCheck), '?'));
+  $checkStmt = $pdo->prepare("SELECT clip_id FROM clips WHERE login = ? AND clip_id IN ($placeholders)");
+  $checkStmt->execute(array_merge([$login], $clipIdsToCheck));
+  $alreadyInDb = $checkStmt->fetchAll(PDO::FETCH_COLUMN);
+
+  if (count($alreadyInDb) > 0) {
+    echo "  ⚠️ BUG FOUND: " . count($alreadyInDb) . " clips already in DB!\n";
+    foreach ($alreadyInDb as $dupId) {
+      echo "    - $dupId\n";
     }
+    echo "  existingClipIds count: " . count($existingClipIds) . "\n";
+    echo "  This means our duplicate detection is broken!\n";
+  } else {
+    echo "  ✓ All " . count($newClips) . " clips verified as genuinely new\n";
   }
 
   $pdo->beginTransaction();
