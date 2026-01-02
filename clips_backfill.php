@@ -279,7 +279,8 @@ $windowStart = $startAll + (($startWindow - 1) * $windowSec);
 $windowsProcessed = 0;
 $stoppedEarly = false;
 $totalInserted = 0;
-$totalSkipped = 0;
+$totalAlreadyExist = 0;
+$totalErrors = 0;
 
 // Prepare batch insert statement
 $insertSql = "
@@ -354,7 +355,7 @@ for ($w = $startWindow; $w <= $endWindow; $w++) {
 
       // Skip if already in DB
       if (isset($existingClipIds[$clipId])) {
-        $totalSkipped++;
+        $totalAlreadyExist++;
         continue;
       }
 
@@ -442,14 +443,19 @@ if (count($newClips) > 0) {
         echo "  Progress: $batchCount/" . count($newClips) . " inserted\n";
       }
     } catch (PDOException $e) {
-      // Likely duplicate, skip
-      $totalSkipped++;
+      // Likely duplicate or constraint violation
+      $totalErrors++;
     }
   }
 
   $pdo->commit();
-  echo "  Done! Inserted: $totalInserted, Skipped: $totalSkipped\n";
+  echo "  Done! Inserted: $totalInserted\n";
+  if ($totalErrors > 0) {
+    echo "  Errors: $totalErrors\n";
+  }
 }
+
+echo "\nAPI returned " . ($totalInserted + $totalAlreadyExist) . " clips (" . $totalAlreadyExist . " already in DB)\n";
 
 // Calculate next window for continuation
 $nextWindow = $stoppedEarly ? $w : ($w > $totalWindows ? 0 : $w);
