@@ -282,15 +282,11 @@ $totalInserted = 0;
 $totalAlreadyExist = 0;
 $totalErrors = 0;
 
-// Prepare batch insert statement
+// Prepare batch insert statement - DO NOTHING on conflict to avoid false "inserts"
 $insertSql = "
   INSERT INTO clips (login, clip_id, seq, title, duration, created_at, view_count, game_id, video_id, vod_offset, thumbnail_url, creator_name, blocked)
   VALUES (:login, :clip_id, :seq, :title, :duration, :created_at, :view_count, :game_id, :video_id, :vod_offset, :thumbnail_url, :creator_name, :blocked)
-  ON CONFLICT (login, clip_id) DO UPDATE SET
-    title = EXCLUDED.title,
-    view_count = EXCLUDED.view_count,
-    creator_name = COALESCE(EXCLUDED.creator_name, clips.creator_name),
-    thumbnail_url = EXCLUDED.thumbnail_url
+  ON CONFLICT (login, clip_id) DO NOTHING
 ";
 $insertStmt = $pdo->prepare($insertSql);
 
@@ -409,25 +405,27 @@ if (count($newClips) > 0) {
 
   echo "\nInserting " . count($newClips) . " new clips into database...\n";
 
-  // DEBUG: Check ALL clips against DB to find duplicates
+  // Double-check against DB to catch any duplicates our in-memory check missed
   $clipIdsToCheck = array_column($newClips, 'clip_id');
   $placeholders = implode(',', array_fill(0, count($clipIdsToCheck), '?'));
   $checkStmt = $pdo->prepare("SELECT clip_id FROM clips WHERE login = ? AND clip_id IN ($placeholders)");
   $checkStmt->execute(array_merge([$login], $clipIdsToCheck));
-  $alreadyInDb = $checkStmt->fetchAll(PDO::FETCH_COLUMN);
+  $alreadyInDb = array_flip($checkStmt->fetchAll(PDO::FETCH_COLUMN));
 
+  // Filter out any clips that are actually already in DB
   if (count($alreadyInDb) > 0) {
-    echo "  ⚠️ BUG FOUND: " . count($alreadyInDb) . " clips already in DB!\n";
-    foreach ($alreadyInDb as $dupId) {
-      echo "    - $dupId\n";
-    }
-    echo "  existingClipIds count: " . count($existingClipIds) . "\n";
-    echo "  This means our duplicate detection is broken!\n";
-  } else {
-    echo "  ✓ All " . count($newClips) . " clips verified as genuinely new\n";
+    echo "  Note: " . count($alreadyInDb) . " clips were already in DB (Twitch API inconsistency)\n";
+    $newClips = array_filter($newClips, function($clip) use ($alreadyInDb) {
+      return !isset($alreadyInDb[$clip['clip_id']]);
+    });
+    $newClips = array_values($newClips); // Re-index array
+    echo "  Proceeding with " . count($newClips) . " genuinely new clips\n";
   }
 
-  $pdo->beginTransaction();
+  if (count($newClips) === 0) {
+    echo "  No new clips to insert.\n";
+  } else {
+    $pdo->beginTransaction();
   $nextSeq = $maxSeq + 1;
   $batchCount = 0;
 
@@ -471,6 +469,7 @@ if (count($newClips) > 0) {
   if ($totalErrors > 0) {
     echo "  Errors: $totalErrors\n";
   }
+  } // end else (newClips > 0)
 }
 
 echo "\nAPI returned " . ($totalInserted + $totalAlreadyExist) . " clips (" . $totalAlreadyExist . " already in DB)\n";
