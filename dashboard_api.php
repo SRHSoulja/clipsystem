@@ -570,9 +570,9 @@ switch ($action) {
         }
 
         // Redirect to refresh_clips.php which handles the actual work
-        // We'll modify refresh_clips.php to accept streamer keys
+        // Uses OAuth session for authentication
         json_response([
-            "redirect" => "refresh_clips.php?login=" . urlencode($login) . "&key=" . urlencode($key)
+            "redirect" => "refresh_clips.php?login=" . urlencode($login)
         ]);
         break;
 

@@ -2216,7 +2216,7 @@ if ($currentUser) {
 
         function refreshClips() {
             showToast('info', 'Refreshing Clips', 'Opening refresh page in new tab...');
-            window.open(`/refresh_clips.php?login=${encodeURIComponent(authLogin)}&key=${encodeURIComponent(authKey)}`, '_blank');
+            window.open(`/refresh_clips.php?login=${encodeURIComponent(authLogin)}`, '_blank');
         }
 
         function copyPlayerUrl() {
