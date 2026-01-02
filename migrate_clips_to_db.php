@@ -352,17 +352,17 @@ if ($needsContinue) {
         echo "  Note: Could not setup dashboard: " . $e->getMessage() . "\n";
     }
 
-    // Register channel for bot (doesn't auto-join, just enables it when invited)
+    // Register channel for bot (inactive by default - streamer invites from dashboard)
     echo "\n🤖 Registering channel for bot commands...\n";
     try {
         $stmt = $pdo->prepare("
             INSERT INTO bot_channels (channel_login, added_by, active)
-            VALUES (?, 'system', TRUE)
+            VALUES (?, 'system', FALSE)
             ON CONFLICT (channel_login) DO NOTHING
         ");
         $stmt->execute([$login]);
         if ($stmt->rowCount() > 0) {
-            echo "  ✓ Channel registered - bot can now respond to commands when invited\n";
+            echo "  ✓ Channel registered - streamer can invite bot from their dashboard\n";
         } else {
             echo "  ✓ Channel already registered for bot\n";
         }
