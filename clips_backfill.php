@@ -408,9 +408,8 @@ if (count($newClips) > 0) {
   });
 
   echo "\nInserting " . count($newClips) . " new clips into database...\n";
-  foreach ($newClips as $nc) {
-    echo "  + {$nc['clip_id']} ({$nc['created_at_raw']})\n";
-  }
+  // Note: Twitch's API doesn't guarantee returning all clips every time.
+  // Running backfill multiple times may find clips that weren't returned before.
 
   $pdo->beginTransaction();
   $nextSeq = $maxSeq + 1;
