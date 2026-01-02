@@ -68,6 +68,17 @@ if ($authenticated && $_SERVER['REQUEST_METHOD'] === 'POST') {
     }
   }
 
+  // Wipe and re-fetch all clips for a user (fresh=1 mode)
+  if (isset($_POST['action']) && $_POST['action'] === 'wipe_refresh_user') {
+    $login = strtolower(trim(preg_replace('/[^a-zA-Z0-9_]/', '', $_POST['login'] ?? '')));
+    $years = max(1, min(10, intval($_POST['years'] ?? 5)));
+
+    if ($login) {
+      header("Location: clips_backfill.php?login=" . urlencode($login) . "&years=" . $years . "&fresh=1");
+      exit;
+    }
+  }
+
   // Generate dashboard link for a user
   if (isset($_POST['action']) && $_POST['action'] === 'generate_dashboard') {
     $login = strtolower(trim(preg_replace('/[^a-zA-Z0-9_]/', '', $_POST['login'] ?? '')));
@@ -468,6 +479,7 @@ if ($authenticated) {
                 <input type="hidden" name="login" value="<?= htmlspecialchars($user['login']) ?>">
                 <button type="submit" class="btn-secondary" style="padding: 6px 12px; font-size: 14px; background: #9147ff;" title="Generate dashboard access link">Dashboard</button>
               </form>
+              <button type="button" class="btn-secondary" style="padding: 6px 12px; font-size: 14px; background: #e74c3c; margin-left: 8px;" title="Delete all clips and re-fetch from scratch" onclick="wipeRefresh('<?= htmlspecialchars($user['login']) ?>')">Wipe & Refresh</button>
             </td>
           </tr>
           <?php endforeach; ?>
@@ -510,6 +522,32 @@ if ($authenticated) {
     </div>
 
     <script>
+      function wipeRefresh(login) {
+        const years = prompt('This will DELETE ALL CLIPS for ' + login + ' and re-fetch from Twitch.\n\nHow many years of clips to fetch? (1-10)', '5');
+        if (years === null) return; // Cancelled
+
+        const yearsNum = parseInt(years, 10);
+        if (isNaN(yearsNum) || yearsNum < 1 || yearsNum > 10) {
+          alert('Please enter a number between 1 and 10');
+          return;
+        }
+
+        if (!confirm('Are you sure you want to WIPE and RE-FETCH all clips for ' + login + '?\n\nThis cannot be undone!')) {
+          return;
+        }
+
+        // Submit via form
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.innerHTML = `
+          <input type="hidden" name="action" value="wipe_refresh_user">
+          <input type="hidden" name="login" value="${login}">
+          <input type="hidden" name="years" value="${yearsNum}">
+        `;
+        document.body.appendChild(form);
+        form.submit();
+      }
+
       async function loadApplications() {
         const container = document.getElementById('applicationsList');
         container.innerHTML = '<p style="color: #adadb8;">Loading...</p>';
