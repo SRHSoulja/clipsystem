@@ -34,11 +34,9 @@ $successClips = isset($_GET['clips']) ? intval($_GET['clips']) : 0;
 // Handle actions
 $message = '';
 $messageType = '';
-$playerUrl = '';
 
 if ($successLogin && $authenticated) {
-  $playerUrl = "https://gmgnrepeat.com/flop/clipplayer_mp4_reel.html?login=" . urlencode($successLogin);
-  $message = "Successfully added {$successLogin} with {$successClips} clips!";
+  $message = "Successfully archived {$successLogin} with {$successClips} clips!";
   $messageType = 'success';
 }
 
@@ -382,15 +380,6 @@ if ($authenticated) {
     <?php if ($message): ?>
       <div class="<?= $messageType === 'error' ? 'error' : 'success' ?>">
         <?= htmlspecialchars($message) ?>
-        <?php if ($playerUrl): ?>
-          <div style="margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 4px;">
-            <strong>Player URL (for OBS Browser Source):</strong><br>
-            <input type="text" value="<?= htmlspecialchars($playerUrl) ?>" readonly onclick="this.select()" style="width: 100%; margin-top: 5px; cursor: pointer;">
-            <div style="margin-top: 8px; font-size: 13px; color: #adadb8;">
-              <strong>Next step:</strong> Add <code><?= htmlspecialchars($successLogin) ?></code> to the bot using the "Bot Channel Management" section below for chat commands to work.
-            </div>
-          </div>
-        <?php endif; ?>
         <?php if (isset($generatedDashboardUrl)): ?>
           <div style="margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 4px;">
             <strong>Dashboard enabled for <?= htmlspecialchars($generatedLogin) ?>!</strong><br>
