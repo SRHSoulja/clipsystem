@@ -1157,13 +1157,25 @@ if ($currentUser) {
                 </div>
             </div>
 
+            <div class="card" id="presetsCard">
+                <h3>Quick Presets</h3>
+                <p style="color: #adadb8; margin-bottom: 16px;">Apply a preset configuration or customize manually below.</p>
+                <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                    <button class="btn" style="background: #3a3a3d;" onclick="applyPreset('balanced')">🎯 Balanced (Default)</button>
+                    <button class="btn" style="background: #3a3a3d;" onclick="applyPreset('popular')">🔥 Popular Clips</button>
+                    <button class="btn" style="background: #3a3a3d;" onclick="applyPreset('fresh')">✨ Fresh Content</button>
+                    <button class="btn" style="background: #3a3a3d;" onclick="applyPreset('community')">👥 Community Picks</button>
+                    <button class="btn" style="background: #3a3a3d;" onclick="applyPreset('random')">🎲 Pure Random</button>
+                </div>
+            </div>
+
             <div class="card" id="weightsCard">
                 <h3>Base Weights</h3>
-                <p style="color: #adadb8; margin-bottom: 16px;">Adjust how much each factor affects clip selection (0 = disabled, 1 = normal, 2 = maximum).</p>
+                <p style="color: #adadb8; margin-bottom: 16px;">Adjust how much each factor affects clip selection. <span style="color: #666;">(0 = disabled, 1 = normal, 2 = maximum)</span></p>
 
                 <div style="display: grid; gap: 16px;">
                     <div class="slider-group">
-                        <label>Recency (favor clips not recently played)</label>
+                        <label>Recency <span style="color: #666; font-weight: normal;">(favor clips not recently played)</span></label>
                         <div style="display: flex; align-items: center; gap: 12px;">
                             <input type="range" id="weightRecency" min="0" max="2" step="0.1" value="1" onchange="updateWeightLabel('Recency'); saveWeighting()">
                             <span id="weightRecencyLabel" style="min-width: 40px;">1.0</span>
@@ -1171,7 +1183,7 @@ if ($currentUser) {
                     </div>
 
                     <div class="slider-group">
-                        <label>Views (favor high view count clips)</label>
+                        <label>Views <span style="color: #666; font-weight: normal;">(favor high view count clips)</span></label>
                         <div style="display: flex; align-items: center; gap: 12px;">
                             <input type="range" id="weightViews" min="0" max="2" step="0.1" value="1" onchange="updateWeightLabel('Views'); saveWeighting()">
                             <span id="weightViewsLabel" style="min-width: 40px;">1.0</span>
@@ -1179,7 +1191,7 @@ if ($currentUser) {
                     </div>
 
                     <div class="slider-group">
-                        <label>Play Penalty (avoid recently played clips)</label>
+                        <label>Play Penalty <span style="color: #666; font-weight: normal;">(avoid recently played clips)</span></label>
                         <div style="display: flex; align-items: center; gap: 12px;">
                             <input type="range" id="weightPlayPenalty" min="0" max="2" step="0.1" value="1" onchange="updateWeightLabel('PlayPenalty'); saveWeighting()">
                             <span id="weightPlayPenaltyLabel" style="min-width: 40px;">1.0</span>
@@ -1187,7 +1199,7 @@ if ($currentUser) {
                     </div>
 
                     <div class="slider-group">
-                        <label>Voting (community !like/!dislike impact)</label>
+                        <label>Voting <span style="color: #666; font-weight: normal;">(community !like/!dislike impact)</span></label>
                         <div style="display: flex; align-items: center; gap: 12px;">
                             <input type="range" id="weightVoting" min="0" max="2" step="0.1" value="1" onchange="updateWeightLabel('Voting'); saveWeighting()">
                             <span id="weightVotingLabel" style="min-width: 40px;">1.0</span>
@@ -1263,13 +1275,23 @@ if ($currentUser) {
 
             <div class="card" id="goldenClipsCard">
                 <h3>Golden Clips</h3>
-                <p style="color: #adadb8; margin-bottom: 16px;">Add specific clips to a "golden" list that always gets a boost (use clip # from !cnow).</p>
+                <p style="color: #adadb8; margin-bottom: 16px;">Add specific clips to a "golden" list that always gets a boost. Use the clip number from <code style="background: #2a2a2e; padding: 2px 6px; border-radius: 3px;">!cnow</code> to identify clips.</p>
 
-                <div style="display: flex; gap: 12px; margin-bottom: 16px;">
-                    <input type="number" id="goldenClipSeq" min="1" placeholder="Clip #" style="width: 100px; padding: 10px; border: 1px solid #3a3a3d; border-radius: 4px; background: #0e0e10; color: #efeff1;">
-                    <input type="number" id="goldenClipBoost" min="0" max="5" step="0.5" value="2" placeholder="Boost" style="width: 80px; padding: 10px; border: 1px solid #3a3a3d; border-radius: 4px; background: #0e0e10; color: #efeff1;">
-                    <button class="btn btn-primary" onclick="addGoldenClip()">Add Golden Clip</button>
+                <div style="display: flex; gap: 12px; margin-bottom: 12px; align-items: center;">
+                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                        <label style="font-size: 12px; color: #666;">Clip #</label>
+                        <input type="number" id="goldenClipSeq" min="1" placeholder="e.g. 42" style="width: 100px; padding: 10px; border: 1px solid #3a3a3d; border-radius: 4px; background: #0e0e10; color: #efeff1;">
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                        <label style="font-size: 12px; color: #666;">Boost Amount</label>
+                        <input type="number" id="goldenClipBoost" min="0" max="5" step="0.5" value="2" placeholder="2" style="width: 100px; padding: 10px; border: 1px solid #3a3a3d; border-radius: 4px; background: #0e0e10; color: #efeff1;">
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                        <label style="font-size: 12px; color: transparent;">Add</label>
+                        <button class="btn btn-primary" onclick="addGoldenClip()">Add Golden Clip</button>
+                    </div>
                 </div>
+                <p style="color: #666; font-size: 12px; margin-bottom: 16px;">Higher boost values (1-5) increase how often the clip plays. Default boost is 2.</p>
                 <div id="goldenClipsList" class="tags"></div>
             </div>
 
@@ -2627,6 +2649,66 @@ if ($currentUser) {
             } catch (e) {
                 showMessage('weightingMessage', 'Network error', 'error');
             }
+        }
+
+        // Preset configurations
+        const WEIGHT_PRESETS = {
+            balanced: {
+                name: 'Balanced',
+                recency: 1.0,
+                views: 1.0,
+                play_penalty: 1.0,
+                voting: 1.0
+            },
+            popular: {
+                name: 'Popular Clips',
+                recency: 0.5,
+                views: 2.0,
+                play_penalty: 0.8,
+                voting: 1.5
+            },
+            fresh: {
+                name: 'Fresh Content',
+                recency: 2.0,
+                views: 0.5,
+                play_penalty: 2.0,
+                voting: 0.5
+            },
+            community: {
+                name: 'Community Picks',
+                recency: 0.5,
+                views: 0.5,
+                play_penalty: 1.0,
+                voting: 2.0
+            },
+            random: {
+                name: 'Pure Random',
+                recency: 0,
+                views: 0,
+                play_penalty: 0,
+                voting: 0
+            }
+        };
+
+        function applyPreset(presetName) {
+            const preset = WEIGHT_PRESETS[presetName];
+            if (!preset) return;
+
+            // Update sliders
+            document.getElementById('weightRecency').value = preset.recency;
+            document.getElementById('weightViews').value = preset.views;
+            document.getElementById('weightPlayPenalty').value = preset.play_penalty;
+            document.getElementById('weightVoting').value = preset.voting;
+
+            // Update labels
+            updateWeightLabel('Recency');
+            updateWeightLabel('Views');
+            updateWeightLabel('PlayPenalty');
+            updateWeightLabel('Voting');
+
+            // Save
+            saveWeighting();
+            showMessage('weightingMessage', `Applied "${preset.name}" preset`, 'success');
         }
 
         // Load weighting when tab is clicked
