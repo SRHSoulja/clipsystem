@@ -207,10 +207,15 @@ if ($freshMode && $startWindow === 1) {
     // Also clear staging table for this login
     $deleteStmt = $pdo->prepare("DELETE FROM clips_staging WHERE login = ?");
     $deleteStmt->execute([$login]);
-    echo "  Cleared staging table.\n";
+    $stagingDeleted = $deleteStmt->rowCount();
+    echo "  Cleared staging table ($stagingDeleted rows).\n";
   } catch (PDOException $e) {
     echo "  Warning: Could not delete existing clips: " . $e->getMessage() . "\n";
   }
+} elseif ($freshMode) {
+  echo "Continuing fresh mode from window $startWindow...\n";
+} else {
+  echo "Incremental mode (not fresh)\n";
 }
 
 // Get current max seq for this login (for incremental mode)
