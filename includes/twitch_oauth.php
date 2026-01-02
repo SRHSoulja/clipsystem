@@ -274,25 +274,38 @@ function getCurrentUser(): ?array {
   }
 
   // Check if token is still valid (cached check)
-  if (isset($_SESSION['token_expires']) && $_SESSION['token_expires'] < time()) {
-    // Token expired, clear session
+  // Only logout if token is WELL past expiry (add 1 hour grace period)
+  if (isset($_SESSION['token_expires']) && $_SESSION['token_expires'] < (time() - 3600)) {
+    // Token expired over an hour ago, clear session
+    error_log("Session logout: Token expired over an hour ago for " . ($_SESSION['twitch_user']['login'] ?? 'unknown'));
     logout();
     return null;
   }
 
-  // Periodically validate token with Twitch (every 15 minutes)
+  // Periodically validate token with Twitch (every 30 minutes instead of 15)
+  // Only if the token hasn't expired yet (avoid unnecessary API calls)
   $lastValidated = $_SESSION['last_validated'] ?? 0;
-  if (time() - $lastValidated > 900 && !empty($_SESSION['access_token'])) {
+  $tokenExpired = isset($_SESSION['token_expires']) && $_SESSION['token_expires'] < time();
+
+  if (!$tokenExpired && time() - $lastValidated > 1800 && !empty($_SESSION['access_token'])) {
     $oauth = new TwitchOAuth();
     $validation = $oauth->validateToken($_SESSION['access_token']);
 
-    if (!$validation) {
-      // Token is no longer valid with Twitch
+    if ($validation === null) {
+      // Validation FAILED (network error, timeout, etc.)
+      // Don't logout immediately - could be temporary issue
+      // Just log it and let the session continue
+      error_log("Token validation failed (network/timeout?) for " . ($_SESSION['twitch_user']['login'] ?? 'unknown') . " - keeping session");
+      // Don't update last_validated so we'll retry soon
+    } elseif ($validation === false || (is_array($validation) && empty($validation['login']))) {
+      // Token was explicitly rejected by Twitch (revoked or invalid)
+      error_log("Session logout: Token explicitly rejected by Twitch for " . ($_SESSION['twitch_user']['login'] ?? 'unknown'));
       logout();
       return null;
+    } else {
+      // Validation succeeded
+      $_SESSION['last_validated'] = time();
     }
-
-    $_SESSION['last_validated'] = time();
   }
 
   return $_SESSION['twitch_user'];
