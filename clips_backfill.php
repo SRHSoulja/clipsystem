@@ -407,7 +407,10 @@ if (count($newClips) > 0) {
     return strcmp($a['created_at_raw'], $b['created_at_raw']);
   });
 
-  echo "\nInserting " . count($newClips) . " clips into database...\n";
+  echo "\nInserting " . count($newClips) . " new clips into database...\n";
+  foreach ($newClips as $nc) {
+    echo "  + {$nc['clip_id']} ({$nc['created_at_raw']})\n";
+  }
 
   $pdo->beginTransaction();
   $nextSeq = $maxSeq + 1;
