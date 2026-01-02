@@ -459,8 +459,48 @@ if (count($newClips) > 0) {
         echo "  Progress: $batchCount/" . count($newClips) . " inserted\n";
       }
     } catch (PDOException $e) {
-      // Likely duplicate or constraint violation
-      $totalErrors++;
+      // Log the actual error for debugging
+      $errMsg = $e->getMessage();
+      if (strpos($errMsg, 'clips_login_seq_key') !== false) {
+        // Seq conflict - get fresh max seq and retry
+        echo "  ⚠️ Seq conflict at seq=$nextSeq, refreshing...\n";
+        $pdo->rollBack();
+        $stmt = $pdo->prepare("SELECT COALESCE(MAX(seq), 0) FROM clips WHERE login = ?");
+        $stmt->execute([$login]);
+        $nextSeq = (int)$stmt->fetchColumn() + 1;
+        $pdo->beginTransaction();
+        // Retry this clip
+        try {
+          $insertStmt->execute([
+            ':login' => $login,
+            ':clip_id' => $clip['clip_id'],
+            ':seq' => $nextSeq,
+            ':title' => $clip['title'],
+            ':duration' => $clip['duration'],
+            ':created_at' => $clip['created_at'],
+            ':view_count' => $clip['view_count'],
+            ':game_id' => $clip['game_id'],
+            ':video_id' => $clip['video_id'],
+            ':vod_offset' => $clip['vod_offset'],
+            ':thumbnail_url' => $clip['thumbnail_url'],
+            ':creator_name' => $clip['creator_name'],
+            ':blocked' => $clip['blocked'] ? 't' : 'f',
+          ]);
+          if ($insertStmt->rowCount() > 0) {
+            $totalInserted++;
+            $nextSeq++;
+          }
+        } catch (PDOException $e2) {
+          $totalErrors++;
+          echo "  ❌ Failed even after seq refresh: " . $e2->getMessage() . "\n";
+        }
+      } else {
+        $totalErrors++;
+        // Only log non-duplicate errors
+        if (strpos($errMsg, 'clips_login_clip_id_key') === false) {
+          echo "  ❌ Insert error: $errMsg\n";
+        }
+      }
     }
   }
 
@@ -554,15 +594,18 @@ if ($isWeb && $needsContinue) {
   echo "<p><a href='" . htmlspecialchars($nextUrl) . "'>Click here if not redirected...</a></p>";
   echo "</body></html>";
 } elseif ($isWeb) {
-  // Backfill complete - redirect to admin
+  // Backfill complete - show results with manual continue button (no auto-redirect)
   header('Content-Type: text/html; charset=utf-8');
   echo "<!DOCTYPE html><html><head><meta charset='utf-8'>";
-  echo "<meta http-equiv='refresh' content='3;url=" . htmlspecialchars($successUrl) . "'>";
   echo "<title>Clips Backfill Complete</title>";
-  echo "<style>body{background:#1a1a2e;color:#0f0;font-family:monospace;padding:20px;font-size:14px;line-height:1.4;} a{color:#0ff;}</style>";
+  echo "<style>
+    body{background:#1a1a2e;color:#0f0;font-family:monospace;padding:20px;font-size:14px;line-height:1.4;}
+    a{color:#0ff;}
+    .btn{display:inline-block;padding:12px 24px;background:#27ae60;color:#fff;text-decoration:none;border-radius:6px;font-size:16px;margin-top:20px;}
+    .btn:hover{background:#2ecc71;}
+  </style>";
   echo "</head><body><pre>" . htmlspecialchars($output) . "</pre>";
-  echo "<p>🔄 Redirecting to admin panel...</p>";
-  echo "<p><a href='" . htmlspecialchars($successUrl) . "'>Click here if not redirected...</a></p>";
+  echo "<p><a class='btn' href='" . htmlspecialchars($successUrl) . "'>✓ Continue to Admin Panel</a></p>";
   echo "</body></html>";
 } else {
   // Plain text output (CLI)
