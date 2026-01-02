@@ -600,9 +600,9 @@ if ($needsContinue) {
   echo "\n🤖 Registering channel for bot commands...\n";
   try {
     $stmt = $pdo->prepare("
-      INSERT INTO bot_channels (login, enabled, added_at)
-      VALUES (?, true, CURRENT_TIMESTAMP)
-      ON CONFLICT (login) DO NOTHING
+      INSERT INTO bot_channels (channel_login, added_by, active)
+      VALUES (?, 'system', TRUE)
+      ON CONFLICT (channel_login) DO NOTHING
     ");
     $stmt->execute([$login]);
     if ($stmt->rowCount() > 0) {
