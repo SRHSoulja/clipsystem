@@ -596,7 +596,7 @@ if ($needsContinue) {
     echo "  Note: Could not setup dashboard: " . $e->getMessage() . "\n";
   }
 
-  // Register channel for bot (inactive by default - streamer invites from dashboard)
+  // Register channel for bot (inactive by default for NEW channels - existing channels unchanged)
   echo "\n🤖 Registering channel for bot commands...\n";
   try {
     $stmt = $pdo->prepare("
@@ -606,9 +606,9 @@ if ($needsContinue) {
     ");
     $stmt->execute([$login]);
     if ($stmt->rowCount() > 0) {
-      echo "  ✓ Channel registered - streamer can invite bot from their dashboard\n";
+      echo "  ✓ Channel registered (inactive) - streamer can invite bot from their dashboard\n";
     } else {
-      echo "  ✓ Channel already registered for bot\n";
+      echo "  ✓ Channel already registered - bot status unchanged\n";
     }
   } catch (PDOException $e) {
     echo "  Note: Could not register bot channel: " . $e->getMessage() . "\n";
