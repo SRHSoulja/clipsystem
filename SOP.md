@@ -1,184 +1,131 @@
-# Clip System - Standard Operating Procedures
+# ClipArchive - Standard Operating Procedures
 
 ## Overview
 
-This system manages Twitch clips for the reel player. Clips are:
-1. Fetched from Twitch API (backfill)
-2. Stored in PostgreSQL database (migration)
-3. Served to the player via API
-4. Tracked with votes and now-playing status
+ClipArchive manages Twitch clips for reel playback. The system:
+1. Fetches clips from Twitch API (backfill)
+2. Stores them in PostgreSQL database
+3. Serves clips to the OBS player via API
+4. Tracks votes, play history, and now-playing status
+5. Provides chat bot commands for viewers and moderators
 
 ---
 
-## Initial Setup (Fresh Start)
+## Initial Setup (New Channel)
 
-Use this when setting up for the first time or rebuilding from scratch.
+### Step 1: Run Clip Backfill
 
-### Step 1: Run Fresh Backfill
+Navigate to (requires super admin OAuth login):
 ```
-clips_backfill.php?login=floppyjimmie&years=5&fresh=1
+clips_backfill.php?login=CHANNEL_NAME&years=5&fresh=1
 ```
-- Deletes any existing cache
+
 - Fetches ALL clips from Twitch API for the past 5 years
+- Uses 30-day windows to bypass Twitch's 1000-clip limit
 - Gets `creator_name` (clipper credit) for every clip
-- Auto-continues through all time windows (~61 windows for 5 years)
-- Takes ~2-3 hours to complete
+- Auto-continues through all time windows
+- Takes 1-3 hours depending on clip count
 
-### Step 2: Run Fresh Migration
+### Step 2: Migrate to Database
+
+Navigate to (requires super admin OAuth login):
 ```
-migrate_clips_to_db.php?login=floppyjimmie&key=YOUR_ADMIN_KEY&fresh=1
+migrate_clips_to_db.php?login=CHANNEL_NAME&fresh=1
 ```
-- Deletes existing clips from database (for this login only)
-- Imports all clips from JSON cache
+
+- Imports all clips from JSON cache to PostgreSQL
 - Assigns seq numbers (1 = oldest, N = newest)
 - Auto-continues through all clips
 - Takes ~10-15 minutes for 14k clips
 
-### Step 3: Export Seq Mapping (IMPORTANT!)
+### Step 3: Populate Thumbnails
+
+Navigate to:
 ```
-seq_export.php?login=floppyjimmie&key=YOUR_ADMIN_KEY
+populate_thumbnails.php?login=CHANNEL_NAME
 ```
-- Downloads `seq_map_floppyjimmie_YYYYMMDD.json`
-- **Save this file!** It's your backup of clip_id → seq mappings
-- If you ever need to rebuild, this ensures seq numbers stay the same
+
+- Fetches thumbnail URLs from Twitch API
+- Enables MP4 URL generation from thumbnails
+- Marks deleted/unavailable clips as `NOT_FOUND`
+
+### Step 4: Export Seq Mapping (Backup)
+
+Navigate to:
+```
+seq_export.php?login=CHANNEL_NAME
+```
+
+- Downloads `seq_map_CHANNEL_YYYYMMDD.json`
+- **Save this file!** It's your backup of clip_id to seq mappings
+- If you ever rebuild, this ensures seq numbers stay the same
 
 ---
 
-## Adding New Clips (After Launch)
+## Adding New Clips (Maintenance)
 
-Use this to add new clips that were created after the initial backfill.
+### Automatic: Dashboard Refresh
 
-### Step 1: Run Incremental Backfill
+From the Streamer Dashboard, click "Refresh Clips" button.
+
+### Manual: Incremental Backfill
+
 ```
-clips_backfill.php?login=floppyjimmie&years=1
+clips_backfill.php?login=CHANNEL_NAME&years=1
 ```
+
 - Loads existing clips from cache (preserves seq numbers)
 - Only fetches NEW clips from Twitch
 - New clips get seq numbers starting from max+1
-- Existing votes/blocks are NOT affected
 
-### Step 2: Run Migration (No Fresh)
+Then run migration (without `fresh=1`):
 ```
-migrate_clips_to_db.php?login=floppyjimmie&key=YOUR_ADMIN_KEY
+migrate_clips_to_db.php?login=CHANNEL_NAME
 ```
+
 - Adds new clips to database
 - Skips existing clips (ON CONFLICT DO NOTHING)
 - Existing votes/blocks are preserved
 
 ---
 
-## Updating Clip Metadata
+## Dashboard Access
 
-Use this to update fields like `creator_name` without re-importing.
-
-### Update Existing Clips
+### Streamer Dashboard
 ```
-migrate_clips_to_db.php?login=floppyjimmie&key=YOUR_ADMIN_KEY&update=1
-```
-- Updates `creator_name` from JSON for existing clips
-- Uses COALESCE to preserve existing values if JSON is empty
-
----
-
-## Rebuilding with Preserved Seq Numbers
-
-If you ever need to do a fresh rebuild but want to keep the same seq numbers:
-
-### Step 1: Fresh Backfill
-```
-clips_backfill.php?login=floppyjimmie&years=5&fresh=1
+/dashboard.php
 ```
 
-### Step 2: Fresh Migration
+Login with Twitch OAuth. Access granted to:
+- Super admins (thearsondragon, cliparchive)
+- The channel owner (streamer)
+
+Features:
+- **Overview**: Quick stats and player URL
+- **Clips Tab**: Browse, search, block/unblock clips
+- **Weighting Tab**: Configure clip selection algorithm
+- **Playlists Tab**: Create and manage playlists
+- **Blocked Tab**: View blocked clips and clippers
+- **Mods Tab**: Grant permissions to moderators
+- **Settings Tab**: Channel-specific settings
+
+### Mod Dashboard
 ```
-migrate_clips_to_db.php?login=floppyjimmie&key=YOUR_ADMIN_KEY&fresh=1
+/mod_dashboard.php
 ```
 
-### Step 3: Restore Seq Numbers
-1. Upload your saved `seq_map_*.json` to Railway at `/tmp/clipsystem_cache/seq_map.json`
-2. Run:
+Login with Twitch OAuth. Access granted to:
+- Super admins
+- Moderators with permissions for the channel
+
+Features depend on granted permissions.
+
+### Public Clip Browser
 ```
-seq_import.php?login=floppyjimmie&key=YOUR_ADMIN_KEY
+/search/CHANNEL_NAME
 ```
-- Restores original seq numbers from your backup
-- New clips (not in backup) keep their new seq numbers
 
----
-
-## Key Concepts
-
-### Seq Numbers
-- Each clip has a unique `seq` number within a login
-- `seq=1` is the oldest clip, `seq=N` is the newest
-- Votes are stored by `clip_id` (permanent), NOT seq number
-- Seq is just a human-friendly lookup key
-- **Even if seq changes, votes stay attached to the correct clip**
-
-### Fresh Mode
-- `fresh=1` on backfill: Ignores cache, re-fetches everything from Twitch
-- `fresh=1` on migration: Deletes existing DB clips before importing
-- **Only use fresh mode before launch or to rebuild from scratch**
-
-### Cache Locations
-- Railway writes to: `/tmp/clipsystem_cache/`
-- Static cache (`./cache/`) is NO LONGER deployed with the app
-- In fresh mode, ONLY `/tmp` cache is used (never static cache)
-- Migration checks `/tmp` first (fresh backfill data), then static cache
-
----
-
-## Troubleshooting
-
-### "Permission denied" on Railway
-- Railway's `/app/` directory is read-only
-- Backfill now writes to `/tmp/clipsystem_cache/`
-- This is expected behavior
-
-### 504 Gateway Timeout
-- Scripts auto-chunk to avoid Railway's ~30s timeout
-- They auto-continue with HTML meta refresh
-- Just wait for completion
-
-### Clips missing creator_name
-- Old cache doesn't have creator_name field
-- Run fresh backfill to re-fetch all clips from Twitch API
-
-### New clips not appearing
-- Check that backfill found them (should show "Added this window: N")
-- Check migration completed successfully
-- Verify seq numbers were assigned (seq > 0)
-
----
-
-## Files Reference
-
-| File | Purpose |
-|------|---------|
-| `clips_backfill.php` | Fetch clips from Twitch API |
-| `migrate_clips_to_db.php` | Import clips from JSON to PostgreSQL |
-| `seq_export.php` | Export clip_id → seq mapping (backup) |
-| `seq_import.php` | Restore seq numbers from backup |
-| `twitch_reel_api.php` | API for player to get clip list |
-| `now_playing_set.php` | Update currently playing clip |
-| `now_playing_get.php` | Get current clip (for !pb command) |
-| `vote_submit.php` | Record votes |
-| `vote_status.php` | Get vote counts |
-| `pclip.php` | Play specific clip by seq number |
-
----
-
-## Workflow Summary
-
-```
-[Fresh Start]
-  backfill?fresh=1 → migrate?fresh=1 → Ready!
-
-[Add New Clips]
-  backfill (no fresh) → migrate (no fresh) → New clips added!
-
-[Update Metadata]
-  backfill?fresh=1 → migrate?update=1 → Metadata updated!
-```
+No login required. Anyone can browse clips and vote (if voting enabled).
 
 ---
 
@@ -187,88 +134,117 @@ seq_import.php?login=floppyjimmie&key=YOUR_ADMIN_KEY
 ### All Users
 | Command | Description |
 |---------|-------------|
-| `!cclip` | Show currently playing clip with link |
-| `!cfind` | Get link to clip search page |
-| `!like [#]` | Upvote current clip or specific clip# |
-| `!dislike [#]` | Downvote current clip or specific clip# |
+| `!cclip [#]` | Show currently playing clip (or specific clip by number) |
+| `!cfind [query]` | Search clips and get browse link |
+| `!like [#]` | Upvote current clip (or specific clip) |
+| `!dislike [#]` | Downvote current clip (or specific clip) |
+| `!cvote [#\|clear]` | Clear your vote (current clip, specific, or all) |
 | `!chelp` | Show available commands |
 
-### Mod-Only Commands
+### Moderator Commands
 | Command | Description |
 |---------|-------------|
 | `!cplay <#>` | Force play a specific clip by seq number |
 | `!cskip` | Skip the current clip |
+| `!cprev` | Go back to the previous clip |
 | `!ccat <game>` | Filter clips to specific game/category |
 | `!ccat off` | Return to all games (exit category filter) |
-| `!cremove <#>` | Remove clip from rotation |
-| `!cadd <#>` | Restore a removed clip |
-
-### Category Filter (!ccat)
-- Works with fuzzy matching: `!ccat elden` matches "Elden Ring"
-- Exit keywords: `off`, `clear`, `all`, `exit`, `reset`, `none`
-- Shows available games if no match found
+| `!ctop [#]` | Show top voted clips overlay (default 5) |
+| `!chud <pos>` | Move vote HUD (tl, tr, bl, br) |
+| `!chud top <pos>` | Move top clips overlay position |
+| `!cremove <#>` | Hide clip from rotation |
+| `!cadd <#>` | Restore a hidden clip |
+| `!clikeon` | Enable voting for channel |
+| `!clikeoff` | Disable voting for channel |
+| `!cswitch <channel>` | Control another channel's clips (super admin only) |
 
 ---
 
-## Player Features
+## Player Setup (OBS)
 
-### Reel Player (floppyjimmie_mp4_reel.html)
+### Browser Source URL
+```
+https://clips.gmgnrepeat.com/clipplayer_mp4_reel.html?login=CHANNEL_NAME
+```
 
-**URL Parameters:**
+### URL Parameters
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `login` | floppyjimmie | Twitch username for clips |
-| `days` | 180 | Only clips from last N days |
-| `pool` | 400 | Number of clips in rotation |
-| `rotate` | 0 | Enable smart rotation (1=on) |
-| `hud` | 1 | Show vote HUD (0=off) |
-| `debug` | 0 | Show debug overlay (1=on) |
-| `muted` | 0 | Force muted playback (1=on) |
+| `login` | - | Channel name (required) |
+| `days` | 0 | Only clips from last N days (0 = all time) |
+| `pool` | 300 | Number of clips in rotation pool |
+| `hud` | 1 | Show vote HUD (0 = hide) |
+| `debug` | 0 | Show debug overlay (1 = show) |
+| `muted` | 0 | Force muted playback (1 = mute) |
+| `instance` | - | Instance ID for multi-player setups |
 
-**Buffering Behavior:**
-- First clip (scene init): Buffer 8s or full clip
-- Command-triggered (!pclip, !cskip): 5s buffer
-- Normal progression: 2s buffer
-
-### Smart Rotation (rotate=1)
-When enabled, the pool of 400 clips rotates through all 14,000+ clips:
-- 70% fresh/never-played clips
-- 20% least-recently-played clips
-- 10% top-voted favorites
-
-Requires `clip_played.php` tracking to be active.
+### Recommended OBS Settings
+- Width: 1920
+- Height: 1080
+- Custom CSS: (leave empty)
+- Shutdown source when not visible: OFF
+- Refresh browser when scene becomes active: OFF
 
 ---
 
-## API Endpoints Reference
+## Weighting Configuration
+
+The player selects clips using weighted random selection. Configure via Dashboard > Weighting tab.
+
+### Weight Factors
+| Factor | Description |
+|--------|-------------|
+| `recency` | Bonus for clips not played recently |
+| `views` | Bonus based on view count (log scale) |
+| `play_penalty` | Penalty for frequently played clips |
+| `voting` | Bonus/penalty based on net vote score |
+
+### Quick Presets
+- **Balanced**: Equal weights (default)
+- **Popular Clips**: Favor high view counts
+- **Fresh Content**: Favor recently created, rarely played
+- **Community Picks**: Favor highly voted clips
+- **Pure Random**: No weighting at all
+
+### Golden Clips
+Specific clips that should appear more frequently. Add by seq number with boost value.
+
+### Category/Clipper Boosts
+Boost or reduce clips from specific games or clippers.
+
+---
+
+## API Endpoints
 
 ### Player APIs
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
-| `twitch_reel_api.php` | GET | Get clip pool for player |
-| `now_playing.php` | POST | Report currently playing clip |
-| `now_playing_get.php` | GET | Get current clip (for !cclip command) |
-| `clip_played.php` | GET | Report clip was played (for rotation) |
-| `force_play_get.php` | GET | Check for force play command |
-| `force_play_clear.php` | GET | Clear force play after playing |
-| `skip_check.php` | GET | Check for skip command |
-| `category_get.php` | GET | Get active category filter |
+| `twitch_reel_api.php` | GET | Get weighted clip pool |
+| `clip_mp4_url.php` | GET | Get signed MP4 URL for clip |
+| `poll.php` | GET | Consolidated polling (votes, skip, commands) |
+| `now_playing_get.php` | GET | Get currently playing clip |
+| `now_playing_set.php` | POST | Report currently playing clip |
+| `vote_status.php` | GET | Get current vote counts |
+| `hud_position.php` | GET | Get/set HUD position |
 
-### Command APIs (require admin key)
+### Bot Command APIs
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
 | `pclip.php` | GET | Set force play by seq |
 | `cskip.php` | GET | Trigger skip |
+| `cprev.php` | GET | Go to previous clip |
 | `ccat.php` | GET | Set/clear category filter |
-| `cremove.php` | GET | Remove clip from pool |
-| `cadd.php` | GET | Restore removed clip |
+| `ctop.php` | GET | Trigger top clips overlay |
+| `cremove.php` | GET | Block clip |
+| `cadd.php` | GET | Unblock clip |
 
-### Voting APIs
+### Management APIs
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
-| `vote_submit.php` | GET | Submit vote |
-| `vote_status.php` | GET | Get current vote counts |
-| `votes_export.php` | GET | Export all vote data |
+| `dashboard_api.php` | GET/POST | Dashboard operations |
+| `playlist_api.php` | GET/POST | Playlist CRUD |
+| `clips_api.php` | GET/POST | Clip management |
+| `bot_api.php` | GET/POST | Bot channel management |
 
 ---
 
@@ -276,27 +252,116 @@ Requires `clip_played.php` tracking to be active.
 
 | Table | Purpose |
 |-------|---------|
-| `clips` | All clips with metadata, seq numbers, blocked status |
+| `clips` | All clips with metadata, seq, blocked status |
 | `votes` | Aggregate vote counts per clip |
-| `vote_ledger` | Individual votes (prevents duplicates) |
-| `blocklist` | Removed clips |
+| `vote_ledger` | Individual user votes (prevents duplicates) |
 | `clip_plays` | Play history for smart rotation |
-| `playlist_active` | Currently playing playlist |
 | `playlists` | Saved playlists |
-| `playlist_clips` | Clips in playlists |
+| `playlist_clips` | Clips in playlists (with position) |
+| `playlist_active` | Currently playing playlist per channel |
+| `channel_settings` | Per-channel configuration |
+| `channel_mods` | Moderator assignments |
+| `mod_permissions` | Granular mod permissions |
+| `bot_channels` | Channels the bot should join |
 | `games_cache` | Cached game names from Twitch |
+| `blocked_clippers` | Blocked clipper usernames |
+| `streamers` | Registered streamers |
+| `hud_state` | HUD position per channel |
+| `now_playing` | Current clip per channel |
+| `force_play` | Pending force play commands |
+| `skip_flag` | Pending skip commands |
+| `category_filter` | Active category filter per channel |
 
 ---
 
-## Environment Variables (Railway)
+## How MP4 Streaming Works
 
-| Variable | Required | Purpose |
-|----------|----------|---------|
-| `DATABASE_URL` | Yes | PostgreSQL connection string |
-| `ADMIN_KEY` | Yes | Secret key for mod commands |
-| `TWITCH_BOT_USERNAME` | For bot | Bot's Twitch username |
-| `TWITCH_OAUTH_TOKEN` | For bot | Bot OAuth token |
-| `TWITCH_CHANNEL` | For bot | Channel to join |
-| `CLIP_CHANNEL` | For bot | Channel whose clips to play |
-| `TWITCH_CLIENT_ID` | For games | Twitch API client ID |
-| `TWITCH_CLIENT_SECRET` | For games | Twitch API secret |
+The system uses Twitch's internal GraphQL API to get signed MP4 URLs:
+
+```javascript
+// Twitch's web player client ID (public)
+const CLIENT_ID = "kimne78kx3ncx6brgo4mv6wki5h1ko";
+
+// VideoAccessToken_Clip operation hash
+const QUERY_HASH = "36b89d2507fce29e5ca551df756d27c1cfe079e2609642b4390aa4c35796eb11";
+
+// POST to https://gql.twitch.tv/gql
+{
+  operationName: "VideoAccessToken_Clip",
+  variables: { slug: "ClipSlugHere" },
+  extensions: { persistedQuery: { version: 1, sha256Hash: QUERY_HASH } }
+}
+```
+
+This returns:
+- `playbackAccessToken.value` - Signed token
+- `playbackAccessToken.signature` - Signature
+- `videoQualities` - Array of quality options with source URLs
+
+Final MP4 URL: `{sourceURL}?sig={signature}&token={token}`
+
+**Key benefit**: Works for ANY clip, even from deleted VODs, because Twitch generates fresh tokens on-demand.
+
+---
+
+## Troubleshooting
+
+### "Permission denied" on Railway
+- Railway's `/app/` directory is read-only
+- Backfill writes to `/tmp/clipsystem_cache/`
+- This is expected behavior
+
+### 504 Gateway Timeout
+- Scripts auto-chunk to avoid Railway's ~30s timeout
+- They auto-continue with HTML meta refresh
+- Just wait for completion
+
+### Clips not playing
+- Check debug overlay (`?debug=1`)
+- Verify clip exists in database
+- Check if clip is blocked
+- GQL may fail for very old/deleted clips
+
+### Votes not showing
+- Verify voting is enabled in channel settings
+- Check vote_status.php response
+- Browser may be caching - try hard refresh
+
+### Bot not responding
+- Check bot is in channel (`bot_api.php?action=list`)
+- Verify command is enabled in channel settings
+- Check Railway logs for bot errors
+
+### New clips not appearing
+- Run refresh_clips.php or dashboard refresh
+- Verify migration completed
+- Check if clips are being filtered (date range, category)
+
+---
+
+## Workflow Summary
+
+```
+[New Channel Setup]
+  backfill?fresh=1 → migrate?fresh=1 → populate_thumbnails → Ready!
+
+[Add New Clips]
+  backfill (no fresh) → migrate (no fresh) → New clips added!
+
+[Rebuild with Same Seq Numbers]
+  backfill?fresh=1 → migrate?fresh=1 → seq_import (from backup) → Done!
+
+[Daily Maintenance]
+  Dashboard "Refresh Clips" button → Auto-fetches new clips
+```
+
+---
+
+## Security Notes
+
+- All management APIs require OAuth authentication
+- Bot commands require ADMIN_KEY for protected operations
+- Super admin list is hardcoded (thearsondragon, cliparchive)
+- Streamers can only access their own channel data
+- Moderators have granular permissions set by streamer
+- Vote deduplication prevents spam voting
