@@ -559,6 +559,170 @@
     #remoteBtn:active { transform: scale(0.95); }
     #remoteBtn.active { background: rgba(139, 92, 246, 0.3); border-color: #a78bfa; color: #fff; }
 
+    /* Back button */
+    #backBtn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.7);
+      border: 2px solid rgba(96, 165, 250, 0.6);
+      color: #60a5fa;
+      font: 600 16px system-ui, sans-serif;
+      backdrop-filter: blur(12px);
+      cursor: pointer;
+      transition: all 200ms;
+    }
+    #backBtn:hover { background: rgba(96, 165, 250, 0.2); border-color: #60a5fa; }
+    #backBtn:active { transform: scale(0.95); }
+
+    /* Chat button */
+    #chatBtn {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.7);
+      border: 2px solid rgba(34, 197, 94, 0.6);
+      color: #4ade80;
+      font: 600 16px system-ui, sans-serif;
+      backdrop-filter: blur(12px);
+      cursor: pointer;
+      transition: all 200ms;
+    }
+    #chatBtn:hover { background: rgba(34, 197, 94, 0.2); border-color: #4ade80; }
+    #chatBtn:active { transform: scale(0.95); }
+    #chatBtn.active { background: rgba(34, 197, 94, 0.3); border-color: #4ade80; color: #fff; }
+    .chat-badge {
+      position: absolute;
+      top: -4px;
+      right: -4px;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 5px;
+      border-radius: 999px;
+      background: #ef4444;
+      color: #fff;
+      font: 700 10px system-ui, sans-serif;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+    }
+    .chat-badge.show { display: flex; }
+
+    /* Chat Panel */
+    #chatPanel {
+      position: fixed;
+      bottom: 90px;
+      left: 24px;
+      width: 320px;
+      height: 380px;
+      background: rgba(15, 15, 25, 0.95);
+      backdrop-filter: blur(20px);
+      border: 2px solid rgba(34, 197, 94, 0.4);
+      border-radius: 16px;
+      display: none;
+      flex-direction: column;
+      font: 14px/1.4 system-ui, sans-serif;
+      color: #e0e0e0;
+      z-index: 11000;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      overflow: hidden;
+      pointer-events: auto;
+      resize: none;
+    }
+    #chatPanel.open { display: flex; }
+    .chat-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      background: rgba(0,0,0,0.3);
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      cursor: grab;
+      user-select: none;
+      flex-shrink: 0;
+    }
+    .chat-header:active { cursor: grabbing; }
+    .chat-header-title { font-weight: 700; font-size: 14px; }
+    .chat-online { font-size: 12px; color: #4ade80; margin-left: auto; }
+    .chat-close {
+      padding: 4px 8px; border-radius: 6px; background: none;
+      border: 1px solid rgba(255,255,255,0.15); color: #9ca3af;
+      font: 600 12px system-ui, sans-serif; cursor: pointer; transition: all 200ms;
+    }
+    .chat-close:hover { background: rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.4); color: #f87171; }
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-height: 0;
+    }
+    .chat-messages::-webkit-scrollbar { width: 5px; }
+    .chat-messages::-webkit-scrollbar-thumb { background: rgba(34, 197, 94, 0.3); border-radius: 3px; }
+    .chat-msg {
+      font-size: 13px;
+      line-height: 1.35;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+    }
+    .chat-msg .chat-name { font-weight: 700; margin-right: 6px; }
+    .chat-msg .chat-text { color: #d1d5db; }
+    .chat-msg.system { color: #6b7280; font-style: italic; font-size: 12px; }
+    .chat-input-area {
+      display: flex;
+      gap: 6px;
+      padding: 10px 14px;
+      border-top: 1px solid rgba(255,255,255,0.1);
+      flex-shrink: 0;
+    }
+    .chat-input-area input {
+      flex: 1;
+      padding: 8px 12px;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.15);
+      color: #fff;
+      font: 13px system-ui, sans-serif;
+      outline: none;
+    }
+    .chat-input-area input:focus { border-color: rgba(34, 197, 94, 0.6); }
+    .chat-input-area input::placeholder { color: #6b7280; }
+    .chat-input-area button {
+      padding: 8px 14px;
+      border-radius: 10px;
+      background: rgba(34, 197, 94, 0.3);
+      border: 1px solid rgba(34, 197, 94, 0.6);
+      color: #4ade80;
+      font: 700 14px system-ui, sans-serif;
+      cursor: pointer;
+      transition: all 200ms;
+    }
+    .chat-input-area button:hover { background: rgba(34, 197, 94, 0.5); color: #fff; }
+    .chat-input-area button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .chat-login-prompt {
+      padding: 14px;
+      text-align: center;
+      border-top: 1px solid rgba(255,255,255,0.1);
+      flex-shrink: 0;
+    }
+    .chat-login-prompt a {
+      color: #a78bfa;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 13px;
+    }
+    .chat-login-prompt a:hover { color: #c4b5fd; text-decoration: underline; }
+    .chat-empty { color: #6b7280; text-align: center; padding: 20px; font-size: 13px; }
+
     /* Remote control bottom sheet */
     #remoteSheet {
       position: fixed;
@@ -874,7 +1038,8 @@
       }
       #viewerCount { padding: 6px 10px; font-size: 12px; }
       #viewerCount .eye { font-size: 14px; }
-      #skipBtn, #remoteBtn { padding: 8px 14px; font-size: 12px; gap: 6px; }
+      #skipBtn, #remoteBtn, #backBtn, #chatBtn { padding: 8px 14px; font-size: 12px; gap: 6px; }
+      #chatPanel { width: 280px; height: 340px; left: 12px; bottom: 70px; }
     }
 
     @media (max-width: 480px) {
@@ -884,12 +1049,13 @@
         gap: 6px;
       }
       #viewerCount { padding: 5px 8px; font-size: 11px; }
-      #skipBtn, #remoteBtn { padding: 8px 12px; font-size: 11px; min-height: 44px; }
+      #skipBtn, #remoteBtn, #backBtn, #chatBtn { padding: 8px 12px; font-size: 11px; min-height: 44px; }
+      #chatPanel { width: calc(100vw - 24px); left: 12px; bottom: 65px; }
     }
 
     /* Touch-friendly buttons */
     @media (hover: none) and (pointer: coarse) {
-      #skipBtn, #remoteBtn {
+      #skipBtn, #remoteBtn, #backBtn, #chatBtn {
         min-height: 44px;
         min-width: 44px;
         padding: 10px 20px;
@@ -900,7 +1066,7 @@
     @media (max-height: 500px) and (orientation: landscape) {
       #viewerControls { gap: 6px; }
       #viewerCount { padding: 4px 8px; font-size: 10px; }
-      #skipBtn, #remoteBtn { padding: 6px 10px; font-size: 10px; }
+      #skipBtn, #remoteBtn, #backBtn, #chatBtn { padding: 6px 10px; font-size: 10px; }
     }
   </style>
 </head>
@@ -942,8 +1108,29 @@
 
   <div id="viewerControls">
     <div id="viewerCount"><span class="eye">👁</span><span id="viewerNum">1</span></div>
-    <button id="skipBtn">⏭ Skip<span id="skipStatus"></span></button>
+    <button id="backBtn">⏮</button>
     <button id="remoteBtn">🎛️ Remote</button>
+    <button id="skipBtn">⏭ Skip<span id="skipStatus"></span></button>
+    <button id="chatBtn">💬<span id="chatBadge" class="chat-badge"></span></button>
+  </div>
+
+  <!-- Chat Panel (draggable on desktop) -->
+  <div id="chatPanel">
+    <div class="chat-header" id="chatHeader">
+      <span class="chat-header-title">💬 Chat</span>
+      <span class="chat-online" id="chatOnline"></span>
+      <button class="chat-close" id="chatClose">✕</button>
+    </div>
+    <div class="chat-messages" id="chatMessages">
+      <div class="chat-empty">No messages yet — say something!</div>
+    </div>
+    <div class="chat-input-area" id="chatInputArea">
+      <input type="text" id="chatInput" placeholder="Say something..." maxlength="200" autocomplete="off" />
+      <button id="chatSend">➤</button>
+    </div>
+    <div class="chat-login-prompt" id="chatLoginPrompt" style="display:none">
+      <a id="chatLoginLink" href="#">Log in with Twitch to chat</a>
+    </div>
   </div>
 
   <!-- Remote Control Bottom Sheet -->
@@ -1333,7 +1520,7 @@
   // Handle tap to show controls on mobile (single tap shows, auto-hides after 4s)
   function handleTap(e) {
     // Ignore taps on interactive elements - let them handle their own events
-    if (e.target.closest('#volumeControl, #volumeBtn, #volumeSlider, #unmuteOverlay, #skipBtn, #remoteBtn, #remoteSheet, #viewerControls, #voteUp, #voteDown, #loginPrompt, #clipRequestBanner')) {
+    if (e.target.closest('#volumeControl, #volumeBtn, #volumeSlider, #unmuteOverlay, #skipBtn, #remoteBtn, #remoteSheet, #viewerControls, #voteUp, #voteDown, #loginPrompt, #clipRequestBanner, #chatPanel, #chatBtn, #backBtn')) {
       // But still reset the hide timeout so controls stay visible while interacting
       if (controlsVisible && hideTimeout) {
         clearTimeout(hideTimeout);
@@ -2900,6 +3087,265 @@
     }
   });
 
+  // === Back Button ===
+  document.getElementById('backBtn').addEventListener('click', () => {
+    if (!clipHistory.length) {
+      debugLog("No previous clip in history", "warn");
+      return;
+    }
+    const prevClip = clipHistory.pop();
+    requestClip(prevClip);
+  });
+
+  // === Chat System ===
+  const chatPanel = document.getElementById('chatPanel');
+  const chatMessages = document.getElementById('chatMessages');
+  const chatInput = document.getElementById('chatInput');
+  const chatSend = document.getElementById('chatSend');
+  const chatBadge = document.getElementById('chatBadge');
+  const chatOnline = document.getElementById('chatOnline');
+  const chatBtn = document.getElementById('chatBtn');
+  const chatInputArea = document.getElementById('chatInputArea');
+  const chatLoginPrompt = document.getElementById('chatLoginPrompt');
+
+  let chatOpen = false;
+  let chatLoggedIn = false;
+  let chatLastId = 0;
+  let chatPollInterval = null;
+  let chatUnread = 0;
+  let chatSendCooldown = false;
+
+  const CHAT_COLORS = ['#ff6b6b', '#ffd93d', '#6bcb77', '#4d96ff', '#ff922b', '#a78bfa', '#f472b6', '#34d399', '#22d3ee', '#fb923c', '#e879f9', '#2dd4bf'];
+
+  function getChatColor(username) {
+    let hash = 0;
+    for (let i = 0; i < username.length; i++) {
+      hash = ((hash << 5) - hash) + username.charCodeAt(i);
+      hash |= 0;
+    }
+    return CHAT_COLORS[Math.abs(hash) % CHAT_COLORS.length];
+  }
+
+  function toggleChat() {
+    chatOpen = !chatOpen;
+    chatPanel.classList.toggle('open', chatOpen);
+    chatBtn.classList.toggle('active', chatOpen);
+    if (chatOpen) {
+      chatUnread = 0;
+      updateChatBadge();
+      pollChat(); // Fetch immediately
+      startChatPoll();
+      // Scroll to bottom
+      setTimeout(() => { chatMessages.scrollTop = chatMessages.scrollHeight; }, 100);
+    } else {
+      stopChatPoll();
+    }
+  }
+
+  chatBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleChat();
+    showControls();
+  });
+
+  document.getElementById('chatClose').addEventListener('click', () => {
+    chatOpen = false;
+    chatPanel.classList.remove('open');
+    chatBtn.classList.remove('active');
+    stopChatPoll();
+  });
+
+  function startChatPoll() {
+    stopChatPoll();
+    chatPollInterval = setInterval(pollChat, 3000);
+  }
+
+  function stopChatPoll() {
+    if (chatPollInterval) {
+      clearInterval(chatPollInterval);
+      chatPollInterval = null;
+    }
+  }
+
+  async function pollChat() {
+    try {
+      const url = `${API_BASE}/cliptv_chat.php?login=${encodeURIComponent(login)}&after=${chatLastId}`;
+      const res = await fetch(url, { cache: 'no-store', credentials: 'same-origin' });
+      const data = await res.json();
+
+      chatLoggedIn = !!data.logged_in;
+
+      // Show/hide input vs login prompt
+      if (chatLoggedIn) {
+        chatInputArea.style.display = '';
+        chatLoginPrompt.style.display = 'none';
+      } else {
+        chatInputArea.style.display = 'none';
+        chatLoginPrompt.style.display = '';
+        const link = document.getElementById('chatLoginLink');
+        if (link) link.href = `${API_BASE}/auth/login.php?return=${encodeURIComponent(location.href)}`;
+      }
+
+      // Update chatter count
+      const count = data.chatter_count || 0;
+      chatOnline.textContent = count > 0 ? `${count} chatting` : '';
+
+      // Render new messages
+      if (data.messages && data.messages.length > 0) {
+        const isAtBottom = chatMessages.scrollTop + chatMessages.clientHeight >= chatMessages.scrollHeight - 30;
+
+        // Remove empty placeholder
+        const emptyEl = chatMessages.querySelector('.chat-empty');
+        if (emptyEl) emptyEl.remove();
+
+        data.messages.forEach(msg => {
+          if (msg.id > chatLastId) chatLastId = msg.id;
+          const div = document.createElement('div');
+          div.className = 'chat-msg';
+          const nameSpan = document.createElement('span');
+          nameSpan.className = 'chat-name';
+          nameSpan.style.color = getChatColor(msg.username);
+          nameSpan.textContent = msg.display_name + ':';
+          const textSpan = document.createElement('span');
+          textSpan.className = 'chat-text';
+          textSpan.textContent = ' ' + msg.message;
+          div.appendChild(nameSpan);
+          div.appendChild(textSpan);
+          chatMessages.appendChild(div);
+
+          // Track unread if chat is closed
+          if (!chatOpen) chatUnread++;
+        });
+
+        // Auto-scroll if user was at bottom
+        if (isAtBottom || chatOpen) {
+          chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        updateChatBadge();
+
+        // Trim old messages (keep last 100)
+        while (chatMessages.children.length > 100) {
+          chatMessages.removeChild(chatMessages.firstChild);
+        }
+      }
+
+      // Update badge count even when no new messages
+      if (!chatOpen && count > 0) {
+        updateChatBadge();
+      }
+    } catch (e) {
+      // Silently fail
+    }
+  }
+
+  function updateChatBadge() {
+    if (chatUnread > 0 && !chatOpen) {
+      chatBadge.textContent = chatUnread > 99 ? '99+' : chatUnread;
+      chatBadge.classList.add('show');
+    } else {
+      chatBadge.classList.remove('show');
+    }
+  }
+
+  async function sendChatMessage() {
+    const text = chatInput.value.trim();
+    if (!text || chatSendCooldown) return;
+
+    if (!chatLoggedIn) return;
+
+    chatSendCooldown = true;
+    chatSend.disabled = true;
+    chatInput.value = '';
+
+    try {
+      const formData = new FormData();
+      formData.append('login', login);
+      formData.append('message', text);
+      const res = await fetch(`${API_BASE}/cliptv_chat.php`, {
+        method: 'POST',
+        body: formData,
+        credentials: 'same-origin'
+      });
+      const data = await res.json();
+      if (data.error) {
+        debugLog("Chat error: " + data.error, "err");
+        chatInput.value = text; // Restore message on error
+      } else {
+        // Immediately poll for the new message
+        pollChat();
+      }
+    } catch (e) {
+      chatInput.value = text; // Restore on error
+    }
+
+    // Cooldown
+    setTimeout(() => {
+      chatSendCooldown = false;
+      chatSend.disabled = false;
+    }, 2000);
+  }
+
+  chatSend.addEventListener('click', sendChatMessage);
+  chatInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      sendChatMessage();
+    }
+  });
+
+  // Prevent chat input from triggering video controls
+  chatInput.addEventListener('keydown', (e) => e.stopPropagation());
+  chatInput.addEventListener('keyup', (e) => e.stopPropagation());
+
+  // Draggable chat panel (desktop only)
+  const chatHeader = document.getElementById('chatHeader');
+  let chatDragging = false;
+  let chatDragOffsetX = 0, chatDragOffsetY = 0;
+
+  chatHeader.addEventListener('mousedown', (e) => {
+    if (e.target.closest('button')) return; // Don't drag when clicking close
+    chatDragging = true;
+    chatDragOffsetX = e.clientX - chatPanel.offsetLeft;
+    chatDragOffsetY = e.clientY - chatPanel.offsetTop;
+    chatPanel.style.transition = 'none';
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!chatDragging) return;
+    const x = Math.max(0, Math.min(window.innerWidth - chatPanel.offsetWidth, e.clientX - chatDragOffsetX));
+    const y = Math.max(0, Math.min(window.innerHeight - chatPanel.offsetHeight, e.clientY - chatDragOffsetY));
+    chatPanel.style.left = x + 'px';
+    chatPanel.style.top = y + 'px';
+    chatPanel.style.bottom = 'auto';
+    chatPanel.style.right = 'auto';
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (chatDragging) {
+      chatDragging = false;
+      chatPanel.style.transition = '';
+    }
+  });
+
+  // Background chat badge polling (when chat is closed, check count every 15s)
+  let chatBadgePollInterval = setInterval(async () => {
+    if (chatOpen) return; // Already polling actively
+    try {
+      const res = await fetch(`${API_BASE}/cliptv_chat.php?login=${encodeURIComponent(login)}&after=${chatLastId}`, { cache: 'no-store', credentials: 'same-origin' });
+      const data = await res.json();
+      if (data.messages && data.messages.length > 0) {
+        data.messages.forEach(msg => {
+          if (msg.id > chatLastId) chatLastId = msg.id;
+          chatUnread++;
+        });
+        updateChatBadge();
+      }
+    } catch (e) {}
+  }, 15000);
+
   // === Play specific clip ===
   async function playSpecificClip(clip) {
     debugLog(`Playing specific clip: #${clip.seq || '?'}`, "ok");
@@ -2979,6 +3425,8 @@
   window.addEventListener('beforeunload', () => {
     if (heartbeatInterval) clearInterval(heartbeatInterval);
     if (controllerHeartbeatInterval) clearInterval(controllerHeartbeatInterval);
+    if (chatPollInterval) clearInterval(chatPollInterval);
+    if (chatBadgePollInterval) clearInterval(chatBadgePollInterval);
   });
 
   async function init() {
