@@ -5,7 +5,7 @@
  * Usage: api/clip_search.php?login=abbabox&q=wizard&limit=50
  *
  * Returns JSON array of matching clips from the database.
- * Searches title, creator_name, and game_name.
+ * Searches title, creator_name, and game name (via games_cache).
  */
 header("Access-Control-Allow-Origin: *");
 header("Content-Type: application/json; charset=utf-8");
@@ -28,25 +28,23 @@ if (!$pdo) {
     exit;
 }
 
-// Build search query
-$whereClauses = ["login = ?", "blocked = FALSE"];
+// Build search query - JOIN games_cache for game names
+$whereClauses = ["c.login = ?", "c.blocked = FALSE"];
 $params = [$login];
 
 if ($query !== '') {
-    // Split into words, require all words to match (AND search)
     $words = preg_split('/\s+/', $query);
     $words = array_filter($words, function($w) { return strlen($w) >= 1; });
     $words = array_values($words);
 
     foreach ($words as $word) {
-        // Check if it's a pure number (seq search)
         if (ctype_digit($word)) {
-            $whereClauses[] = "(title ILIKE ? OR creator_name ILIKE ? OR CAST(seq AS TEXT) = ?)";
+            $whereClauses[] = "(c.title ILIKE ? OR c.creator_name ILIKE ? OR CAST(c.seq AS TEXT) = ?)";
             $params[] = '%' . $word . '%';
             $params[] = '%' . $word . '%';
             $params[] = $word;
         } else {
-            $whereClauses[] = "(title ILIKE ? OR creator_name ILIKE ? OR game_name ILIKE ?)";
+            $whereClauses[] = "(c.title ILIKE ? OR c.creator_name ILIKE ? OR gc.name ILIKE ?)";
             $params[] = '%' . $word . '%';
             $params[] = '%' . $word . '%';
             $params[] = '%' . $word . '%';
@@ -55,21 +53,21 @@ if ($query !== '') {
 }
 
 $whereSQL = implode(' AND ', $whereClauses);
+$limitInt = (int)$limit;
 
 try {
     $stmt = $pdo->prepare("
-        SELECT seq, clip_id, title, duration, created_at, view_count,
-               game_id, game_name, creator_name
-        FROM clips
+        SELECT c.seq, c.clip_id, c.title, c.duration, c.created_at, c.view_count,
+               c.game_id, gc.name AS game_name, c.creator_name
+        FROM clips c
+        LEFT JOIN games_cache gc ON c.game_id = gc.game_id
         WHERE {$whereSQL}
-        ORDER BY seq DESC
-        LIMIT ?
+        ORDER BY c.seq DESC
+        LIMIT {$limitInt}
     ");
-    $params[] = $limit;
     $stmt->execute($params);
     $clips = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Format for the remote control
     $results = array_map(function($c) {
         return [
             "id" => $c['clip_id'],
