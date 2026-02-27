@@ -1140,6 +1140,7 @@
       <div class="sheet-handle">━━</div>
       <div class="sheet-tabs">
         <button class="sheet-tab active" data-tab="goto">Go To</button>
+        <button class="sheet-tab" data-tab="history">Previously on..</button>
         <button class="sheet-tab" data-tab="upNext">Up Next</button>
         <button class="sheet-tab" data-tab="browse">Browse</button>
         <button class="sheet-tab" data-tab="controls">Controls</button>
@@ -1153,6 +1154,15 @@
           </div>
           <div class="clip-preview empty" id="clipPreview">
             Type a clip number and press Go
+          </div>
+        </div>
+        <!-- Previous / History tab -->
+        <div class="tab-panel" id="tabHistory">
+          <div class="queue-header">
+            <span class="queue-label">Previously on..</span>
+          </div>
+          <div class="clip-list" id="historyList">
+            <div class="clip-list-status">No clips played yet</div>
           </div>
         </div>
         <!-- Up Next tab -->
@@ -2627,6 +2637,8 @@
       tab.classList.add('active');
       const target = tab.dataset.tab;
       document.getElementById('tab' + target.charAt(0).toUpperCase() + target.slice(1)).classList.add('active');
+      // Render history when switching to that tab
+      if (target === 'history') renderHistory();
     });
   });
 
@@ -2842,6 +2854,48 @@
     upNextQueue = [];
     fillQueue();
   });
+
+  // === Previous / History ===
+  const historyList = document.getElementById('historyList');
+
+  function renderHistory() {
+    if (!clipHistory.length) {
+      historyList.innerHTML = '<div class="clip-list-status">No clips played yet</div>';
+      return;
+    }
+    // Show most recent first (reverse), limit to last 20
+    const recent = [...clipHistory].reverse();
+    historyList.innerHTML = recent.map((c, i) => {
+      const dur = c.duration ? (c.duration < 60 ? `${Math.round(c.duration)}s` : `${Math.floor(c.duration/60)}:${(Math.round(c.duration)%60).toString().padStart(2,'0')}`) : '';
+      return `
+        <div class="clip-row" data-history-idx="${i}" data-clip-id="${c.id}">
+          <span class="cr-pos" style="color:#60a5fa">${i === 0 ? '⏮' : i + 1}</span>
+          <div class="cr-info">
+            <div class="cr-title">#${c.seq || '?'} — ${escapeHtml(c.title || 'Untitled')}</div>
+            <div class="cr-meta">
+              ${dur ? `<span class="cm-dur">${dur}</span> ` : ''}
+              ${c.game_name ? `<span class="cm-game">${escapeHtml(c.game_name)}</span>` : ''}
+            </div>
+          </div>
+          <button class="cr-play">▶</button>
+        </div>
+      `;
+    }).join('');
+
+    // Attach play handlers
+    historyList.querySelectorAll('.cr-play').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const row = btn.closest('.clip-row');
+        const idx = parseInt(row.dataset.historyIdx);
+        const clip = [...clipHistory].reverse()[idx];
+        if (clip) {
+          requestClip(clip);
+          closeRemote();
+        }
+      });
+    });
+  }
 
   // === Controls ===
   document.getElementById('ctrlSkip').addEventListener('click', () => {
