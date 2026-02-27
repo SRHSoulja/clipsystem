@@ -124,8 +124,13 @@ echo "Broadcaster ID: {$broadcasterId}\n\n";
 
 // Fetch clips from Twitch API using time windows
 // The Twitch API only returns 1 week of clips when ended_at is not specified,
-// so we must iterate through 7-day windows from the last clip date to now.
-$fetchStart = strtotime($latestDate) - 86400; // Go back 1 day to catch missed clips
+// so we must iterate through 7-day windows.
+// Go back 90 days (not just 1 day) because the Twitch Clips API is inconsistent -
+// it sorts by view_count and can skip lower-viewed clips between pagination runs.
+// Rescanning recent months catches clips the API dropped on previous passes.
+// Duplicates are harmless thanks to ON CONFLICT DO NOTHING.
+$lookbackDays = 90;
+$fetchStart = strtotime($latestDate) - ($lookbackDays * 86400);
 $now = time();
 $windowDays = 7; // 7-day windows (matches Twitch API default)
 $windowSec = $windowDays * 24 * 60 * 60;
@@ -134,7 +139,7 @@ $totalWindows = (int)ceil(($now - $fetchStart) / $windowSec);
 echo "Fetching clips from: " . date('c', $fetchStart) . "\n";
 echo "To: " . date('c', $now) . "\n";
 echo "Time span: " . round(($now - $fetchStart) / 86400) . " days across {$totalWindows} windows\n";
-echo "(Going back 1 day to catch any previously missed clips)\n\n";
+echo "(Scanning last {$lookbackDays} days to catch clips Twitch API may have missed)\n\n";
 
 $newClips = [];
 $totalPages = 0;
