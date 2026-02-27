@@ -223,7 +223,10 @@ $nextSeq = $maxSeq + 1;
 $insertStmt = $pdo->prepare("
     INSERT INTO clips (login, clip_id, seq, title, duration, created_at, view_count, game_id, video_id, vod_offset, creator_name, thumbnail_url, blocked)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, false)
+    ON CONFLICT (login, clip_id) DO NOTHING
 ");
+
+$skipped = 0;
 
 foreach ($newClips as $clip) {
     try {
@@ -242,8 +245,12 @@ foreach ($newClips as $clip) {
             $clip['thumbnail_url'] ?? ''
         ]);
 
-        $inserted++;
-        $nextSeq++;
+        if ($insertStmt->rowCount() > 0) {
+            $inserted++;
+            $nextSeq++;
+        } else {
+            $skipped++; // Already existed in DB
+        }
 
         if ($inserted % 50 == 0) {
             echo "Inserted {$inserted} clips...\n";
@@ -258,6 +265,7 @@ foreach ($newClips as $clip) {
 
 echo "\n=== Complete ===\n";
 echo "Inserted: {$inserted} new clips\n";
+if ($skipped > 0) echo "Skipped: {$skipped} (already in database)\n";
 echo "Errors: {$errors}\n";
 echo "New max seq: " . ($nextSeq - 1) . "\n";
 
