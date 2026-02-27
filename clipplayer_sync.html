@@ -945,7 +945,7 @@
             <button class="ctrl-btn ctrl-shuffle" id="ctrlShuffle">🔀 Shuffle</button>
           </div>
           <div class="category-section">
-            <label>Category Filter</label>
+            <label>Only play clips from:</label>
             <select id="categorySelect">
               <option value="">All Categories</option>
             </select>
@@ -1733,11 +1733,17 @@
   // Weighted clip selection (for controller)
   const QUEUE_SIZE = 10;
   let upNextQueue = [];
+  let activeCategoryFilter = ''; // game_id filter for playback
 
   function pickRandomClip(exclude = []) {
     if (!clips.length) return null;
     const excludeIds = new Set(exclude.map(c => c.id));
-    const pool = clips.filter(c => !excludeIds.has(c.id));
+    let pool = clips.filter(c => !excludeIds.has(c.id));
+    // Apply category filter if active
+    if (activeCategoryFilter) {
+      const filtered = pool.filter(c => c.game_id === activeCategoryFilter);
+      if (filtered.length) pool = filtered;
+    }
     if (!pool.length) return clips[Math.floor(Math.random() * clips.length)];
     return pool[Math.floor(Math.random() * pool.length)];
   }
@@ -2617,13 +2623,10 @@
 
   categorySelect.addEventListener('change', () => {
     const gameId = categorySelect.value;
-    if (!gameId) {
-      // Clear filter
-      renderClipList(browseClips);
-      return;
-    }
-    const filtered = browseClips.filter(c => c.game_id === gameId);
-    renderClipList(filtered);
+    activeCategoryFilter = gameId;
+    // Regenerate queue with new filter
+    upNextQueue = [];
+    fillQueue();
   });
 
   // === Play specific clip (controller only) ===
