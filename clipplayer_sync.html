@@ -3557,7 +3557,8 @@
         pollChat();
       }
     } catch (e) {
-      chatInput.value = text; // Restore on error
+      // Don't restore text - message may have been sent despite response error
+      debugLog("Chat send error: " + e.message, "err");
     }
 
     // Cooldown

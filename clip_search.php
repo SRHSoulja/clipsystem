@@ -1164,6 +1164,10 @@ if ($hasArchivedClips && $pdo) {
         <div>
           <h1><?= htmlspecialchars($login) ?>'s Clips</h1>
           <p class="subtitle"><?= $hasArchivedClips ? 'Archived' : 'Live from Twitch' ?></p>
+          <div class="nav-links">
+            <a href="/tv/<?= htmlspecialchars(urlencode($login)) ?>">Watch on ClipTV</a>
+            <a href="https://twitch.tv/<?= htmlspecialchars(urlencode($login)) ?>" target="_blank">Twitch Channel</a>
+          </div>
         </div>
       </div>
       <div class="header-right">
