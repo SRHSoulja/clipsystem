@@ -1940,9 +1940,6 @@ if ($hasArchivedClips && $pdo) {
     async function downloadClip(btn) {
       if (btn.classList.contains('downloading')) return;
       const clipId = btn.dataset.clipId;
-      const title = (btn.dataset.title || 'clip').replace(/[^a-zA-Z0-9_\- ]/g, '').trim().substring(0, 60);
-      const seq = btn.dataset.seq && btn.dataset.seq !== '0' ? btn.dataset.seq : '';
-      const filename = seq ? `clip_${seq}_${title}.mp4` : `${title}.mp4`;
 
       btn.classList.add('downloading');
       const origHTML = btn.innerHTML;
@@ -1952,16 +1949,9 @@ if ($hasArchivedClips && $pdo) {
         const mp4Url = await getMp4Url(clipId);
         if (!mp4Url) throw new Error('Could not get MP4 URL');
 
-        const resp = await fetch(mp4Url);
-        const blob = await resp.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        setTimeout(() => URL.revokeObjectURL(url), 5000);
+        // Open MP4 URL directly - browser will download it
+        // (fetch+blob fails due to CORS on Twitch CDN from non-player pages)
+        window.open(mp4Url, '_blank');
       } catch (err) {
         console.error("Download failed:", err);
         alert("Download failed. Try again.");
