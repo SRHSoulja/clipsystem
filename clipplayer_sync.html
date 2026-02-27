@@ -1353,11 +1353,8 @@
 
   // Click to unmute handler
   unmuteOverlay.addEventListener("click", () => {
-    player.muted = false;
-    isMuted = false;
-    updateVolumeIcon();
-    unmuteOverlay.classList.add("hide");
-    debugLog("Unmuted by user click", "ok");
+    doUnmute();
+    debugLog("Unmuted by overlay click", "ok");
   });
 
   // Debug
@@ -1491,12 +1488,39 @@
 
   // Volume control
   const volumeKey = `clip_tv_volume_${login}`;
+  const muteKey = `clip_tv_unmuted_${login}`;
   let savedVolume = parseFloat(localStorage.getItem(volumeKey) || "1");
   let isMuted = false;
+  let userHasUnmuted = localStorage.getItem(muteKey) === 'true';
 
   player.volume = savedVolume;
   volumeSlider.value = savedVolume * 100;
   updateVolumeIcon();
+
+  function saveUnmutedPref(unmuted) {
+    localStorage.setItem(muteKey, unmuted ? 'true' : 'false');
+    userHasUnmuted = unmuted;
+  }
+
+  function doUnmute() {
+    player.muted = false;
+    isMuted = false;
+    updateVolumeIcon();
+    unmuteOverlay.classList.add("hide");
+    saveUnmutedPref(true);
+  }
+
+  // Auto-unmute on first interaction if user previously had sound
+  if (userHasUnmuted) {
+    function autoUnmuteHandler() {
+      doUnmute();
+      debugLog("Auto-unmuted on user interaction", "ok");
+      document.removeEventListener('click', autoUnmuteHandler, true);
+      document.removeEventListener('touchend', autoUnmuteHandler, true);
+    }
+    document.addEventListener('click', autoUnmuteHandler, true);
+    document.addEventListener('touchend', autoUnmuteHandler, true);
+  }
 
   function updateVolumeIcon() {
     if (isMuted || player.volume === 0) {
@@ -1511,6 +1535,7 @@
   volumeBtn.addEventListener("click", () => {
     isMuted = !isMuted;
     player.muted = isMuted;
+    if (!isMuted) saveUnmutedPref(true);
     updateVolumeIcon();
   });
 
@@ -1521,6 +1546,7 @@
     localStorage.setItem(volumeKey, vol.toString());
     isMuted = false;
     player.muted = false;
+    saveUnmutedPref(true);
     updateVolumeIcon();
   });
 
