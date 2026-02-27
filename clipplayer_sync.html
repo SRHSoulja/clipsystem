@@ -577,6 +577,25 @@
     #backBtn:hover { background: rgba(96, 165, 250, 0.2); border-color: #60a5fa; }
     #backBtn:active { transform: scale(0.95); }
 
+    /* Download button */
+    #dlBtn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.7);
+      border: 2px solid rgba(255,255,255,0.3);
+      color: #d1d5db;
+      font: 600 16px system-ui, sans-serif;
+      backdrop-filter: blur(12px);
+      cursor: pointer;
+      transition: all 200ms;
+    }
+    #dlBtn:hover { background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.5); color: #fff; }
+    #dlBtn:active { transform: scale(0.95); }
+    #dlBtn.downloading { border-color: rgba(34, 197, 94, 0.6); color: #4ade80; }
+
     /* Chat button */
     #chatBtn {
       position: relative;
@@ -1038,7 +1057,7 @@
       }
       #viewerCount { padding: 6px 10px; font-size: 12px; }
       #viewerCount .eye { font-size: 14px; }
-      #skipBtn, #remoteBtn, #backBtn, #chatBtn { padding: 8px 14px; font-size: 12px; gap: 6px; }
+      #skipBtn, #remoteBtn, #backBtn, #chatBtn, #dlBtn { padding: 8px 14px; font-size: 12px; gap: 6px; }
       #chatPanel { width: 280px; height: 340px; left: 12px; bottom: 70px; }
     }
 
@@ -1049,13 +1068,13 @@
         gap: 6px;
       }
       #viewerCount { padding: 5px 8px; font-size: 11px; }
-      #skipBtn, #remoteBtn, #backBtn, #chatBtn { padding: 8px 12px; font-size: 11px; min-height: 44px; }
+      #skipBtn, #remoteBtn, #backBtn, #chatBtn, #dlBtn { padding: 8px 12px; font-size: 11px; min-height: 44px; }
       #chatPanel { width: calc(100vw - 24px); left: 12px; bottom: 65px; }
     }
 
     /* Touch-friendly buttons */
     @media (hover: none) and (pointer: coarse) {
-      #skipBtn, #remoteBtn, #backBtn, #chatBtn {
+      #skipBtn, #remoteBtn, #backBtn, #chatBtn, #dlBtn {
         min-height: 44px;
         min-width: 44px;
         padding: 10px 20px;
@@ -1066,7 +1085,7 @@
     @media (max-height: 500px) and (orientation: landscape) {
       #viewerControls { gap: 6px; }
       #viewerCount { padding: 4px 8px; font-size: 10px; }
-      #skipBtn, #remoteBtn, #backBtn, #chatBtn { padding: 6px 10px; font-size: 10px; }
+      #skipBtn, #remoteBtn, #backBtn, #chatBtn, #dlBtn { padding: 6px 10px; font-size: 10px; }
     }
   </style>
 </head>
@@ -1111,6 +1130,7 @@
     <button id="backBtn">⏮</button>
     <button id="remoteBtn">🎛️ Remote</button>
     <button id="skipBtn">⏭ Skip<span id="skipStatus"></span></button>
+    <button id="dlBtn" title="Download this clip">⬇</button>
     <button id="chatBtn">💬<span id="chatBadge" class="chat-badge"></span></button>
   </div>
 
@@ -1530,7 +1550,7 @@
   // Handle tap to show controls on mobile (single tap shows, auto-hides after 4s)
   function handleTap(e) {
     // Ignore taps on interactive elements - let them handle their own events
-    if (e.target.closest('#volumeControl, #volumeBtn, #volumeSlider, #unmuteOverlay, #skipBtn, #remoteBtn, #remoteSheet, #viewerControls, #voteUp, #voteDown, #loginPrompt, #clipRequestBanner, #chatPanel, #chatBtn, #backBtn')) {
+    if (e.target.closest('#volumeControl, #volumeBtn, #volumeSlider, #unmuteOverlay, #skipBtn, #remoteBtn, #remoteSheet, #viewerControls, #voteUp, #voteDown, #loginPrompt, #clipRequestBanner, #chatPanel, #chatBtn, #backBtn, #dlBtn')) {
       // But still reset the hide timeout so controls stay visible while interacting
       if (controlsVisible && hideTimeout) {
         clearTimeout(hideTimeout);
@@ -3149,6 +3169,42 @@
     }
     const prevClip = clipHistory.pop();
     requestClip(prevClip);
+  });
+
+  // === Download Button ===
+  document.getElementById('dlBtn').addEventListener('click', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const dlBtn = document.getElementById('dlBtn');
+    const src = player.src;
+    if (!src) return;
+
+    dlBtn.classList.add('downloading');
+    dlBtn.textContent = '⏳';
+
+    // Build filename from current clip info
+    const seq = currentClipData?.seq || '';
+    const title = (currentClipData?.title || 'clip').replace(/[^a-zA-Z0-9_\- ]/g, '').trim().substring(0, 60);
+    const filename = seq ? `clip_${seq}_${title}.mp4` : `${title}.mp4`;
+
+    try {
+      const resp = await fetch(src);
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch (err) {
+      debugLog("Download fetch failed, falling back to window.open: " + err, "warn");
+      window.open(src, '_blank');
+    }
+
+    dlBtn.textContent = '⬇';
+    dlBtn.classList.remove('downloading');
   });
 
   // === Chat System ===
