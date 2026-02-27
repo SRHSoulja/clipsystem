@@ -55,9 +55,42 @@ try {
   // Table/index exists
 }
 
-// Cleanup old messages (older than 2 hours)
+// Archive and cleanup old messages (older than 24 hours)
 try {
-  $pdo->exec("DELETE FROM cliptv_chat WHERE created_at < NOW() - INTERVAL '2 hours'");
+  // Fetch expired messages before deleting
+  $expired = $pdo->query("
+    SELECT login, username, display_name, message, created_at
+    FROM cliptv_chat
+    WHERE created_at < NOW() - INTERVAL '24 hours'
+    ORDER BY created_at ASC
+  ")->fetchAll(PDO::FETCH_ASSOC);
+
+  if ($expired) {
+    // Archive to file (one JSON line per message, grouped by date)
+    $archiveDir = __DIR__ . '/chat_archive';
+    if (!is_dir($archiveDir)) {
+      mkdir($archiveDir, 0755, true);
+    }
+    // Group by date and append to daily files
+    $byDate = [];
+    foreach ($expired as $msg) {
+      $date = substr($msg['created_at'], 0, 10); // YYYY-MM-DD
+      $byDate[$date][] = $msg;
+    }
+    foreach ($byDate as $date => $msgs) {
+      $file = $archiveDir . '/chat_' . $date . '.jsonl';
+      $fp = fopen($file, 'a');
+      if ($fp) {
+        foreach ($msgs as $msg) {
+          fwrite($fp, json_encode($msg, JSON_UNESCAPED_UNICODE) . "\n");
+        }
+        fclose($fp);
+      }
+    }
+
+    // Now delete the archived messages
+    $pdo->exec("DELETE FROM cliptv_chat WHERE created_at < NOW() - INTERVAL '24 hours'");
+  }
 } catch (PDOException $e) {
   // ignore
 }

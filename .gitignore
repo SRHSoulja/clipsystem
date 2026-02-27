@@ -22,3 +22,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Chat archives (runtime data)
+chat_archive/
