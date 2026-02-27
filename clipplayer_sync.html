@@ -1437,12 +1437,12 @@
   let preloadVideo = null; // Hidden video element for actual preloading
 
   // Adaptive quality - drops quality when buffering issues detected
-  let currentQualityLevel = 2; // 0=160p, 1=360p, 2=480p, 3=720p, 4=1080p
+  let currentQualityLevel = 3; // 0=160p, 1=360p, 2=480p, 3=720p, 4=1080p
   const QUALITY_LEVELS = [160, 360, 480, 720, 1080];
   let bufferingCount = 0; // Count buffering events per clip
   let lastQualityDropTime = 0;
   const QUALITY_DROP_COOLDOWN = 15000; // Don't drop quality more than once per 15s
-  const QUALITY_RECOVER_TIME = 60000; // Try higher quality after 1 min of smooth playback
+  const QUALITY_RECOVER_TIME = 30000; // Try higher quality after 30s of smooth playback
   let smoothPlaybackStart = 0;
 
   function getTargetQuality() {
@@ -1464,7 +1464,7 @@
   function tryRecoverQuality() {
     if (currentQualityLevel >= QUALITY_LEVELS.length - 1) return; // Already at max
     // Cap quality based on device/connection
-    const maxLevel = isSlowConnection ? 1 : (isMobile ? 2 : 3); // 360p slow, 480p mobile, 720p desktop
+    const maxLevel = isSlowConnection ? 1 : (isMobile ? 3 : 4); // 360p slow, 720p mobile, 1080p desktop
     if (currentQualityLevel >= maxLevel) return;
 
     const now = Date.now();
@@ -1489,15 +1489,15 @@
         (conn.downlink && conn.downlink < downlinkThreshold);
       prefersLowQuality = isSlowConnection || isMobile; // Always prefer low quality on mobile
 
-      // Set initial quality level based on connection - be conservative
+      // Set initial quality level based on connection
       if (conn.saveData || ['slow-2g', '2g'].includes(conn.effectiveType)) {
-        currentQualityLevel = 0; // 160p for very slow
+        currentQualityLevel = 1; // 360p for very slow
       } else if (isSlowConnection || conn.effectiveType === '3g') {
-        currentQualityLevel = 0; // 160p for slow - start low, upgrade if smooth
+        currentQualityLevel = 1; // 360p for slow - upgrade if smooth
       } else if (isMobile) {
-        currentQualityLevel = 1; // 360p for mobile - conservative start
+        currentQualityLevel = 2; // 480p for mobile
       } else {
-        currentQualityLevel = 2; // 480p for fast desktop
+        currentQualityLevel = 3; // 720p for fast desktop
       }
 
       debugLog(`Connection: ${conn.effectiveType || 'unknown'}, ${conn.downlink || '?'}Mbps, mobile=${isMobile}, quality=${getTargetQuality()}p`);
@@ -1519,11 +1519,10 @@
         }
       });
     } else {
-      // No Network Information API - be conservative
-      isSlowConnection = isMobile;
+      // No Network Information API - assume decent connection
+      isSlowConnection = false;
       prefersLowQuality = isMobile;
-      // Start with lowest quality on mobile, medium on desktop - can upgrade later
-      currentQualityLevel = isMobile ? 0 : 1; // 160p mobile, 360p desktop
+      currentQualityLevel = isMobile ? 2 : 3; // 480p mobile, 720p desktop
       debugLog(`No connection API, mobile=${isMobile}, quality=${getTargetQuality()}p`);
     }
   }
@@ -2074,27 +2073,33 @@
     if (!next || next.id === currentClipId || next.id === preloadedClipId) return;
 
     try {
-      const url = await getMp4Url(next.id);
+      const url = await getMp4Url(next.id, true); // Force high quality for preload
       if (url) {
         preloadedClipId = next.id;
         preloadedUrl = url;
 
-        // Actually preload the video data using a hidden video element
+        // Cleanup previous preload element
         if (preloadVideo) {
+          preloadVideo.oncanplaythrough = null;
+          preloadVideo.onerror = null;
           preloadVideo.src = '';
           preloadVideo.load();
+          preloadVideo.remove();
+          preloadVideo = null;
         }
+
+        // Preload video data using a hidden video element
         preloadVideo = document.createElement('video');
         preloadVideo.preload = 'auto';
         preloadVideo.muted = true;
         preloadVideo.playsInline = true;
-        preloadVideo.style.display = 'none';
+        preloadVideo.style.cssText = 'position:absolute;width:0;height:0;opacity:0;pointer-events:none';
+        document.body.appendChild(preloadVideo);
         preloadVideo.src = url;
         preloadVideo.load();
 
         debugLog(`Preloading video: ${next.id.substring(0,15)}`, "ok");
 
-        // Clean up after it's buffered enough
         preloadVideo.oncanplaythrough = () => {
           debugLog(`Preload ready: ${next.id.substring(0,15)}`, "ok");
         };
@@ -2180,8 +2185,17 @@
     if (!mp4Url && clipId === preloadedClipId && preloadedUrl) {
       mp4Url = preloadedUrl;
       debugLog("Using preloaded URL", "ok");
-      preloadedClipId = null;
-      preloadedUrl = null;
+    }
+    // Always cleanup preload element on clip switch
+    preloadedClipId = null;
+    preloadedUrl = null;
+    if (preloadVideo) {
+      preloadVideo.oncanplaythrough = null;
+      preloadVideo.onerror = null;
+      preloadVideo.src = '';
+      preloadVideo.load();
+      preloadVideo.remove();
+      preloadVideo = null;
     }
 
     // If we don't have URL, fetch it
@@ -2266,7 +2280,7 @@
         if (isController) resetSkipVotes();
 
         // Start preloading next clip after a delay
-        if (isController) setTimeout(preloadNextClip, 5000);
+        if (isController) setTimeout(preloadNextClip, 3000);
       }).catch(err => {
         // Autoplay blocked - try muted and show unmute overlay
         debugLog(`Autoplay blocked, trying muted`, "warn");
@@ -2286,7 +2300,7 @@
           skipTriggered = false;
           if (isController) resetSkipVotes();
           // Start preloading next clip after a delay
-          if (isController) setTimeout(preloadNextClip, 5000);
+          if (isController) setTimeout(preloadNextClip, 3000);
         }).catch(e => {
           debugLog(`Play failed: ${e.message}`, "err");
           isSwitching = false;
@@ -2294,15 +2308,25 @@
       });
     }
 
-    // Simplified loading: start as soon as we can play
-    // Let the browser's native buffering handle slow connections
-    // This is more reliable than manual buffer management
+    // Multi-tier loading: try to start as soon as any readiness event fires
+    player.onloadedmetadata = () => {
+      if (!hasStarted && player.readyState >= 1) {
+        debugLog("Metadata loaded - attempting early start");
+        // Start a short timer: if canplay doesn't fire soon, force start
+        setTimeout(() => {
+          if (!hasStarted && player.readyState >= 2) {
+            debugLog("Early start from metadata + readyState 2");
+            startPlayback();
+          }
+        }, 500);
+      }
+    };
+
     player.oncanplay = () => {
       debugLog("Can play - starting");
       startPlayback();
     };
 
-    // Also start on canplaythrough for extra reliability
     player.oncanplaythrough = () => {
       if (!hasStarted) {
         debugLog("Can play through - starting");
@@ -2310,7 +2334,6 @@
       }
     };
 
-    // Fallback: start on loadeddata if canplay doesn't fire
     player.onloadeddata = () => {
       if (!hasStarted && player.readyState >= 2) {
         debugLog("Loaded data - starting");
@@ -2331,8 +2354,8 @@
     player.src = mp4Url;
     player.load();
 
-    // Timeout - longer on slow connections
-    const loadTimeout = isSlowConnection ? 10000 : (isMobile ? 8000 : 6000);
+    // Timeout: force play or advance if loading stalls
+    const loadTimeout = isSlowConnection ? 8000 : (isMobile ? 6000 : 4000);
     setTimeout(() => {
       if (isSwitching && currentClipId === clipId && !hasStarted) {
         debugLog("Load timeout - forcing recovery", "warn");
@@ -2340,8 +2363,8 @@
         isSwitching = false;
 
         // Try to force play anyway - sometimes video is ready but events didn't fire
-        if (player.readyState >= 2) {
-          debugLog("Video ready, forcing play", "warn");
+        if (player.readyState >= 1) {
+          debugLog(`readyState ${player.readyState}, forcing play`, "warn");
           player.play().then(() => {
             loadingOverlay.classList.add("hide");
             updateHud(clipData);
@@ -3389,9 +3412,13 @@
     stopChatPoll();
   });
 
+  let chatBgPollInterval = null; // Slow background poll for badge updates
+
   function startChatPoll() {
     stopChatPoll();
     chatPollInterval = setInterval(pollChat, 3000);
+    // Stop background poll when active poll is running
+    if (chatBgPollInterval) { clearInterval(chatBgPollInterval); chatBgPollInterval = null; }
   }
 
   function stopChatPoll() {
@@ -3399,7 +3426,16 @@
       clearInterval(chatPollInterval);
       chatPollInterval = null;
     }
+    // Resume background poll when chat is closed
+    if (!chatBgPollInterval) {
+      chatBgPollInterval = setInterval(pollChat, 10000);
+    }
   }
+
+  // Start background poll immediately (picks up messages for badge)
+  chatBgPollInterval = setInterval(pollChat, 10000);
+  // Initial fetch after short delay (let init() complete first)
+  setTimeout(pollChat, 2000);
 
   async function pollChat() {
     try {
@@ -3659,7 +3695,7 @@
     if (heartbeatInterval) clearInterval(heartbeatInterval);
     if (controllerHeartbeatInterval) clearInterval(controllerHeartbeatInterval);
     if (chatPollInterval) clearInterval(chatPollInterval);
-    if (chatBadgePollInterval) clearInterval(chatBadgePollInterval);
+    if (chatBgPollInterval) clearInterval(chatBgPollInterval);
   });
 
   async function init() {
