@@ -156,6 +156,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $messageId = $pdo->lastInsertId();
 
+    // Immediately log to file as backup (never loses messages)
+    $logDir = __DIR__ . '/chat_archive';
+    if (!is_dir($logDir)) mkdir($logDir, 0755, true);
+    $logFile = $logDir . '/chat_log.jsonl';
+    $logEntry = json_encode([
+      'id' => intval($messageId),
+      'login' => $login,
+      'username' => $currentUser['login'],
+      'display_name' => $currentUser['display_name'],
+      'message' => $message,
+      'created_at' => date('Y-m-d H:i:s')
+    ], JSON_UNESCAPED_UNICODE) . "\n";
+    file_put_contents($logFile, $logEntry, FILE_APPEND | LOCK_EX);
+
     echo json_encode([
       "ok" => true,
       "id" => intval($messageId),
