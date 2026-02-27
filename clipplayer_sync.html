@@ -1085,6 +1085,11 @@
   let heartbeatInterval = null;
   let controllerHeartbeatInterval = null;
 
+  // Clip history (for Prev button)
+  let clipHistory = []; // Stack of previously played clips
+  let currentClipData = null; // Full data of currently playing clip
+  const MAX_HISTORY = 20;
+
   // Clip request system
   let pendingRequest = null; // { clip, timer, startTime } - set when I'm the requester
   let requestBannerClip = null; // Clip data for current request banner (for Play Now)
@@ -1890,7 +1895,27 @@
       }
     }
 
+    // Track history for Prev button (save outgoing clip before switching)
+    if (currentClipId && currentClipData) {
+      if (!clipHistory.length || clipHistory[clipHistory.length - 1].id !== currentClipId) {
+        clipHistory.push(currentClipData);
+        if (clipHistory.length > MAX_HISTORY) clipHistory.shift();
+      }
+    }
+
     currentClipId = clipId;
+
+    // Store current clip data for history tracking
+    currentClipData = {
+      id: clipId,
+      clip_id: clipId,
+      seq: clipData?.seq || clipData?.clip_seq,
+      title: clipData?.clip_title || clipData?.title || '',
+      creator_name: clipData?.clip_curator || clipData?.creator_name || '',
+      game_name: clipData?.game_name || '',
+      duration: clipData?.clip_duration || clipData?.duration || duration || 30,
+      created_at: clipData?.created_at || ''
+    };
 
     // Reset recovery state for new clip
     stallRecoveryAttempts = 0;
@@ -2645,13 +2670,12 @@
   });
 
   document.getElementById('ctrlPrev').addEventListener('click', () => {
-    if (!isController) return;
-    // Send prev command via cliptv_command
-    const formData = new FormData();
-    formData.append('login', login);
-    formData.append('command_type', 'prev');
-    formData.append('nonce', Date.now().toString());
-    fetch(`${API_BASE}/cliptv_command.php`, { method: 'POST', body: formData }).catch(() => {});
+    if (!clipHistory.length) {
+      debugLog("No previous clip in history", "warn");
+      return;
+    }
+    const prevClip = clipHistory.pop();
+    requestClip(prevClip);
   });
 
   document.getElementById('ctrlShuffle').addEventListener('click', () => {
