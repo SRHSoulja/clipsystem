@@ -238,6 +238,11 @@ class TwitchOAuth {
 function initSession() {
   // Handle case where session was closed by session_write_close()
   if (session_status() === PHP_SESSION_NONE) {
+    // Use database-backed sessions so they survive Railway deploys
+    require_once __DIR__ . '/db_session_handler.php';
+    require_once __DIR__ . '/../db_config.php';
+    initDbSessions();
+
     // Set secure session settings
     $secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
 
