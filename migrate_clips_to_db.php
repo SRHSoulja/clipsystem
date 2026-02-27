@@ -170,8 +170,17 @@ $existingCount = $pdo->query("SELECT COUNT(*) FROM clips WHERE login = " . $pdo-
 echo "Existing clips in database for $login: $existingCount\n";
 
 // Fresh mode: delete all existing clips for this login (preserves other logins)
+// Safety: snapshot existing clips to a temp file so we can rescue any the API misses
+$rescueFile = (is_writable('/tmp') ? '/tmp' : sys_get_temp_dir()) . "/clips_rescue_{$login}.json";
+$rescueClips = [];
 if ($freshMode && $startOffset === 0 && $existingCount > 0) {
-    echo "\n🔄 FRESH MODE: Deleting $existingCount existing clips for $login...\n";
+    echo "\n🔄 FRESH MODE: Backing up $existingCount existing clips before delete...\n";
+    $backupStmt = $pdo->prepare("SELECT clip_id, seq, title, duration, created_at, view_count, game_id, video_id, vod_offset, thumbnail_url, creator_name, blocked FROM clips WHERE login = ?");
+    $backupStmt->execute([$login]);
+    $rescueClips = $backupStmt->fetchAll(PDO::FETCH_ASSOC);
+    file_put_contents($rescueFile, json_encode($rescueClips));
+    echo "  Backed up " . count($rescueClips) . " clips to rescue file.\n";
+
     $deleteStmt = $pdo->prepare("DELETE FROM clips WHERE login = ?");
     $deleteStmt->execute([$login]);
     echo "  Deleted. Database ready for fresh import.\n";
@@ -314,8 +323,84 @@ $finalCount = $pdo->query("SELECT COUNT(*) FROM clips WHERE login = " . $pdo->qu
 echo "\nTotal clips in database for $login: $finalCount\n";
 
 // Get max seq
-$maxSeq = $pdo->query("SELECT MAX(seq) FROM clips WHERE login = " . $pdo->quote($login))->fetchColumn();
+$maxSeq = (int)$pdo->query("SELECT COALESCE(MAX(seq), 0) FROM clips WHERE login = " . $pdo->quote($login))->fetchColumn();
 echo "Max seq number: $maxSeq\n";
+
+// Rescue clips that were in the old database but NOT returned by the API this time
+$needsContinue = $isWeb && $nextOffset < $totalClips;
+if ($freshMode && !$needsContinue && file_exists($rescueFile)) {
+    // Load rescue data (may be from a previous chunk's backup)
+    if (empty($rescueClips)) {
+        $rescueClips = json_decode(file_get_contents($rescueFile), true) ?: [];
+    }
+}
+if ($freshMode && !empty($rescueClips) && !$needsContinue) {
+    echo "\n=== Rescue Check ===\n";
+    echo "Checking " . count($rescueClips) . " backed-up clips against new import...\n";
+
+    // Get all clip_ids currently in the database for this login
+    $currentStmt = $pdo->prepare("SELECT clip_id FROM clips WHERE login = ?");
+    $currentStmt->execute([$login]);
+    $currentIds = array_flip($currentStmt->fetchAll(PDO::FETCH_COLUMN));
+
+    // Find clips that existed before but are missing now
+    $missing = [];
+    foreach ($rescueClips as $oldClip) {
+        if (!isset($currentIds[$oldClip['clip_id']])) {
+            $missing[] = $oldClip;
+        }
+    }
+
+    if (empty($missing)) {
+        echo "All clips accounted for - no rescue needed!\n";
+    } else {
+        echo "Found " . count($missing) . " clips the API didn't return - rescuing...\n";
+
+        $rescueStmt = $pdo->prepare("
+            INSERT INTO clips (login, clip_id, seq, title, duration, created_at, view_count, game_id, video_id, vod_offset, thumbnail_url, creator_name, blocked)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (login, clip_id) DO NOTHING
+        ");
+
+        $rescued = 0;
+        $nextSeq = $maxSeq + 1;
+        foreach ($missing as $clip) {
+            try {
+                $rescueStmt->execute([
+                    $login,
+                    $clip['clip_id'],
+                    $nextSeq,
+                    $clip['title'],
+                    $clip['duration'],
+                    $clip['created_at'],
+                    $clip['view_count'],
+                    $clip['game_id'],
+                    $clip['video_id'],
+                    $clip['vod_offset'],
+                    $clip['thumbnail_url'],
+                    $clip['creator_name'],
+                    ($clip['blocked'] === true || $clip['blocked'] === 't' || $clip['blocked'] === '1') ? 't' : 'f'
+                ]);
+                if ($rescueStmt->rowCount() > 0) {
+                    $rescued++;
+                    $nextSeq++;
+                }
+            } catch (PDOException $e) {
+                echo "  Rescue error for {$clip['clip_id']}: " . $e->getMessage() . "\n";
+            }
+        }
+
+        echo "Rescued $rescued clips that would have been lost!\n";
+
+        // Update final count and max seq
+        $finalCount = $pdo->query("SELECT COUNT(*) FROM clips WHERE login = " . $pdo->quote($login))->fetchColumn();
+        $maxSeq = (int)$pdo->query("SELECT COALESCE(MAX(seq), 0) FROM clips WHERE login = " . $pdo->quote($login))->fetchColumn();
+        echo "Updated total: $finalCount clips, max seq: $maxSeq\n";
+    }
+
+    // Clean up rescue file
+    @unlink($rescueFile);
+}
 
 // Determine if we need to continue
 $needsContinue = $isWeb && $nextOffset < $totalClips;
