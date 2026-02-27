@@ -1490,7 +1490,7 @@
   const volumeKey = `clip_tv_volume_${login}`;
   const muteKey = `clip_tv_unmuted_${login}`;
   let savedVolume = parseFloat(localStorage.getItem(volumeKey) || "1");
-  let isMuted = false;
+  let isMuted = true; // Video starts muted (HTML attribute) - must match reality
   let userHasUnmuted = localStorage.getItem(muteKey) === 'true';
 
   player.volume = savedVolume;
@@ -1512,14 +1512,25 @@
 
   // Auto-unmute on first interaction if user previously had sound
   if (userHasUnmuted) {
-    function autoUnmuteHandler() {
+    let autoUnmuteAttached = true;
+    function autoUnmuteHandler(e) {
+      // Skip if clicking the volume button itself (let its own handler deal with it)
+      if (e.target.closest('#volumeBtn')) return;
       doUnmute();
       debugLog("Auto-unmuted on user interaction", "ok");
+      removeAutoUnmute();
+    }
+    function removeAutoUnmute() {
+      if (!autoUnmuteAttached) return;
+      autoUnmuteAttached = false;
       document.removeEventListener('click', autoUnmuteHandler, true);
       document.removeEventListener('touchend', autoUnmuteHandler, true);
     }
     document.addEventListener('click', autoUnmuteHandler, true);
     document.addEventListener('touchend', autoUnmuteHandler, true);
+
+    // Also show the unmute overlay so user knows to click
+    unmuteOverlay.classList.remove("hide");
   }
 
   function updateVolumeIcon() {
