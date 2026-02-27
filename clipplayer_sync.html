@@ -2359,7 +2359,10 @@
     browseRendered = true;
   }
 
-  function renderClipList(list) {
+  // searchResults = true when clips come from server search (not local pool)
+  let lastRenderedList = [];
+  function renderClipList(list, isSearchResults = false) {
+    lastRenderedList = list;
     const maxShow = 100;
     const toShow = list.slice(0, maxShow);
 
@@ -2398,7 +2401,12 @@
           e.stopPropagation();
           const row = btn.closest('.clip-row');
           const clipId = row.dataset.clipId;
-          const clip = clips.find(c => c.id === clipId);
+          const seq = parseInt(row.dataset.seq) || 0;
+          // Try local pool first, fall back to search result data
+          let clip = clips.find(c => c.id === clipId);
+          if (!clip) {
+            clip = lastRenderedList.find(c => c.id === clipId);
+          }
           if (clip) {
             playSpecificClip(clip);
             closeRemote();
@@ -2408,23 +2416,32 @@
     }
   }
 
-  // Search filtering with debounce
+  // Search with debounce - uses server-side search for full database coverage
   let searchTimeout = null;
   browseSearch.addEventListener('input', () => {
     clearTimeout(searchTimeout);
-    searchTimeout = setTimeout(() => {
-      const q = browseSearch.value.trim().toLowerCase();
+    searchTimeout = setTimeout(async () => {
+      const q = browseSearch.value.trim();
       if (!q) {
         renderClipList(browseClips);
         return;
       }
-      const terms = q.split(/\s+/);
-      const filtered = browseClips.filter(c => {
-        const haystack = `${c.title || ''} ${c.game_name || ''} ${c.creator_name || ''} ${c.seq || ''}`.toLowerCase();
-        return terms.every(t => haystack.includes(t));
-      });
-      renderClipList(filtered);
-    }, 200);
+      clipList.innerHTML = '<div class="clip-list-status">Searching...</div>';
+      try {
+        const res = await fetch(
+          `${API_BASE}/api/clip_search.php?login=${encodeURIComponent(login)}&q=${encodeURIComponent(q)}&limit=50`,
+          { cache: 'no-store' }
+        );
+        const data = await res.json();
+        if (data.clips && data.clips.length > 0) {
+          renderClipList(data.clips, true);
+        } else {
+          clipList.innerHTML = '<div class="clip-list-status">No clips match your search</div>';
+        }
+      } catch (e) {
+        clipList.innerHTML = '<div class="clip-list-status">Search failed</div>';
+      }
+    }, 300);
   });
 
   // === Controls ===
