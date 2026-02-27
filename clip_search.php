@@ -21,6 +21,43 @@ header("Content-Security-Policy: upgrade-insecure-requests");
 // Get current user for voting
 $currentUser = getCurrentUser();
 
+// Check if user can manage clips (block/unblock) for this channel
+$canManageClips = false;
+function checkClipManagePermission($login, $currentUser, $pdo) {
+    if (!$currentUser) return false;
+
+    require_once __DIR__ . '/includes/dashboard_auth.php';
+
+    $userLogin = strtolower($currentUser['login']);
+
+    // Super admin can manage any channel
+    if (isSuperAdmin()) return true;
+
+    // Streamer can manage their own channel
+    if ($userLogin === strtolower($login)) return true;
+
+    // Check if user is a mod with block_clips permission
+    if ($pdo) {
+        try {
+            // Check if user is in channel_mods
+            $stmt = $pdo->prepare("SELECT 1 FROM channel_mods WHERE channel_login = ? AND mod_username = ?");
+            $stmt->execute([strtolower($login), $userLogin]);
+            if ($stmt->fetch()) {
+                // Check if they have block_clips permission
+                $permStmt = $pdo->prepare("SELECT 1 FROM mod_permissions WHERE channel_login = ? AND mod_username = ? AND permission = 'block_clips'");
+                $permStmt->execute([strtolower($login), $userLogin]);
+                if ($permStmt->fetch()) {
+                    return true;
+                }
+            }
+        } catch (PDOException $e) {
+            // Permission check failed, deny access
+        }
+    }
+
+    return false;
+}
+
 function clean_login($s){
   $s = strtolower(trim((string)$s));
   $s = preg_replace("/[^a-z0-9_]/", "", $s);
@@ -75,6 +112,9 @@ $isLiveMode = false;  // True if using live Twitch API instead of archive
 $liveError = "";
 
 $pdo = get_db_connection();
+
+// Check if current user can manage clips for this channel
+$canManageClips = checkClipManagePermission($login, $currentUser, $pdo);
 
 // Check if this streamer has archived clips and get their profile image
 $hasArchivedClips = false;
@@ -308,7 +348,7 @@ if ($hasArchivedClips && $pdo) {
 
     $paginatedParams = array_merge($params, [$perPage, $offset]);
     $stmt = $pdo->prepare("
-      SELECT seq, clip_id, title, view_count, created_at, duration, game_id, thumbnail_url, creator_name
+      SELECT seq, clip_id, title, view_count, created_at, duration, game_id, thumbnail_url, creator_name, blocked
       FROM clips
       WHERE {$whereSQL}
       ORDER BY {$orderBy}
@@ -916,6 +956,41 @@ if ($hasArchivedClips && $pdo) {
       color: #9147ff;
     }
 
+    /* Clip management buttons */
+    .manage-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 8px;
+      border: none;
+      border-radius: 4px;
+      background: #3a3a3d;
+      color: #adadb8;
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      margin-left: 8px;
+    }
+    .manage-btn:hover {
+      background: #ff4757;
+      color: #fff;
+    }
+    .manage-btn.is-blocked {
+      background: #ff4757;
+      color: #fff;
+    }
+    .manage-btn.is-blocked:hover {
+      background: #2ed573;
+    }
+    .manage-btn svg {
+      width: 12px;
+      height: 12px;
+    }
+    .manage-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
     .no-results {
       text-align: center;
       padding: 60px 20px;
@@ -1329,6 +1404,19 @@ if ($hasArchivedClips && $pdo) {
             <?php if (!$currentUser): ?>
             <span class="vote-login-prompt"><a href="/auth/login.php?return=<?= urlencode($_SERVER['REQUEST_URI']) ?>">Login</a> to vote</span>
             <?php endif; ?>
+            <?php if ($canManageClips):
+              $isBlocked = !empty($clip['blocked']);
+            ?>
+            <button type="button" class="manage-btn block-btn<?= $isBlocked ? ' is-blocked' : '' ?>" data-seq="<?= $seq ?>" data-blocked="<?= $isBlocked ? '1' : '0' ?>" onclick="toggleBlockClip(this, <?= $seq ?>)" title="<?= $isBlocked ? 'Unhide this clip (add back to rotation)' : 'Hide this clip from rotation' ?>">
+              <?php if ($isBlocked): ?>
+              <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+              <span>Show</span>
+              <?php else: ?>
+              <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zM4 12c0-4.42 3.58-8 8-8 1.85 0 3.55.63 4.9 1.69L5.69 16.9C4.63 15.55 4 13.85 4 12zm8 8c-1.85 0-3.55-.63-4.9-1.69L18.31 7.1C19.37 8.45 20 10.15 20 12c0 4.42-3.58 8-8 8z"/></svg>
+              <span>Hide</span>
+              <?php endif; ?>
+            </button>
+            <?php endif; ?>
           </div>
           <?php endif; ?>
         </div>
@@ -1698,6 +1786,78 @@ if ($hasArchivedClips && $pdo) {
     }
   </script>
   <?php endif; ?>
+
+  <?php if ($canManageClips): ?>
+  <script>
+    // Clip management (block/unblock)
+    const clipManageConfig = {
+      streamer: <?= json_encode($login) ?>
+    };
+
+    async function toggleBlockClip(btn, seq) {
+      if (btn.disabled) return;
+      btn.disabled = true;
+
+      const isCurrentlyBlocked = btn.dataset.blocked === '1';
+      const newBlockedState = !isCurrentlyBlocked;
+
+      try {
+        const params = new URLSearchParams({
+          action: 'block_clip',
+          login: clipManageConfig.streamer,
+          seq: seq,
+          blocked: newBlockedState ? '1' : '0'
+        });
+
+        const response = await fetch('/dashboard_api.php?' + params.toString());
+        const data = await response.json();
+
+        if (data.success) {
+          // Update button state
+          btn.dataset.blocked = newBlockedState ? '1' : '0';
+          btn.classList.toggle('is-blocked', newBlockedState);
+          btn.title = newBlockedState ? 'Unhide this clip (add back to rotation)' : 'Hide this clip from rotation';
+
+          // Update icon and text
+          const span = btn.querySelector('span');
+          const svg = btn.querySelector('svg');
+          if (newBlockedState) {
+            // Now blocked - show "Show" button
+            svg.innerHTML = '<path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>';
+            span.textContent = 'Show';
+
+            // Fade the clip card to indicate it's hidden
+            const card = btn.closest('.clip-card');
+            if (card) card.style.opacity = '0.5';
+          } else {
+            // Now unblocked - show "Hide" button
+            svg.innerHTML = '<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zM4 12c0-4.42 3.58-8 8-8 1.85 0 3.55.63 4.9 1.69L5.69 16.9C4.63 15.55 4 13.85 4 12zm8 8c-1.85 0-3.55-.63-4.9-1.69L18.31 7.1C19.37 8.45 20 10.15 20 12c0 4.42-3.58 8-8 8z"/>';
+            span.textContent = 'Hide';
+
+            // Restore clip card opacity
+            const card = btn.closest('.clip-card');
+            if (card) card.style.opacity = '1';
+          }
+        } else {
+          console.error('Block/unblock failed:', data.error);
+          alert('Failed to update clip: ' + (data.error || 'Unknown error'));
+        }
+      } catch (e) {
+        console.error('Block/unblock request failed:', e);
+        alert('Failed to update clip. Please try again.');
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    // On page load, fade any already-blocked clips
+    document.querySelectorAll('.manage-btn.is-blocked').forEach(btn => {
+      const card = btn.closest('.clip-card');
+      if (card) card.style.opacity = '0.5';
+    });
+  </script>
+  <?php endif; ?>
+
   </div>
 </body>
 </html>

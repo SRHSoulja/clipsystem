@@ -813,6 +813,56 @@
       cursor: pointer;
     }
     .category-section select:focus { border-color: rgba(139, 92, 246, 0.6); }
+
+    /* Clip Request Banner */
+    #clipRequestBanner {
+      position: fixed;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%) translateY(-110%);
+      z-index: 11500;
+      background: rgba(15, 15, 25, 0.95);
+      backdrop-filter: blur(20px);
+      border: 2px solid rgba(139, 92, 246, 0.6);
+      border-top: none;
+      border-radius: 0 0 16px 16px;
+      padding: 14px 20px;
+      color: #fff;
+      font: 14px/1.4 system-ui, sans-serif;
+      transition: transform 400ms cubic-bezier(0.4, 0, 0.2, 1);
+      max-width: 500px;
+      width: 90vw;
+      pointer-events: auto;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      overflow: hidden;
+    }
+    #clipRequestBanner.show { transform: translateX(-50%) translateY(0); }
+    .req-title { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
+    .req-meta { font-size: 12px; color: #9ca3af; margin-bottom: 10px; }
+    .req-meta .rm-game { color: #22d3ee; }
+    .req-meta .rm-dur { color: #fbbf24; }
+    .req-actions { display: flex; gap: 8px; align-items: center; }
+    .req-play-now {
+      padding: 8px 16px; border-radius: 8px;
+      background: rgba(34, 197, 94, 0.3); border: 1px solid rgba(34, 197, 94, 0.6);
+      color: #4ade80; font: 700 13px system-ui, sans-serif;
+      cursor: pointer; transition: all 200ms;
+    }
+    .req-play-now:hover { background: rgba(34, 197, 94, 0.5); color: #fff; }
+    .req-cancel {
+      padding: 8px 12px; border-radius: 8px;
+      background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.4);
+      color: #f87171; font: 700 13px system-ui, sans-serif;
+      cursor: pointer; transition: all 200ms;
+    }
+    .req-cancel:hover { background: rgba(239, 68, 68, 0.4); color: #fff; }
+    .req-countdown { font: 700 14px system-ui, sans-serif; color: #a78bfa; margin-left: auto; }
+    .req-progress {
+      position: absolute; bottom: 0; left: 0; height: 3px;
+      background: linear-gradient(90deg, #8b5cf6, #a78bfa);
+      border-radius: 0 0 16px 16px;
+      transition: width 1s linear;
+    }
     .category-section select option { background: #1a1a2e; }
 
     /* Mobile responsive for viewer controls */
@@ -955,6 +1005,18 @@
     </div>
   </div>
 
+  <!-- Clip Request Banner -->
+  <div id="clipRequestBanner">
+    <div class="req-title" id="reqTitle"></div>
+    <div class="req-meta" id="reqMeta"></div>
+    <div class="req-actions">
+      <button class="req-play-now" id="reqPlayNow">▶ Play Now</button>
+      <button class="req-cancel" id="reqCancel" style="display:none">✕ Cancel</button>
+      <span class="req-countdown" id="reqCountdown"></span>
+    </div>
+    <div class="req-progress" id="reqProgress"></div>
+  </div>
+
   <div id="loadingOverlay">
     <div class="content">
       <div class="spinner"></div>
@@ -1022,6 +1084,12 @@
   let mySkipVote = false;
   let heartbeatInterval = null;
   let controllerHeartbeatInterval = null;
+
+  // Clip request system
+  let pendingRequest = null; // { clip, timer, startTime } - set when I'm the requester
+  let requestBannerClip = null; // Clip data for current request banner (for Play Now)
+  let activeRequestId = null; // clip_id of currently displayed request
+  const REQUEST_TIMEOUT = 6; // seconds before clip plays
 
   // Hide unmute overlay initially
   unmuteOverlay.classList.add("hide");
@@ -1260,7 +1328,7 @@
   // Handle tap to show controls on mobile (single tap shows, auto-hides after 4s)
   function handleTap(e) {
     // Ignore taps on interactive elements - let them handle their own events
-    if (e.target.closest('#volumeControl, #volumeBtn, #volumeSlider, #unmuteOverlay, #skipBtn, #remoteBtn, #remoteSheet, #viewerControls, #voteUp, #voteDown, #loginPrompt')) {
+    if (e.target.closest('#volumeControl, #volumeBtn, #volumeSlider, #unmuteOverlay, #skipBtn, #remoteBtn, #remoteSheet, #viewerControls, #voteUp, #voteDown, #loginPrompt, #clipRequestBanner')) {
       // But still reset the hide timeout so controls stay visible while interacting
       if (controlsVisible && hideTimeout) {
         clearTimeout(hideTimeout);
@@ -2034,6 +2102,7 @@
 
       // Check if clip ended (server-side)
       if (data.clip_ended) {
+        if (pendingRequest) return; // Let pending request handle clip change
         if (isController && canSkipClip()) {
           // Controller advances to next clip
           debugLog("Server says clip ended, advancing");
@@ -2046,6 +2115,8 @@
       // Check if we need to switch clips
       if (data.clip_id !== currentClipId) {
         debugLog(`New clip from server: ${data.clip_id.substring(0,15)}`, "warn");
+        // Clear request banner if showing
+        hideRequestBanner();
         // Immediately reset skip state when new clip detected
         mySkipVote = false;
         skipVotes = 0;
@@ -2118,6 +2189,7 @@
     }
 
     debugLog("Video legitimately ended");
+    if (pendingRequest) return; // Let pending request handle clip change
     if (isController) {
       controllerAdvance();
     }
@@ -2191,6 +2263,8 @@
     } catch (e) {
       debugLog("Heartbeat error: " + e.message, "err");
     }
+    // Check for clip requests from other viewers
+    checkClipRequests();
   }
 
   function resetSkipVotes() {
@@ -2372,15 +2446,13 @@
           ${clip.game_name ? `<span class="pm-game">${escapeHtml(clip.game_name)}</span>` : ''}
           ${clip.creator_name ? `<span class="pm-clip">by ${escapeHtml(clip.creator_name)}</span>` : ''}
         </div>
-        <button class="play-btn" id="previewPlayBtn" ${!isController ? 'disabled title="Only the controller can change clips"' : ''}>
-          ${isController ? '▶ Play' : '🔒 Controller only'}
-        </button>
+        <button class="play-btn" id="previewPlayBtn">▶ Play</button>
       `;
 
       const playBtn = document.getElementById('previewPlayBtn');
-      if (playBtn && isController) {
+      if (playBtn) {
         playBtn.addEventListener('click', () => {
-          playSpecificClip({
+          requestClip({
             id: clip.clip_id,
             seq: clip.seq,
             title: clip.title,
@@ -2447,9 +2519,7 @@
               ${c.game_name ? `<span class="cm-game">${escapeHtml(c.game_name)}</span>` : ''}
             </div>
           </div>
-          <button class="cr-play" ${!isController ? 'disabled' : ''}>
-            ${isController ? '▶' : '🔒'}
-          </button>
+          <button class="cr-play">▶</button>
         </div>
       `;
     }).join('');
@@ -2459,25 +2529,22 @@
     }
 
     // Attach play handlers
-    if (isController) {
-      clipList.querySelectorAll('.cr-play').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const row = btn.closest('.clip-row');
-          const clipId = row.dataset.clipId;
-          const seq = parseInt(row.dataset.seq) || 0;
-          // Try local pool first, fall back to search result data
-          let clip = clips.find(c => c.id === clipId);
-          if (!clip) {
-            clip = lastRenderedList.find(c => c.id === clipId);
-          }
-          if (clip) {
-            playSpecificClip(clip);
-            closeRemote();
-          }
-        });
+    clipList.querySelectorAll('.cr-play').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const row = btn.closest('.clip-row');
+        const clipId = row.dataset.clipId;
+        const seq = parseInt(row.dataset.seq) || 0;
+        let clip = clips.find(c => c.id === clipId);
+        if (!clip) {
+          clip = lastRenderedList.find(c => c.id === clipId);
+        }
+        if (clip) {
+          requestClip(clip);
+          closeRemote();
+        }
       });
-    }
+    });
   }
 
   // Search with debounce - uses server-side search for full database coverage
@@ -2528,39 +2595,35 @@
               ${c.game_name ? `<span class="cm-game">${escapeHtml(c.game_name)}</span>` : ''}
             </div>
           </div>
-          ${isController ? `
-            <button class="cr-play" data-queue-idx="${i}">▶</button>
-            <button class="cr-remove" data-queue-idx="${i}">✕</button>
-          ` : ''}
+          <button class="cr-play" data-queue-idx="${i}">▶</button>
+          <button class="cr-remove" data-queue-idx="${i}">✕</button>
         </div>
       `;
     }).join('');
 
     // Attach handlers
-    if (isController) {
-      queueList.querySelectorAll('.cr-play').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const idx = parseInt(btn.dataset.queueIdx);
-          const clip = upNextQueue[idx];
-          if (clip) {
-            // Remove this and all clips before it from queue
-            upNextQueue.splice(0, idx + 1);
-            fillQueue();
-            playSpecificClip(clip);
-            closeRemote();
-          }
-        });
-      });
-      queueList.querySelectorAll('.cr-remove').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const idx = parseInt(btn.dataset.queueIdx);
-          upNextQueue.splice(idx, 1);
+    queueList.querySelectorAll('.cr-play').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const idx = parseInt(btn.dataset.queueIdx);
+        const clip = upNextQueue[idx];
+        if (clip) {
+          // Remove this and all clips before it from queue
+          upNextQueue.splice(0, idx + 1);
           fillQueue();
-        });
+          requestClip(clip);
+          closeRemote();
+        }
       });
-    }
+    });
+    queueList.querySelectorAll('.cr-remove').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const idx = parseInt(btn.dataset.queueIdx);
+        upNextQueue.splice(idx, 1);
+        fillQueue();
+      });
+    });
   }
 
   document.getElementById('queueReshuffle').addEventListener('click', () => {
@@ -2592,7 +2655,6 @@
   });
 
   document.getElementById('ctrlShuffle').addEventListener('click', () => {
-    if (!isController) return;
     // Shuffle the clips array
     for (let i = clips.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -2629,9 +2691,193 @@
     fillQueue();
   });
 
-  // === Play specific clip (controller only) ===
+  // === Clip Request System ===
+  // When a viewer requests a clip, all other viewers see a countdown notification.
+  // After REQUEST_TIMEOUT seconds (or if someone clicks Play Now), the clip plays.
+
+  async function requestClip(clip) {
+    // Solo viewer? Play immediately, no countdown needed
+    if (viewerCount <= 1) {
+      await playSpecificClip(clip);
+      return;
+    }
+
+    // Cancel existing request
+    if (pendingRequest) {
+      clearTimeout(pendingRequest.timer);
+      pendingRequest = null;
+    }
+
+    const clipId = clip.id || clip.clip_id;
+    debugLog(`Requesting clip #${clip.seq || '?'}`, "ok");
+
+    // Post request to server so other viewers see it
+    try {
+      const formData = new FormData();
+      formData.append('login', login);
+      formData.append('clip_id', clipId);
+      formData.append('clip_seq', clip.seq || 0);
+      formData.append('clip_title', clip.title || '');
+      formData.append('clip_game', clip.game_name || '');
+      formData.append('clip_creator', clip.creator_name || '');
+      formData.append('clip_duration', clip.duration || 30);
+      formData.append('requester_id', viewerId);
+      fetch(`${API_BASE}/cliptv_request.php`, {
+        method: 'POST',
+        body: formData
+      }).catch(() => {});
+    } catch (e) {
+      debugLog("Failed to post request: " + e.message, "err");
+    }
+
+    // Show local countdown banner
+    showRequestBanner(clip, REQUEST_TIMEOUT, true);
+
+    // Set timer to play after countdown
+    pendingRequest = {
+      clip,
+      startTime: Date.now(),
+      timer: setTimeout(async () => {
+        hideRequestBanner();
+        pendingRequest = null;
+        await playSpecificClip(clip);
+        clearServerRequest();
+      }, REQUEST_TIMEOUT * 1000)
+    };
+  }
+
+  function showRequestBanner(data, remainingSeconds, isRequester = false) {
+    const banner = document.getElementById('clipRequestBanner');
+    const reqTitle = document.getElementById('reqTitle');
+    const reqMeta = document.getElementById('reqMeta');
+    const reqCountdown = document.getElementById('reqCountdown');
+    const reqProgress = document.getElementById('reqProgress');
+    const reqCancel = document.getElementById('reqCancel');
+
+    const seq = data.seq || data.clip_seq || '?';
+    const title = data.title || data.clip_title || 'Untitled';
+    const game = data.game_name || data.clip_game || '';
+    const dur = data.duration || data.clip_duration || 0;
+    const durStr = dur ? (dur < 60 ? `${Math.round(dur)}s` : `${Math.floor(dur/60)}:${(Math.round(dur)%60).toString().padStart(2,'0')}`) : '';
+
+    reqTitle.textContent = '\u{1F4FA} #' + seq + ' \u2014 ' + title;
+    reqMeta.innerHTML = [
+      game ? `<span class="rm-game">${escapeHtml(game)}</span>` : '',
+      durStr ? `<span class="rm-dur">${durStr}</span>` : ''
+    ].filter(Boolean).join(' \u2022 ');
+
+    // Show cancel button only for requester
+    reqCancel.style.display = isRequester ? '' : 'none';
+
+    // Store clip data for Play Now button
+    requestBannerClip = {
+      id: data.id || data.clip_id,
+      clip_id: data.clip_id || data.id,
+      seq: data.seq || data.clip_seq,
+      title: data.title || data.clip_title,
+      game_name: data.game_name || data.clip_game,
+      creator_name: data.creator_name || data.clip_creator,
+      duration: data.duration || data.clip_duration,
+      created_at: data.created_at
+    };
+
+    // Countdown
+    let remaining = Math.ceil(remainingSeconds);
+    reqCountdown.textContent = remaining + 's';
+    reqProgress.style.width = `${(remaining / REQUEST_TIMEOUT) * 100}%`;
+
+    // Update countdown every second
+    if (banner._countdownTimer) clearInterval(banner._countdownTimer);
+    banner._countdownTimer = setInterval(() => {
+      remaining--;
+      if (remaining <= 0) {
+        clearInterval(banner._countdownTimer);
+        reqCountdown.textContent = 'Now!';
+        reqProgress.style.width = '0%';
+      } else {
+        reqCountdown.textContent = remaining + 's';
+        reqProgress.style.width = `${(remaining / REQUEST_TIMEOUT) * 100}%`;
+      }
+    }, 1000);
+
+    activeRequestId = data.id || data.clip_id;
+    banner.classList.add('show');
+  }
+
+  function hideRequestBanner() {
+    const banner = document.getElementById('clipRequestBanner');
+    banner.classList.remove('show');
+    if (banner._countdownTimer) clearInterval(banner._countdownTimer);
+    activeRequestId = null;
+    requestBannerClip = null;
+  }
+
+  function clearServerRequest() {
+    const formData = new FormData();
+    formData.append('login', login);
+    formData.append('action', 'clear');
+    fetch(`${API_BASE}/cliptv_request.php`, {
+      method: 'POST',
+      body: formData
+    }).catch(() => {});
+  }
+
+  // Poll for clip requests from other viewers
+  async function checkClipRequests() {
+    if (pendingRequest) return; // I'm the requester, skip polling
+    try {
+      const res = await fetch(`${API_BASE}/cliptv_request.php?login=${encodeURIComponent(login)}`, { cache: 'no-store' });
+      const data = await res.json();
+      if (data.has_request && data.requester_id !== viewerId) {
+        const remaining = Math.max(0, REQUEST_TIMEOUT - data.age_seconds);
+        if (remaining > 0.5) {
+          // Show notification if not already showing for this clip
+          if (activeRequestId !== data.clip_id) {
+            showRequestBanner(data, remaining, false);
+          }
+        } else {
+          hideRequestBanner();
+        }
+      } else if (!data.has_request && activeRequestId) {
+        hideRequestBanner();
+      }
+    } catch (e) {
+      // Silently fail
+    }
+  }
+
+  // Play Now button - any viewer can click to play immediately
+  document.getElementById('reqPlayNow').addEventListener('click', async () => {
+    if (pendingRequest) {
+      // I'm the requester - play immediately
+      clearTimeout(pendingRequest.timer);
+      const clip = pendingRequest.clip;
+      pendingRequest = null;
+      hideRequestBanner();
+      await playSpecificClip(clip);
+      clearServerRequest();
+    } else if (requestBannerClip) {
+      // I'm another viewer - play the requested clip now
+      const clip = requestBannerClip;
+      hideRequestBanner();
+      await playSpecificClip(clip);
+      clearServerRequest();
+    }
+  });
+
+  // Cancel button - only visible to requester
+  document.getElementById('reqCancel').addEventListener('click', () => {
+    if (pendingRequest) {
+      clearTimeout(pendingRequest.timer);
+      pendingRequest = null;
+      hideRequestBanner();
+      clearServerRequest();
+      debugLog("Request cancelled", "ok");
+    }
+  });
+
+  // === Play specific clip ===
   async function playSpecificClip(clip) {
-    if (!isController) return;
     debugLog(`Playing specific clip: #${clip.seq || '?'}`, "ok");
 
     const clipId = clip.id || clip.clip_id;
