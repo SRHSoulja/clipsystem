@@ -13,6 +13,9 @@
 
 header("Content-Type: text/html; charset=utf-8");
 set_time_limit(300);
+// Flush output progressively so user sees progress
+if (function_exists('ob_implicit_flush')) ob_implicit_flush(true);
+while (ob_get_level()) ob_end_flush();
 
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/includes/twitch_oauth.php';
@@ -119,57 +122,82 @@ if (!$broadcasterId) {
 }
 echo "Broadcaster ID: {$broadcasterId}\n\n";
 
-// Fetch clips from Twitch API (starting from 1 day BEFORE the latest clip)
-// This ensures we catch any clips that failed to insert previously
-$startDate = date('c', strtotime($latestDate) - 86400);
-echo "Fetching clips created after: {$startDate}\n";
+// Fetch clips from Twitch API using time windows
+// The Twitch API only returns 1 week of clips when ended_at is not specified,
+// so we must iterate through 7-day windows from the last clip date to now.
+$fetchStart = strtotime($latestDate) - 86400; // Go back 1 day to catch missed clips
+$now = time();
+$windowDays = 7; // 7-day windows (matches Twitch API default)
+$windowSec = $windowDays * 24 * 60 * 60;
+$totalWindows = (int)ceil(($now - $fetchStart) / $windowSec);
+
+echo "Fetching clips from: " . date('c', $fetchStart) . "\n";
+echo "To: " . date('c', $now) . "\n";
+echo "Time span: " . round(($now - $fetchStart) / 86400) . " days across {$totalWindows} windows\n";
 echo "(Going back 1 day to catch any previously missed clips)\n\n";
 
 $newClips = [];
-$cursor = null;
-$pages = 0;
-$maxPages = 50; // Safety limit
+$totalPages = 0;
 
-do {
-    $url = "https://api.twitch.tv/helix/clips?broadcaster_id={$broadcasterId}&first=100&started_at=" . urlencode($startDate);
-    if ($cursor) {
-        $url .= "&after=" . urlencode($cursor);
-    }
+for ($w = 0; $w < $totalWindows; $w++) {
+    $windowStart = $fetchStart + ($w * $windowSec);
+    $windowEnd = min($now, $windowStart + $windowSec);
+    $startDate = date('c', $windowStart);
+    $endDate = date('c', $windowEnd);
 
-    $clipsRes = @file_get_contents($url, false, stream_context_create([
-        'http' => [
-            'header' => "Client-ID: {$clientId}\r\nAuthorization: Bearer {$accessToken}",
-            'timeout' => 30
-        ]
-    ]));
+    echo "Window " . ($w + 1) . "/{$totalWindows}: {$startDate} → {$endDate}\n";
 
-    if (!$clipsRes) {
-        echo "API request failed, stopping.\n";
-        break;
-    }
+    $cursor = null;
+    $pages = 0;
+    $windowNew = 0;
 
-    $clipsData = json_decode($clipsRes, true);
-    $clips = $clipsData['data'] ?? [];
-    $cursor = $clipsData['pagination']['cursor'] ?? null;
-    $pages++;
-
-    foreach ($clips as $clip) {
-        $clipId = $clip['id'];
-
-        // Skip if we already have this clip
-        if (isset($existingSet[$clipId])) {
-            continue;
+    do {
+        $url = "https://api.twitch.tv/helix/clips?broadcaster_id={$broadcasterId}&first=100"
+             . "&started_at=" . urlencode($startDate)
+             . "&ended_at=" . urlencode($endDate);
+        if ($cursor) {
+            $url .= "&after=" . urlencode($cursor);
         }
 
-        $newClips[] = $clip;
+        $clipsRes = @file_get_contents($url, false, stream_context_create([
+            'http' => [
+                'header' => "Client-ID: {$clientId}\r\nAuthorization: Bearer {$accessToken}",
+                'timeout' => 30
+            ]
+        ]));
+
+        if (!$clipsRes) {
+            echo "  API request failed, skipping window.\n";
+            break;
+        }
+
+        $clipsData = json_decode($clipsRes, true);
+        $clips = $clipsData['data'] ?? [];
+        $cursor = $clipsData['pagination']['cursor'] ?? null;
+        $pages++;
+        $totalPages++;
+
+        foreach ($clips as $clip) {
+            $clipId = $clip['id'];
+
+            // Skip if we already have this clip
+            if (isset($existingSet[$clipId])) {
+                continue;
+            }
+
+            $newClips[] = $clip;
+            $windowNew++;
+        }
+
+        // Small delay to be nice to API
+        usleep(100000);
+
+    } while ($cursor && $pages < 30); // 30 pages per window safety limit
+
+    if ($windowNew > 0) {
+        echo "  Found {$windowNew} new clips (total new: " . count($newClips) . ")\n";
     }
-
-    echo "Page {$pages}: Found " . count($clips) . " clips, " . count($newClips) . " new so far\n";
-
-    // Small delay to be nice to API
-    usleep(100000);
-
-} while ($cursor && $pages < $maxPages);
+}
 
 echo "\n";
 
