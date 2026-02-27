@@ -577,24 +577,47 @@
     #backBtn:hover { background: rgba(96, 165, 250, 0.2); border-color: #60a5fa; }
     #backBtn:active { transform: scale(0.95); }
 
-    /* Download button */
-    #dlBtn {
+    /* Clip action buttons (bottom center) */
+    #clipActions {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%) translateY(10px);
+      bottom: max(24px, env(safe-area-inset-bottom));
+      z-index: 11000;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      opacity: 0;
+      transition: opacity 300ms, transform 300ms;
+    }
+    #clipActions.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    #clipActions .action-btn {
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 10px 14px;
+      gap: 6px;
+      padding: 8px 14px;
       border-radius: 999px;
       background: rgba(0,0,0,0.7);
-      border: 2px solid rgba(255,255,255,0.3);
+      border: 2px solid rgba(255,255,255,0.2);
       color: #d1d5db;
-      font: 600 16px system-ui, sans-serif;
+      font: 600 13px system-ui, sans-serif;
       backdrop-filter: blur(12px);
       cursor: pointer;
       transition: all 200ms;
+      white-space: nowrap;
     }
-    #dlBtn:hover { background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.5); color: #fff; }
-    #dlBtn:active { transform: scale(0.95); }
-    #dlBtn.downloading { border-color: rgba(34, 197, 94, 0.6); color: #4ade80; }
+    #clipActions .action-btn:hover { background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.5); color: #fff; }
+    #clipActions .action-btn:active { transform: scale(0.95); }
+    #clipActions .action-btn svg { width: 16px; height: 16px; flex-shrink: 0; }
+    #clipActions .action-btn.downloading { border-color: rgba(34, 197, 94, 0.6); color: #4ade80; }
+    #clipActions .action-btn.copied { border-color: rgba(34, 197, 94, 0.6); color: #4ade80; }
+    @keyframes clipActionCopied {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+      100% { transform: scale(1); }
+    }
+    #clipActions .action-btn.copied { animation: clipActionCopied 300ms ease; }
 
     /* Chat button */
     #chatBtn {
@@ -1057,7 +1080,10 @@
       }
       #viewerCount { padding: 6px 10px; font-size: 12px; }
       #viewerCount .eye { font-size: 14px; }
-      #skipBtn, #remoteBtn, #backBtn, #chatBtn, #dlBtn { padding: 8px 14px; font-size: 12px; gap: 6px; }
+      #skipBtn, #remoteBtn, #backBtn, #chatBtn { padding: 8px 14px; font-size: 12px; gap: 6px; }
+      #clipActions { bottom: max(12px, env(safe-area-inset-bottom)); }
+      #clipActions .action-btn { padding: 6px 12px; font-size: 11px; }
+      #clipActions .action-btn svg { width: 14px; height: 14px; }
       #chatPanel { width: 280px; height: 340px; left: 12px; bottom: 70px; }
     }
 
@@ -1068,24 +1094,31 @@
         gap: 6px;
       }
       #viewerCount { padding: 5px 8px; font-size: 11px; }
-      #skipBtn, #remoteBtn, #backBtn, #chatBtn, #dlBtn { padding: 8px 12px; font-size: 11px; min-height: 44px; }
+      #skipBtn, #remoteBtn, #backBtn, #chatBtn { padding: 8px 12px; font-size: 11px; min-height: 44px; }
+      #clipActions { bottom: max(10px, env(safe-area-inset-bottom)); }
+      #clipActions .action-btn { padding: 6px 10px; font-size: 11px; }
+      #clipActions .action-btn span { display: none; }
       #chatPanel { width: calc(100vw - 24px); left: 12px; bottom: 65px; }
     }
 
     /* Touch-friendly buttons */
     @media (hover: none) and (pointer: coarse) {
-      #skipBtn, #remoteBtn, #backBtn, #chatBtn, #dlBtn {
+      #skipBtn, #remoteBtn, #backBtn, #chatBtn {
         min-height: 44px;
         min-width: 44px;
         padding: 10px 20px;
       }
+      #clipActions .action-btn { min-height: 44px; min-width: 44px; padding: 10px 16px; }
     }
 
     /* Landscape mobile */
     @media (max-height: 500px) and (orientation: landscape) {
       #viewerControls { gap: 6px; }
       #viewerCount { padding: 4px 8px; font-size: 10px; }
-      #skipBtn, #remoteBtn, #backBtn, #chatBtn, #dlBtn { padding: 6px 10px; font-size: 10px; }
+      #skipBtn, #remoteBtn, #backBtn, #chatBtn { padding: 6px 10px; font-size: 10px; }
+      #clipActions .action-btn { padding: 5px 8px; font-size: 10px; }
+      #clipActions .action-btn svg { width: 12px; height: 12px; }
+      #clipActions .action-btn span { display: none; }
     }
   </style>
 </head>
@@ -1130,8 +1163,18 @@
     <button id="backBtn">⏮</button>
     <button id="remoteBtn">🎛️ Remote</button>
     <button id="skipBtn">⏭ Skip<span id="skipStatus"></span></button>
-    <button id="dlBtn" title="Download this clip">⬇</button>
     <button id="chatBtn">💬<span id="chatBadge" class="chat-badge"></span></button>
+  </div>
+
+  <div id="clipActions">
+    <button class="action-btn" id="dlBtn" title="Download this clip">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+      <span>Download</span>
+    </button>
+    <button class="action-btn" id="copyLinkBtn" title="Copy link to this clip">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>
+      <span>Copy Link</span>
+    </button>
   </div>
 
   <!-- Chat Panel (draggable on desktop) -->
@@ -1565,11 +1608,14 @@
   let hideTimeout = null;
   let controlsVisible = false;
 
+  const clipActions = document.getElementById('clipActions');
+
   function hideControls() {
     voteHud.classList.remove("show");
     volumeControl.classList.remove("show");
     syncStatus.classList.remove("show");
     viewerControls.classList.remove("show");
+    clipActions.classList.remove("show");
     controlsVisible = false;
     if (hideTimeout) clearTimeout(hideTimeout);
   }
@@ -1579,6 +1625,7 @@
     volumeControl.classList.add("show");
     syncStatus.classList.add("show");
     viewerControls.classList.add("show");
+    clipActions.classList.add("show");
     controlsVisible = true;
     if (hideTimeout) clearTimeout(hideTimeout);
     hideTimeout = setTimeout(hideControls, 4000);
@@ -1587,7 +1634,7 @@
   // Handle tap to show controls on mobile (single tap shows, auto-hides after 4s)
   function handleTap(e) {
     // Ignore taps on interactive elements - let them handle their own events
-    if (e.target.closest('#volumeControl, #volumeBtn, #volumeSlider, #unmuteOverlay, #skipBtn, #remoteBtn, #remoteSheet, #viewerControls, #voteUp, #voteDown, #loginPrompt, #clipRequestBanner, #chatPanel, #chatBtn, #backBtn, #dlBtn')) {
+    if (e.target.closest('#volumeControl, #volumeBtn, #volumeSlider, #unmuteOverlay, #skipBtn, #remoteBtn, #remoteSheet, #viewerControls, #voteUp, #voteDown, #loginPrompt, #clipRequestBanner, #chatPanel, #chatBtn, #backBtn, #clipActions, #dlBtn, #copyLinkBtn')) {
       // But still reset the hide timeout so controls stay visible while interacting
       if (controlsVisible && hideTimeout) {
         clearTimeout(hideTimeout);
@@ -3216,8 +3263,9 @@
     const src = player.src;
     if (!src) return;
 
+    const labelSpan = dlBtn.querySelector('span');
     dlBtn.classList.add('downloading');
-    dlBtn.textContent = '⏳';
+    if (labelSpan) labelSpan.textContent = 'Downloading...';
 
     // Build filename from current clip info
     const seq = currentClipData?.seq || '';
@@ -3240,8 +3288,46 @@
       window.open(src, '_blank');
     }
 
-    dlBtn.textContent = '⬇';
+    if (labelSpan) labelSpan.textContent = 'Download';
     dlBtn.classList.remove('downloading');
+  });
+
+  // === Copy Link Button ===
+  document.getElementById('copyLinkBtn').addEventListener('click', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const btn = document.getElementById('copyLinkBtn');
+    const clipId = currentClipData?.id || currentClipId;
+    if (!clipId) return;
+
+    const clipUrl = `https://clips.twitch.tv/${clipId}`;
+    const labelSpan = btn.querySelector('span');
+
+    try {
+      await navigator.clipboard.writeText(clipUrl);
+      btn.classList.add('copied');
+      if (labelSpan) labelSpan.textContent = 'Copied!';
+      setTimeout(() => {
+        btn.classList.remove('copied');
+        if (labelSpan) labelSpan.textContent = 'Copy Link';
+      }, 2000);
+    } catch (err) {
+      // Fallback for older browsers / insecure contexts
+      const ta = document.createElement('textarea');
+      ta.value = clipUrl;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      btn.classList.add('copied');
+      if (labelSpan) labelSpan.textContent = 'Copied!';
+      setTimeout(() => {
+        btn.classList.remove('copied');
+        if (labelSpan) labelSpan.textContent = 'Copy Link';
+      }, 2000);
+    }
   });
 
   // === Chat System ===
