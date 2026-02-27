@@ -956,6 +956,34 @@ if ($hasArchivedClips && $pdo) {
       color: #9147ff;
     }
 
+    /* Download button */
+    .dl-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      border: 1px solid #3d3d42;
+      border-radius: 4px;
+      background: transparent;
+      color: #adadb8;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-left: auto;
+    }
+    .dl-btn:hover {
+      border-color: #9147ff;
+      color: #efeff1;
+    }
+    .dl-btn.downloading {
+      border-color: #00c853;
+      color: #00c853;
+    }
+    .dl-btn svg {
+      width: 14px;
+      height: 14px;
+    }
+
     /* Clip management buttons */
     .manage-btn {
       display: inline-flex;
@@ -1391,6 +1419,13 @@ if ($hasArchivedClips && $pdo) {
             <span class="clip-game" title="<?= htmlspecialchars($gameName) ?>"><?= htmlspecialchars($gameName) ?></span>
           </div>
           <?php endif; ?>
+          <?php if ($seq <= 0): // Live clips: download button without votes row ?>
+          <div class="clip-votes">
+            <button type="button" class="dl-btn" data-clip-id="<?= htmlspecialchars($clipId) ?>" data-title="<?= htmlspecialchars($title) ?>" data-seq="0" title="Download clip">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+            </button>
+          </div>
+          <?php endif; ?>
           <?php if ($seq > 0): // Only show votes for archived clips ?>
           <div class="clip-votes" data-seq="<?= $seq ?>">
             <button type="button" class="vote-btn like-btn" data-vote="like" title="Like this clip">
@@ -1404,6 +1439,9 @@ if ($hasArchivedClips && $pdo) {
             <?php if (!$currentUser): ?>
             <span class="vote-login-prompt"><a href="/auth/login.php?return=<?= urlencode($_SERVER['REQUEST_URI']) ?>">Login</a> to vote</span>
             <?php endif; ?>
+            <button type="button" class="dl-btn" data-clip-id="<?= htmlspecialchars($clipId) ?>" data-title="<?= htmlspecialchars($title) ?>" data-seq="<?= $seq ?>" title="Download clip">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+            </button>
             <?php if ($canManageClips):
               $isBlocked = !empty($clip['blocked']);
             ?>
@@ -1659,6 +1697,11 @@ if ($hasArchivedClips && $pdo) {
               ${clip.creator_name ? `<a href="/search/${encodeURIComponent(liveConfig.streamer)}?clipper=${encodeURIComponent(clip.creator_name)}" class="clip-clipper" title="View all clips by ${clip.creator_name.replace(/"/g, '&quot;')}">&#9986; ${clip.creator_name.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</a>` : ''}
             </div>
             ${clip.game_name ? `<div class="clip-game-row"><span class="clip-game" title="${clip.game_name.replace(/"/g, '&quot;')}">${clip.game_name.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span></div>` : ''}
+            <div class="clip-votes">
+              <button type="button" class="dl-btn" data-clip-id="${clip.clip_id}" data-title="${(clip.title || 'clip').replace(/"/g, '&quot;')}" data-seq="0" title="Download clip">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+              </button>
+            </div>
           </div>
         </div>
       `;
@@ -1857,6 +1900,88 @@ if ($hasArchivedClips && $pdo) {
     });
   </script>
   <?php endif; ?>
+
+  <script>
+    // Clip download functionality
+    const GQL_URL = "https://gql.twitch.tv/gql";
+    const GQL_CLIENT_ID = "kimne78kx3ncx6brgo4mv6wki5h1ko";
+    const GQL_HASH = "36b89d2507fce29e5ca551df756d27c1cfe079e2609642b4390aa4c35796eb11";
+
+    async function getMp4Url(clipId) {
+      try {
+        const res = await fetch(GQL_URL, {
+          method: "POST",
+          headers: { "Client-ID": GQL_CLIENT_ID, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            operationName: "VideoAccessToken_Clip",
+            variables: { slug: clipId },
+            extensions: { persistedQuery: { version: 1, sha256Hash: GQL_HASH } }
+          })
+        });
+        if (!res.ok) return null;
+        const data = await res.json();
+        const clip = data?.data?.clip;
+        if (!clip) return null;
+        const token = clip.playbackAccessToken?.value;
+        const sig = clip.playbackAccessToken?.signature;
+        const qualities = clip.videoQualities || [];
+        if (!token || !sig || !qualities.length) return null;
+        // Highest quality
+        const sorted = qualities.sort((a,b) => (parseInt(b.quality)||0) - (parseInt(a.quality)||0));
+        const chosen = sorted[0];
+        const sep = chosen.sourceURL.includes("?") ? "&" : "?";
+        return `${chosen.sourceURL}${sep}sig=${encodeURIComponent(sig)}&token=${encodeURIComponent(token)}`;
+      } catch (e) {
+        console.error("getMp4Url error:", e);
+        return null;
+      }
+    }
+
+    async function downloadClip(btn) {
+      if (btn.classList.contains('downloading')) return;
+      const clipId = btn.dataset.clipId;
+      const title = (btn.dataset.title || 'clip').replace(/[^a-zA-Z0-9_\- ]/g, '').trim().substring(0, 60);
+      const seq = btn.dataset.seq && btn.dataset.seq !== '0' ? btn.dataset.seq : '';
+      const filename = seq ? `clip_${seq}_${title}.mp4` : `${title}.mp4`;
+
+      btn.classList.add('downloading');
+      const origHTML = btn.innerHTML;
+      btn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" style="animation:spin 1s linear infinite"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>';
+
+      try {
+        const mp4Url = await getMp4Url(clipId);
+        if (!mp4Url) throw new Error('Could not get MP4 URL');
+
+        const resp = await fetch(mp4Url);
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+      } catch (err) {
+        console.error("Download failed:", err);
+        alert("Download failed. Try again.");
+      }
+
+      btn.innerHTML = origHTML;
+      btn.classList.remove('downloading');
+    }
+
+    // Attach handlers (including dynamically added cards)
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('.dl-btn');
+      if (btn) {
+        e.preventDefault();
+        e.stopPropagation();
+        downloadClip(btn);
+      }
+    });
+  </script>
+  <style>@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }</style>
 
   </div>
 </body>
