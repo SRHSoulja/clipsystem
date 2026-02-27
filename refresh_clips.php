@@ -64,9 +64,21 @@ $maxSeq = (int)($row['max_seq'] ?? 0);
 $latestDate = $row['latest_date'] ?? null;
 $totalClips = (int)($row['total'] ?? 0);
 
+// Get last refresh timestamp from channel_settings
+$lastRefresh = null;
+try {
+    $stmt = $pdo->prepare("SELECT last_refresh FROM channel_settings WHERE login = ?");
+    $stmt->execute([$login]);
+    $csRow = $stmt->fetch(PDO::FETCH_ASSOC);
+    $lastRefresh = $csRow['last_refresh'] ?? null;
+} catch (PDOException $e) {
+    // Table/column might not exist
+}
+
 echo "Current clips in database: {$totalClips}\n";
 echo "Max seq number: {$maxSeq}\n";
-echo "Most recent clip date: " . ($latestDate ?? 'none') . "\n\n";
+echo "Most recent clip date: " . ($latestDate ?? 'none') . "\n";
+echo "Last refresh: " . ($lastRefresh ?? 'never') . "\n\n";
 
 if (!$latestDate) {
     die("No existing clips found. Use the Add User feature to do initial backfill.");
@@ -123,23 +135,20 @@ if (!$broadcasterId) {
 echo "Broadcaster ID: {$broadcasterId}\n\n";
 
 // Fetch clips from Twitch API using time windows
-// The Twitch API only returns 1 week of clips when ended_at is not specified,
-// so we must iterate through 7-day windows.
-// Go back 90 days (not just 1 day) because the Twitch Clips API is inconsistent -
-// it sorts by view_count and can skip lower-viewed clips between pagination runs.
-// Rescanning recent months catches clips the API dropped on previous passes.
+// Start from the last refresh timestamp (minus 24h safety margin).
+// If never refreshed before, fall back to the most recent clip date minus 24h.
 // Duplicates are harmless thanks to ON CONFLICT DO NOTHING.
-$lookbackDays = 90;
-$fetchStart = strtotime($latestDate) - ($lookbackDays * 86400);
+$baseDate = $lastRefresh ? strtotime($lastRefresh) : strtotime($latestDate);
+$fetchStart = $baseDate - 86400; // 24 hours before last refresh for safety
 $now = time();
-$windowDays = 7; // 7-day windows (matches Twitch API default)
+$windowDays = 7; // 7-day windows (Twitch API requires ended_at or defaults to 1 week)
 $windowSec = $windowDays * 24 * 60 * 60;
 $totalWindows = (int)ceil(($now - $fetchStart) / $windowSec);
 
 echo "Fetching clips from: " . date('c', $fetchStart) . "\n";
 echo "To: " . date('c', $now) . "\n";
 echo "Time span: " . round(($now - $fetchStart) / 86400) . " days across {$totalWindows} windows\n";
-echo "(Scanning last {$lookbackDays} days to catch clips Twitch API may have missed)\n\n";
+echo "(Starting from last refresh" . ($lastRefresh ? "" : " (never refreshed, using latest clip date)") . " minus 24h)\n\n";
 
 $newClips = [];
 $totalPages = 0;
