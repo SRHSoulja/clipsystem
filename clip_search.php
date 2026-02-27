@@ -563,7 +563,11 @@ if ($hasArchivedClips && $pdo) {
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
+  <?php if ($streamerProfileImage): ?>
+  <link rel="icon" type="image/png" href="<?= htmlspecialchars($streamerProfileImage) ?>">
+  <?php else: ?>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <?php endif; ?>
   <title>Clip Search<?= $query ? ': ' . htmlspecialchars($query) : '' ?> - <?= htmlspecialchars($login) ?></title>
   <style>
     * { box-sizing: border-box; }

@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+  <link id="favicon" rel="icon" type="image/png" href="">
   <title>Clip TV</title>
   <style>
     * {
@@ -1300,6 +1301,16 @@
   const login = (qs.get("login") || "floppyjimmie").toLowerCase();
   document.title = login + " Clip TV";
   const API_BASE = "https://clips.gmgnrepeat.com";
+
+  // Set streamer's Twitch profile image as favicon
+  fetch(`${API_BASE}/channel_info.php?login=${encodeURIComponent(login)}`)
+    .then(r => r.json())
+    .then(data => {
+      if (data.profile_image_url) {
+        document.getElementById('favicon').href = data.profile_image_url;
+      }
+    })
+    .catch(() => {});
 
   // Twitch GQL for MP4 URLs
   const GQL_URL = "https://gql.twitch.tv/gql";
