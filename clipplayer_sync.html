@@ -783,6 +783,24 @@
     .ctrl-btn.ctrl-shuffle:hover { background: rgba(52, 211, 153, 0.15); }
     .category-section { margin-top: 8px; }
     .category-section label { display: block; font-size: 12px; color: #9ca3af; margin-bottom: 6px; font-weight: 600; }
+
+    /* Queue / Up Next */
+    .queue-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .queue-label { font-weight: 700; font-size: 14px; color: #a78bfa; }
+    .queue-reshuffle {
+      padding: 6px 14px; border-radius: 8px; background: rgba(52, 211, 153, 0.15);
+      border: 1px solid rgba(52, 211, 153, 0.4); color: #34d399; font: 600 12px system-ui, sans-serif;
+      cursor: pointer; transition: all 200ms;
+    }
+    .queue-reshuffle:hover { background: rgba(52, 211, 153, 0.3); color: #fff; }
+    .clip-row .cr-pos { font-weight: 800; font-size: 12px; color: #6b7280; min-width: 24px; text-align: center; }
+    .clip-row.cr-playing { background: rgba(139, 92, 246, 0.15); border-color: rgba(139, 92, 246, 0.4); }
+    .clip-row .cr-remove {
+      padding: 4px 10px; border-radius: 6px; background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; font: 600 12px system-ui, sans-serif;
+      cursor: pointer; transition: all 200ms;
+    }
+    .clip-row .cr-remove:hover { background: rgba(239, 68, 68, 0.3); color: #fff; }
     .category-section select {
       width: 100%;
       padding: 10px 12px;
@@ -885,6 +903,7 @@
       <div class="sheet-handle">━━</div>
       <div class="sheet-tabs">
         <button class="sheet-tab active" data-tab="goto">Go To</button>
+        <button class="sheet-tab" data-tab="upNext">Up Next</button>
         <button class="sheet-tab" data-tab="browse">Browse</button>
         <button class="sheet-tab" data-tab="controls">Controls</button>
       </div>
@@ -897,6 +916,16 @@
           </div>
           <div class="clip-preview empty" id="clipPreview">
             Type a clip number and press Go
+          </div>
+        </div>
+        <!-- Up Next tab -->
+        <div class="tab-panel" id="tabUpNext">
+          <div class="queue-header">
+            <span class="queue-label">Coming up next</span>
+            <button class="queue-reshuffle" id="queueReshuffle">🔀 Reshuffle</button>
+          </div>
+          <div class="clip-list" id="queueList">
+            <div class="clip-list-status">Loading queue...</div>
           </div>
         </div>
         <!-- Browse/Search tab -->
@@ -1702,9 +1731,37 @@
   }
 
   // Weighted clip selection (for controller)
-  function pickNextClip() {
+  const QUEUE_SIZE = 10;
+  let upNextQueue = [];
+
+  function pickRandomClip(exclude = []) {
     if (!clips.length) return null;
-    // Simple random for now - could add weighted selection later
+    const excludeIds = new Set(exclude.map(c => c.id));
+    const pool = clips.filter(c => !excludeIds.has(c.id));
+    if (!pool.length) return clips[Math.floor(Math.random() * clips.length)];
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+
+  function fillQueue() {
+    const existing = [...upNextQueue];
+    if (currentClipId) existing.push({ id: currentClipId });
+    while (upNextQueue.length < QUEUE_SIZE && clips.length > 0) {
+      const pick = pickRandomClip(existing);
+      if (!pick) break;
+      upNextQueue.push(pick);
+      existing.push(pick);
+    }
+    renderQueue();
+  }
+
+  function pickNextClip() {
+    if (upNextQueue.length > 0) {
+      const next = upNextQueue.shift();
+      fillQueue(); // Refill after consuming
+      return next;
+    }
+    // Fallback if queue is empty
+    if (!clips.length) return null;
     return clips[Math.floor(Math.random() * clips.length)];
   }
 
@@ -2250,6 +2307,7 @@
     if (remoteOpen) {
       populateBrowse();
       populateCategories();
+      renderQueue();
     }
   }
 
@@ -2444,6 +2502,66 @@
     }, 300);
   });
 
+  // === Up Next Queue ===
+  const queueList = document.getElementById('queueList');
+
+  function renderQueue() {
+    if (!upNextQueue.length) {
+      queueList.innerHTML = '<div class="clip-list-status">Queue is empty — waiting for clips to load</div>';
+      return;
+    }
+    queueList.innerHTML = upNextQueue.map((c, i) => {
+      const dur = c.duration ? (c.duration < 60 ? `${Math.round(c.duration)}s` : `${Math.floor(c.duration/60)}:${(Math.round(c.duration)%60).toString().padStart(2,'0')}`) : '';
+      return `
+        <div class="clip-row" data-queue-idx="${i}" data-clip-id="${c.id}">
+          <span class="cr-pos">${i + 1}</span>
+          <div class="cr-info">
+            <div class="cr-title">#${c.seq || '?'} — ${escapeHtml(c.title || 'Untitled')}</div>
+            <div class="cr-meta">
+              ${dur ? `<span class="cm-dur">${dur}</span> ` : ''}
+              ${c.game_name ? `<span class="cm-game">${escapeHtml(c.game_name)}</span>` : ''}
+            </div>
+          </div>
+          ${isController ? `
+            <button class="cr-play" data-queue-idx="${i}">▶</button>
+            <button class="cr-remove" data-queue-idx="${i}">✕</button>
+          ` : ''}
+        </div>
+      `;
+    }).join('');
+
+    // Attach handlers
+    if (isController) {
+      queueList.querySelectorAll('.cr-play').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const idx = parseInt(btn.dataset.queueIdx);
+          const clip = upNextQueue[idx];
+          if (clip) {
+            // Remove this and all clips before it from queue
+            upNextQueue.splice(0, idx + 1);
+            fillQueue();
+            playSpecificClip(clip);
+            closeRemote();
+          }
+        });
+      });
+      queueList.querySelectorAll('.cr-remove').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const idx = parseInt(btn.dataset.queueIdx);
+          upNextQueue.splice(idx, 1);
+          fillQueue();
+        });
+      });
+    }
+  }
+
+  document.getElementById('queueReshuffle').addEventListener('click', () => {
+    upNextQueue = [];
+    fillQueue();
+  });
+
   // === Controls ===
   document.getElementById('ctrlSkip').addEventListener('click', () => {
     if (canSkipClip()) {
@@ -2607,6 +2725,7 @@
     if (clipsResult.status === 'fulfilled') {
       clips = Array.isArray(clipsResult.value.clips) ? clipsResult.value.clips : [];
       debugLog(`${clips.length} clips loaded`, "ok");
+      fillQueue(); // Pre-generate up next queue
     }
 
     // Process sync state
