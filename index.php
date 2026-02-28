@@ -171,6 +171,17 @@ header("Content-Type: text/html; charset=utf-8");
       background: #772ce8;
     }
 
+    .archive-btn {
+      background: transparent !important;
+      border: 2px solid #9147ff !important;
+      color: #bf94ff !important;
+    }
+
+    .archive-btn:hover {
+      background: rgba(145, 71, 255, 0.15) !important;
+      color: #fff !important;
+    }
+
     .links {
       display: flex;
       gap: 20px;
@@ -261,6 +272,7 @@ header("Content-Type: text/html; charset=utf-8");
     <form class="search-box" onsubmit="goToSearch(event)">
       <input type="text" id="streamer" placeholder="Enter streamer name..." autofocus>
       <button type="submit">Browse Clips</button>
+      <button type="button" onclick="goToArchive()" class="archive-btn">Archive</button>
     </form>
 
     <div class="features">
@@ -317,6 +329,15 @@ header("Content-Type: text/html; charset=utf-8");
       const streamer = document.getElementById('streamer').value.trim().toLowerCase();
       if (streamer) {
         window.location.href = '/search/' + encodeURIComponent(streamer);
+      }
+    }
+
+    function goToArchive() {
+      const streamer = document.getElementById('streamer').value.trim().toLowerCase();
+      if (streamer) {
+        window.location.href = '/archive?login=' + encodeURIComponent(streamer);
+      } else {
+        window.location.href = '/archive';
       }
     }
   </script>

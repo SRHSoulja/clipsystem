@@ -235,6 +235,27 @@ function init_votes_tables($pdo) {
         $pdo->exec("CREATE INDEX IF NOT EXISTS idx_live_cache_login_views ON clips_live_cache(login, view_count DESC)");
         $pdo->exec("CREATE INDEX IF NOT EXISTS idx_live_cache_login_date ON clips_live_cache(login, created_at DESC)");
 
+        // Self-service archive jobs - tracks archive progress per streamer
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS archive_jobs (
+                id SERIAL PRIMARY KEY,
+                login VARCHAR(64) NOT NULL,
+                broadcaster_id VARCHAR(64),
+                status VARCHAR(20) NOT NULL DEFAULT 'pending',
+                started_by VARCHAR(64),
+                total_windows INTEGER DEFAULT 0,
+                current_window INTEGER DEFAULT 0,
+                clips_found INTEGER DEFAULT 0,
+                clips_inserted INTEGER DEFAULT 0,
+                error_message TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                completed_at TIMESTAMP,
+                UNIQUE(login)
+            )
+        ");
+        $pdo->exec("CREATE INDEX IF NOT EXISTS idx_archive_jobs_status ON archive_jobs(status)");
+
         return true;
     } catch (PDOException $e) {
         error_log("Failed to create tables: " . $e->getMessage());
