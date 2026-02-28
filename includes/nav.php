@@ -143,6 +143,10 @@ $navCurrentPath = $_SERVER['REQUEST_URI'] ?? '/';
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
                         Playlist Manager
                     </a>
+                    <a href="/remote/<?= urlencode($ch['login']) ?>" class="nav-dropdown-item">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="15" rx="2" ry="2"/><polyline points="17 2 12 7 7 2"/></svg>
+                        Remote Control
+                    </a>
                     <?php endif; ?>
                     <?php endforeach; ?>
                     <?php if (count(array_filter($navChannels, fn($c) => $c['role'] === 'mod')) > 0): ?>

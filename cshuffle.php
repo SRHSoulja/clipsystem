@@ -9,6 +9,7 @@
  */
 require_once __DIR__ . '/includes/helpers.php';
 require_once __DIR__ . '/includes/dashboard_auth.php';
+require_once __DIR__ . '/includes/twitch_oauth.php';
 require_once __DIR__ . '/db_config.php';
 
 set_cors_headers();
@@ -16,7 +17,35 @@ handle_options_request();
 header("Content-Type: text/plain; charset=utf-8");
 
 $login = clean_login($_GET["login"] ?? "");
-require_admin_auth();
+
+// Auth: OAuth (own channel, super admin, or mod) + ADMIN_KEY fallback
+$isAuthorized = false;
+$key = $_GET['key'] ?? $_POST['key'] ?? '';
+$adminKey = getenv('ADMIN_KEY') ?: '';
+if ($adminKey !== '' && hash_equals($adminKey, (string)$key)) {
+  $isAuthorized = true;
+}
+if (!$isAuthorized) {
+  $currentUser = getCurrentUser();
+  if ($currentUser) {
+    $oauthUsername = strtolower($currentUser['login']);
+    if ($oauthUsername === $login) {
+      $isAuthorized = true;
+    } elseif (isSuperAdmin()) {
+      $isAuthorized = true;
+    } else {
+      $pdoCheck = get_db_connection();
+      if ($pdoCheck) {
+        try {
+          $stmt = $pdoCheck->prepare("SELECT 1 FROM channel_mods WHERE channel_login = ? AND mod_username = ?");
+          $stmt->execute([$login, $oauthUsername]);
+          if ($stmt->fetch()) { $isAuthorized = true; }
+        } catch (PDOException $e) {}
+      }
+    }
+  }
+}
+if (!$isAuthorized) { http_response_code(403); echo "forbidden"; exit; }
 
 // Get streamer's instance for command isolation
 $auth = new DashboardAuth();
