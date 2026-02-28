@@ -549,7 +549,7 @@
       textEl.style.animation = 'bannerPulse 2s ease-in-out infinite';
       textEl.style.whiteSpace = '';
     } else if (config.animation === 'scroll') {
-      textEl.style.animation = 'bannerScroll 8s linear infinite';
+      textEl.style.animation = `bannerScroll ${config.scroll_speed || 8}s linear infinite`;
       textEl.style.whiteSpace = 'nowrap';
     } else {
       textEl.style.animation = 'none';

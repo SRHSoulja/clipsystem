@@ -321,6 +321,7 @@ switch ($action) {
                     $validated['border_style'] = in_array($config['border_style'] ?? '', $validBorders) ? $config['border_style'] : 'none';
                     $validAnimations = ['none', 'pulse', 'scroll'];
                     $validated['animation'] = in_array($config['animation'] ?? '', $validAnimations) ? $config['animation'] : 'none';
+                    $validated['scroll_speed'] = max(3, min(20, intval($config['scroll_speed'] ?? 8)));
                     $validShapes = ['rectangle', 'rounded', 'pill'];
                     $validated['shape'] = in_array($config['shape'] ?? '', $validShapes) ? $config['shape'] : 'rectangle';
                     $value = json_encode($validated);

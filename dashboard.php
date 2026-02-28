@@ -1059,6 +1059,16 @@ if ($currentUser) {
                             <button class="option-btn" data-value="scroll" onclick="selectBannerOption('bannerAnimationSelector', 'scroll')">Scroll</button>
                         </div>
                     </div>
+
+                    <div id="scrollSpeedGroup" style="display:none;">
+                        <label>Scroll Speed</label>
+                        <div class="slider-group">
+                            <span style="font-size:12px;color:#adadb8;">Fast</span>
+                            <input type="range" id="bannerScrollSpeed" min="3" max="20" value="8" oninput="updateBannerPreview(); debouncedSaveBanner();">
+                            <span style="font-size:12px;color:#adadb8;">Slow</span>
+                            <span class="slider-value" id="bannerScrollSpeedValue">8s</span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -2180,6 +2190,7 @@ if ($currentUser) {
                 position: getSelectedOption('bannerPositionSelector') || 'top',
                 border_style: getSelectedOption('bannerBorderSelector') || 'none',
                 animation: getSelectedOption('bannerAnimationSelector') || 'none',
+                scroll_speed: parseInt(document.getElementById('bannerScrollSpeed').value) || 8,
                 shape: getSelectedOption('bannerShapeSelector') || 'rectangle'
             };
         }
@@ -2191,6 +2202,8 @@ if ($currentUser) {
 
             document.getElementById('bannerOpacityValue').textContent = Math.round(config.bg_opacity * 100) + '%';
             document.getElementById('bannerFontSizeValue').textContent = config.font_size + 'px';
+            document.getElementById('bannerScrollSpeedValue').textContent = config.scroll_speed + 's';
+            document.getElementById('scrollSpeedGroup').style.display = config.animation === 'scroll' ? '' : 'none';
 
             if (!config.enabled) {
                 preview.style.display = 'none';
@@ -2249,7 +2262,7 @@ if ($currentUser) {
             if (config.animation === 'pulse') {
                 previewText.style.animation = 'bannerPulse 2s ease-in-out infinite';
             } else if (config.animation === 'scroll') {
-                previewText.style.animation = 'bannerScroll 8s linear infinite';
+                previewText.style.animation = `bannerScroll ${config.scroll_speed || 8}s linear infinite`;
                 previewText.style.whiteSpace = 'nowrap';
             } else {
                 previewText.style.animation = 'none';
@@ -2280,6 +2293,7 @@ if ($currentUser) {
             document.getElementById('bannerBgColorHex').value = config.bg_color || '#9147ff';
             document.getElementById('bannerOpacity').value = Math.round((config.bg_opacity ?? 0.85) * 100);
             document.getElementById('bannerFontSize').value = config.font_size || 32;
+            document.getElementById('bannerScrollSpeed').value = config.scroll_speed || 8;
             document.getElementById('bannerFontFamily').value = config.font_family || 'Inter';
 
             // Set option selectors without triggering save
