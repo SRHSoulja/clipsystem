@@ -213,6 +213,28 @@ function init_votes_tables($pdo) {
             )
         ");
 
+        // Live clips cache - stores Twitch API results for non-archived streamers
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS clips_live_cache (
+                id SERIAL PRIMARY KEY,
+                login VARCHAR(64) NOT NULL,
+                clip_id VARCHAR(255) NOT NULL,
+                title TEXT,
+                duration INTEGER,
+                created_at TIMESTAMP,
+                view_count INTEGER DEFAULT 0,
+                game_id VARCHAR(64),
+                thumbnail_url TEXT,
+                creator_name VARCHAR(64),
+                url TEXT,
+                cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(login, clip_id)
+            )
+        ");
+        $pdo->exec("CREATE INDEX IF NOT EXISTS idx_live_cache_login_cached ON clips_live_cache(login, cached_at)");
+        $pdo->exec("CREATE INDEX IF NOT EXISTS idx_live_cache_login_views ON clips_live_cache(login, view_count DESC)");
+        $pdo->exec("CREATE INDEX IF NOT EXISTS idx_live_cache_login_date ON clips_live_cache(login, created_at DESC)");
+
         return true;
     } catch (PDOException $e) {
         error_log("Failed to create tables: " . $e->getMessage());

@@ -360,197 +360,231 @@ if ($hasArchivedClips && $pdo) {
     error_log("clip_search db error: " . $e->getMessage());
   }
 } else {
-  // Live mode - fetch from Twitch API
+  // Live mode - fetch from Twitch API with DB cache
   $isLiveMode = true;
   $twitchApi = new TwitchAPI();
-  $liveCursor = null; // For progressive loading
-  $hasMoreClips = false;
+  $liveCacheCount = 0;
+
+  // Default to newest-first for live mode (popular clips dominate otherwise)
+  if (!isset($_GET['sort'])) {
+    $sort = 'date';
+  }
 
   if (!$twitchApi->isConfigured()) {
     $liveError = "Twitch API not configured";
+  } elseif (!$pdo) {
+    $liveError = "Database not available";
   } else {
-    // Fetch clips from Twitch API with date range
-    // Start with 500 clips, user can load more via AJAX
-    $result = $twitchApi->getClipsForStreamer($login, 500, $gameName ?: null, $dateRange);
+    try {
+      // Check if we have a fresh cache (< 1 hour old)
+      $cacheStmt = $pdo->prepare("
+        SELECT COUNT(*) FROM clips_live_cache
+        WHERE login = ? AND cached_at > NOW() - INTERVAL '1 hour'
+      ");
+      $cacheStmt->execute([$login]);
+      $cacheHit = (int)$cacheStmt->fetchColumn() > 0;
 
-    if (isset($result['error'])) {
-      $liveError = $result['error'];
-    } else {
-      $allLiveClips = $result['clips'];
+      if (!$cacheHit) {
+        // Cache miss — fetch from Twitch API using two-wave strategy
+        $result = $twitchApi->getTwoWaveClips($login);
 
-      // Build games list from ALL clips BEFORE filtering (for category dropdown)
-      $gameIds = [];
-      foreach ($allLiveClips as $clip) {
-        $gid = $clip['game_id'] ?? '';
-        if ($gid && !isset($gameIds[$gid])) {
-          $gameIds[$gid] = ['game_id' => $gid, 'name' => '', 'count' => 0];
-        }
-        if ($gid) {
-          $gameIds[$gid]['count']++;
+        if (isset($result['error'])) {
+          $liveError = $result['error'];
+        } else {
+          // Clear old cache for this streamer
+          $pdo->prepare("DELETE FROM clips_live_cache WHERE login = ?")->execute([$login]);
+
+          // Batch insert into cache
+          if (!empty($result['clips'])) {
+            $insertStmt = $pdo->prepare("
+              INSERT INTO clips_live_cache (login, clip_id, title, duration, created_at, view_count, game_id, thumbnail_url, creator_name, url, cached_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+              ON CONFLICT (login, clip_id) DO UPDATE SET
+                title = EXCLUDED.title,
+                view_count = EXCLUDED.view_count,
+                thumbnail_url = EXCLUDED.thumbnail_url,
+                cached_at = NOW()
+            ");
+            foreach ($result['clips'] as $clip) {
+              $insertStmt->execute([
+                $login,
+                $clip['clip_id'],
+                $clip['title'] ?? '',
+                (int)($clip['duration'] ?? 0),
+                $clip['created_at'] ?? null,
+                (int)($clip['view_count'] ?? 0),
+                $clip['game_id'] ?? null,
+                $clip['thumbnail_url'] ?? null,
+                $clip['creator_name'] ?? '',
+                $clip['url'] ?? '',
+              ]);
+            }
+          }
         }
       }
-      $games = array_values($gameIds);
 
-      // Try to get game names from cache first, then Twitch API for missing ones
-      if (!empty($games)) {
-        $gameIdList = array_column($games, 'game_id');
-        $gameNames = [];
+      // Probabilistic stale cache cleanup (1 in 50 requests)
+      if (mt_rand(1, 50) === 1) {
+        try {
+          $pdo->exec("DELETE FROM clips_live_cache WHERE cached_at < NOW() - INTERVAL '24 hours'");
+        } catch (PDOException $e) {
+          // Non-critical, ignore
+        }
+      }
 
-        // Try database cache first
-        if ($pdo) {
-          try {
-            $placeholders = implode(',', array_fill(0, count($gameIdList), '?'));
-            $stmt = $pdo->prepare("SELECT game_id, name FROM games_cache WHERE game_id IN ($placeholders)");
-            $stmt->execute($gameIdList);
-            $gameNames = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
-          } catch (PDOException $e) {
-            // Ignore - will try API
+      // Query from cache if no error
+      if (!$liveError) {
+        // Build WHERE conditions
+        $where = ["login = ?"];
+        $params = [$login];
+
+        // Title search
+        if (!empty($queryWords)) {
+          foreach ($queryWords as $word) {
+            $where[] = "title ILIKE ?";
+            $params[] = '%' . $word . '%';
           }
         }
 
-        // Find which game IDs are missing from cache
-        $missingIds = array_filter($gameIdList, function($id) use ($gameNames) {
-          return !isset($gameNames[$id]);
-        });
+        // Clipper filter
+        if ($clipper) {
+          $where[] = "creator_name ILIKE ?";
+          $params[] = '%' . $clipper . '%';
+        }
 
-        // Fetch missing game names from Twitch API
-        if (!empty($missingIds)) {
-          $apiGames = $twitchApi->getGamesByIds($missingIds);
-          foreach ($apiGames as $gid => $gameInfo) {
-            $gameNames[$gid] = $gameInfo['name'];
+        // Game filter
+        if ($gameId) {
+          $where[] = "game_id = ?";
+          $params[] = $gameId;
+        }
 
-            // Cache to database for future use
-            if ($pdo) {
+        // Duration filter
+        if ($minDuration === 'short') {
+          $where[] = "duration < 30";
+        } elseif ($minDuration === 'medium') {
+          $where[] = "duration >= 30 AND duration <= 60";
+        } elseif ($minDuration === 'long') {
+          $where[] = "duration > 60";
+        }
+
+        // Min views filter
+        if ($minViews > 0) {
+          $where[] = "view_count >= ?";
+          $params[] = $minViews;
+        }
+
+        $whereClause = implode(' AND ', $where);
+
+        // Sort
+        switch ($sort) {
+          case 'date':    $orderBy = "created_at DESC NULLS LAST"; break;
+          case 'oldest':  $orderBy = "created_at ASC NULLS LAST"; break;
+          case 'title':   $orderBy = "title ASC"; break;
+          case 'titlez':  $orderBy = "title DESC"; break;
+          case 'trending':
+            $orderBy = "CASE WHEN created_at IS NOT NULL
+              THEN view_count::float / GREATEST(1, EXTRACT(EPOCH FROM (NOW() - created_at)) / 86400)
+              ELSE 0 END DESC";
+            break;
+          default:        $orderBy = "view_count DESC"; break;
+        }
+
+        // Get total count
+        $countStmt = $pdo->prepare("SELECT COUNT(*) FROM clips_live_cache WHERE $whereClause");
+        $countStmt->execute($params);
+        $totalCount = (int)$countStmt->fetchColumn();
+        $totalPages = ceil($totalCount / $perPage);
+        $offset = ($page - 1) * $perPage;
+
+        // Get total cached clips count (unfiltered)
+        $totalCacheStmt = $pdo->prepare("SELECT COUNT(*) FROM clips_live_cache WHERE login = ?");
+        $totalCacheStmt->execute([$login]);
+        $liveCacheCount = (int)$totalCacheStmt->fetchColumn();
+
+        // Fetch page
+        $dataStmt = $pdo->prepare("
+          SELECT clip_id, title, view_count, created_at, duration, game_id, thumbnail_url, creator_name
+          FROM clips_live_cache
+          WHERE $whereClause
+          ORDER BY $orderBy
+          LIMIT ? OFFSET ?
+        ");
+        $dataParams = array_merge($params, [$perPage, $offset]);
+        $dataStmt->execute($dataParams);
+        $rows = $dataStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        foreach ($rows as $row) {
+          $matches[] = [
+            'seq' => 0,
+            'clip_id' => $row['clip_id'],
+            'title' => $row['title'],
+            'view_count' => (int)$row['view_count'],
+            'created_at' => $row['created_at'],
+            'duration' => (int)$row['duration'],
+            'game_id' => $row['game_id'],
+            'thumbnail_url' => $row['thumbnail_url'],
+            'creator_name' => $row['creator_name'],
+          ];
+        }
+
+        // Build games list from cache
+        $gamesStmt = $pdo->prepare("
+          SELECT game_id, COUNT(*) as cnt FROM clips_live_cache
+          WHERE login = ? AND game_id IS NOT NULL AND game_id != ''
+          GROUP BY game_id ORDER BY cnt DESC
+        ");
+        $gamesStmt->execute([$login]);
+        $gameRows = $gamesStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $gameIdList = array_column($gameRows, 'game_id');
+        $gameNames = [];
+
+        // Resolve game names via cache + API
+        if (!empty($gameIdList)) {
+          $placeholders = implode(',', array_fill(0, count($gameIdList), '?'));
+          $gnStmt = $pdo->prepare("SELECT game_id, name FROM games_cache WHERE game_id IN ($placeholders)");
+          $gnStmt->execute($gameIdList);
+          $gameNames = $gnStmt->fetchAll(PDO::FETCH_KEY_PAIR);
+
+          $missingIds = array_filter($gameIdList, function($id) use ($gameNames) {
+            return !isset($gameNames[$id]);
+          });
+
+          if (!empty($missingIds)) {
+            $apiGames = $twitchApi->getGamesByIds(array_values($missingIds));
+            foreach ($apiGames as $gid => $gameInfo) {
+              $gameNames[$gid] = $gameInfo['name'];
               try {
-                $insertStmt = $pdo->prepare("INSERT INTO games_cache (game_id, name) VALUES (?, ?) ON CONFLICT (game_id) DO UPDATE SET name = EXCLUDED.name");
-                $insertStmt->execute([$gid, $gameInfo['name']]);
+                $pdo->prepare("INSERT INTO games_cache (game_id, name) VALUES (?, ?) ON CONFLICT (game_id) DO UPDATE SET name = EXCLUDED.name")
+                  ->execute([$gid, $gameInfo['name']]);
               } catch (PDOException $e) {
-                // Ignore cache write errors
+                // Ignore
               }
             }
           }
         }
 
-        // Apply names to games list
-        foreach ($games as &$g) {
-          if (isset($gameNames[$g['game_id']])) {
-            $g['name'] = $gameNames[$g['game_id']];
-          } else {
-            $g['name'] = "Unknown Game";
-          }
+        foreach ($gameRows as $gr) {
+          $games[] = [
+            'game_id' => $gr['game_id'],
+            'name' => $gameNames[$gr['game_id']] ?? 'Unknown Game',
+            'count' => (int)$gr['cnt'],
+          ];
         }
-        unset($g);
-      }
 
-      // Sort games by count
-      usort($games, function($a, $b) {
-        return $b['count'] - $a['count'];
-      });
-
-      // Set currentGameName for active filter display
-      if ($gameId) {
-        foreach ($games as $g) {
-          if ($g['game_id'] === $gameId) {
-            $currentGameName = $g['name'] ?: "Game $gameId";
-            break;
-          }
-        }
-      }
-
-      // Apply title filter if query provided
-      if (!empty($queryWords)) {
-        $allLiveClips = array_filter($allLiveClips, function($clip) use ($queryWords) {
-          $title = strtolower($clip['title'] ?? '');
-          foreach ($queryWords as $word) {
-            if (stripos($title, $word) === false) {
-              return false;
+        // Set currentGameName for active filter display
+        if ($gameId) {
+          foreach ($games as $g) {
+            if ($g['game_id'] === $gameId) {
+              $currentGameName = $g['name'] ?: "Game $gameId";
+              break;
             }
           }
-          return true;
-        });
-        $allLiveClips = array_values($allLiveClips);
-      }
-
-      // Apply clipper filter if provided (partial match)
-      if ($clipper) {
-        $allLiveClips = array_filter($allLiveClips, function($clip) use ($clipper) {
-          return stripos($clip['creator_name'] ?? '', $clipper) !== false;
-        });
-        $allLiveClips = array_values($allLiveClips);
-      }
-
-      // Apply game_id filter if provided (for live mode category filtering)
-      if ($gameId) {
-        $allLiveClips = array_filter($allLiveClips, function($clip) use ($gameId) {
-          return ($clip['game_id'] ?? '') === $gameId;
-        });
-        $allLiveClips = array_values($allLiveClips);
-      }
-
-      // Apply duration filter
-      if ($minDuration) {
-        $allLiveClips = array_filter($allLiveClips, function($clip) use ($minDuration) {
-          $dur = (float)($clip['duration'] ?? 0);
-          if ($minDuration === 'short') return $dur < 30;
-          if ($minDuration === 'medium') return $dur >= 30 && $dur <= 60;
-          if ($minDuration === 'long') return $dur > 60;
-          return true;
-        });
-        $allLiveClips = array_values($allLiveClips);
-      }
-
-      // Apply minimum views filter
-      if ($minViews > 0) {
-        $allLiveClips = array_filter($allLiveClips, function($clip) use ($minViews) {
-          return ($clip['view_count'] ?? 0) >= $minViews;
-        });
-        $allLiveClips = array_values($allLiveClips);
-      }
-
-      // Sort clips
-      usort($allLiveClips, function($a, $b) use ($sort) {
-        switch ($sort) {
-          case 'date':
-            return strtotime($b['created_at'] ?? 0) - strtotime($a['created_at'] ?? 0);
-          case 'oldest':
-            return strtotime($a['created_at'] ?? 0) - strtotime($b['created_at'] ?? 0);
-          case 'title':
-            return strcasecmp($a['title'] ?? '', $b['title'] ?? '');
-          case 'titlez':
-            return strcasecmp($b['title'] ?? '', $a['title'] ?? '');
-          case 'trending':
-            // Trending = views per day (higher = more trending)
-            $nowTs = time();
-            $ageA = max(1, ($nowTs - strtotime($a['created_at'] ?? 'now')) / 86400);
-            $ageB = max(1, ($nowTs - strtotime($b['created_at'] ?? 'now')) / 86400);
-            $trendA = ($a['view_count'] ?? 0) / $ageA;
-            $trendB = ($b['view_count'] ?? 0) / $ageB;
-            return $trendB <=> $trendA;
-          default: // views
-            return ($b['view_count'] ?? 0) - ($a['view_count'] ?? 0);
         }
-      });
-
-      // Paginate
-      $totalCount = count($allLiveClips);
-      $totalPages = ceil($totalCount / $perPage);
-      $offset = ($page - 1) * $perPage;
-      $pagedClips = array_slice($allLiveClips, $offset, $perPage);
-
-      // Convert to matches format (similar to DB format)
-      foreach ($pagedClips as $clip) {
-        $matches[] = [
-          'seq' => 0, // No seq for live clips
-          'clip_id' => $clip['clip_id'],
-          'title' => $clip['title'],
-          'view_count' => $clip['view_count'],
-          'created_at' => $clip['created_at'],
-          'duration' => $clip['duration'],
-          'game_id' => $clip['game_id'],
-          'thumbnail_url' => $clip['thumbnail_url'],
-          'creator_name' => $clip['creator_name'],
-        ];
       }
+    } catch (PDOException $e) {
+      error_log("clip_search live cache error: " . $e->getMessage());
+      $liveError = "Database error loading clips";
     }
   }
 }
@@ -1248,21 +1282,7 @@ if ($hasArchivedClips && $pdo) {
         </select>
       </div>
 
-      <?php if ($isLiveMode): ?>
-      <div class="filter-group">
-        <label>Date Range</label>
-        <select name="range">
-          <option value="week" <?= $dateRange === 'week' ? 'selected' : '' ?>>Last Week</option>
-          <option value="month" <?= $dateRange === 'month' ? 'selected' : '' ?>>Last Month</option>
-          <option value="3months" <?= $dateRange === '3months' ? 'selected' : '' ?>>Last 3 Months</option>
-          <option value="6months" <?= $dateRange === '6months' ? 'selected' : '' ?>>Last 6 Months</option>
-          <option value="year" <?= $dateRange === 'year' ? 'selected' : '' ?>>Last Year</option>
-          <option value="2years" <?= $dateRange === '2years' ? 'selected' : '' ?>>Last 2 Years</option>
-          <option value="3years" <?= $dateRange === '3years' ? 'selected' : '' ?>>Last 3 Years</option>
-          <option value="all" <?= $dateRange === 'all' ? 'selected' : '' ?>>All Time</option>
-        </select>
-      </div>
-      <?php endif; ?>
+      <?php /* Date range dropdown removed for live mode — two-wave fetch covers recent + popular automatically */ ?>
 
       <button type="submit" class="filter-btn">Search</button>
       <?php if ($query || $gameId || $gameName || $clipper || $minDuration || $minViews > 0): ?>
@@ -1333,9 +1353,9 @@ if ($hasArchivedClips && $pdo) {
 
     <?php if ($isLiveMode && !$liveError): ?>
     <div class="info-msg" style="background: linear-gradient(90deg, rgba(145,71,255,0.2), rgba(145,71,255,0.1)); border-color: #9147ff;">
-      <strong>Live from Twitch</strong> - Showing clips from <?= $dateRange === 'all' ? 'all time' : 'the last ' . str_replace(['week', 'month', '3months', '6months', 'year', '2years', '3years'], ['week', 'month', '3 months', '6 months', 'year', '2 years', '3 years'], $dateRange) ?>.
+      <strong>Live from Twitch</strong> — cached <?= $liveCacheCount ?> clips (refreshes hourly).
       <span style="color: #adadb8; font-size: 12px; display: block; margin-top: 5px;">
-        Showing <span id="liveClipCount"><?= $totalCount ?></span> clips. Use filters above to narrow results. No voting or clip numbers in live mode.
+        Showing <?= $totalCount ?> clips<?= $totalCount < $liveCacheCount ? ' (filtered)' : '' ?>. Use filters above to narrow results. No voting or clip numbers in live mode.
       </span>
     </div>
     <?php elseif ($liveError): ?>
@@ -1470,14 +1490,7 @@ if ($hasArchivedClips && $pdo) {
       <?php endforeach; ?>
     </div>
 
-    <?php if ($isLiveMode && $totalCount >= 500): ?>
-    <!-- Load More for live mode (Twitch API returns more clips) -->
-    <div class="load-more-container">
-      <button type="button" class="load-more-btn" id="loadMoreBtn" onclick="loadMoreClips()">
-        Load More Clips
-      </button>
-    </div>
-    <?php endif; ?>
+    <?php /* Load More removed for live mode — all clips are cached and pagination is SQL-based */ ?>
 
     <?php if ($totalPages > 1): ?>
     <div class="pagination">
@@ -1491,7 +1504,6 @@ if ($hasArchivedClips && $pdo) {
         if ($minDuration) $baseParams['duration'] = $minDuration;
         if ($minViews > 0) $baseParams['min_views'] = $minViews;
         if ($perPage !== 100) $baseParams['per_page'] = $perPage;
-        if ($isLiveMode && $dateRange !== 'year') $baseParams['range'] = $dateRange;
 
         function pageUrl($params, $pageNum) {
           global $login;
@@ -1640,203 +1652,7 @@ if ($hasArchivedClips && $pdo) {
   </script>
   <?php endif; ?>
 
-  <?php if ($isLiveMode && !$liveError && !empty($matches)): ?>
-  <script>
-    // Live mode: Load More functionality
-    const liveConfig = {
-      streamer: <?= json_encode($login) ?>,
-      dateRange: <?= json_encode($dateRange) ?>,
-      query: <?= json_encode($query) ?>,
-      clipper: <?= json_encode($clipper) ?>,
-      gameId: <?= json_encode($gameId) ?>,
-      minDuration: <?= json_encode($minDuration) ?>,
-      minViews: <?= (int)$minViews ?>,
-      sort: <?= json_encode($sort) ?>,
-      cursor: null, // Will be set when we start loading more
-      loadedClips: new Set(), // Track clip IDs to avoid duplicates
-      totalDisplayed: <?= $totalCount ?>
-    };
-
-    // Track already-loaded clip IDs
-    document.querySelectorAll('.clip-card .clip-thumb').forEach(el => {
-      const url = el.href;
-      const clipId = url.split('/').pop();
-      if (clipId) liveConfig.loadedClips.add(clipId);
-    });
-
-    function formatDuration(seconds) {
-      const mins = Math.floor(seconds / 60);
-      const secs = Math.floor(seconds % 60);
-      return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    }
-
-    function formatDate(dateStr) {
-      const date = new Date(dateStr);
-      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    }
-
-    function formatViews(num) {
-      return num.toLocaleString();
-    }
-
-    function createClipCard(clip) {
-      const thumbUrl = clip.thumbnail_url || `https://clips-media-assets2.twitch.tv/${clip.clip_id}-preview-480x272.jpg`;
-      const twitchUrl = `https://clips.twitch.tv/${encodeURIComponent(clip.clip_id)}`;
-      const duration = clip.duration ? formatDuration(clip.duration) : '';
-
-      return `
-        <div class="clip-card">
-          <a href="${twitchUrl}" target="_blank" class="clip-thumb">
-            <img src="${thumbUrl}" alt="" loading="lazy"
-                 onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 480 272%22><rect fill=%22%2326262c%22 width=%22480%22 height=%22272%22/><text x=%22240%22 y=%22140%22 fill=%22%23666%22 text-anchor=%22middle%22>No Preview</text></svg>'">
-            ${duration ? `<span class="clip-duration">${duration}</span>` : ''}
-            <span class="play-overlay"></span>
-          </a>
-          <div class="clip-info">
-            <div class="clip-title">${clip.title ? clip.title.replace(/</g, '&lt;').replace(/>/g, '&gt;') : '(no title)'}</div>
-            <div class="clip-meta">
-              <span class="clip-views">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
-                ${formatViews(clip.view_count || 0)}
-              </span>
-              ${clip.created_at ? `<span class="clip-date">${formatDate(clip.created_at)}</span>` : ''}
-            </div>
-            <div class="clip-meta">
-              ${clip.creator_name ? `<a href="/search/${encodeURIComponent(liveConfig.streamer)}?clipper=${encodeURIComponent(clip.creator_name)}" class="clip-clipper" title="View all clips by ${clip.creator_name.replace(/"/g, '&quot;')}">&#9986; ${clip.creator_name.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</a>` : ''}
-            </div>
-            ${clip.game_name ? `<div class="clip-game-row"><span class="clip-game" title="${clip.game_name.replace(/"/g, '&quot;')}">${clip.game_name.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span></div>` : ''}
-            <div class="clip-votes">
-              <button type="button" class="dl-btn" data-clip-id="${clip.clip_id}" data-title="${(clip.title || 'clip').replace(/"/g, '&quot;')}" data-seq="0" title="Download clip">
-                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
-              </button>
-            </div>
-          </div>
-        </div>
-      `;
-    }
-
-    function filterClip(clip) {
-      // Skip duplicates
-      if (liveConfig.loadedClips.has(clip.clip_id)) return false;
-
-      // Apply title search filter
-      if (liveConfig.query) {
-        const words = liveConfig.query.toLowerCase().split(/\s+/).filter(w => w.length >= 2);
-        const title = (clip.title || '').toLowerCase();
-        for (const word of words) {
-          if (!title.includes(word)) return false;
-        }
-      }
-
-      // Apply clipper filter
-      if (liveConfig.clipper) {
-        if (!(clip.creator_name || '').toLowerCase().includes(liveConfig.clipper.toLowerCase())) return false;
-      }
-
-      // Apply game filter
-      if (liveConfig.gameId && clip.game_id !== liveConfig.gameId) return false;
-
-      // Apply duration filter
-      if (liveConfig.minDuration) {
-        const dur = clip.duration || 0;
-        if (liveConfig.minDuration === 'short' && dur >= 30) return false;
-        if (liveConfig.minDuration === 'medium' && (dur < 30 || dur > 60)) return false;
-        if (liveConfig.minDuration === 'long' && dur <= 60) return false;
-      }
-
-      // Apply min views filter
-      if (liveConfig.minViews > 0 && (clip.view_count || 0) < liveConfig.minViews) return false;
-
-      return true;
-    }
-
-    function sortClips(clips) {
-      const sort = liveConfig.sort;
-      return clips.sort((a, b) => {
-        switch (sort) {
-          case 'date':
-            return new Date(b.created_at || 0) - new Date(a.created_at || 0);
-          case 'oldest':
-            return new Date(a.created_at || 0) - new Date(b.created_at || 0);
-          case 'title':
-            return (a.title || '').localeCompare(b.title || '');
-          case 'titlez':
-            return (b.title || '').localeCompare(a.title || '');
-          case 'trending':
-            const now = Date.now();
-            const ageA = Math.max(1, (now - new Date(a.created_at || now)) / 86400000);
-            const ageB = Math.max(1, (now - new Date(b.created_at || now)) / 86400000);
-            return ((b.view_count || 0) / ageB) - ((a.view_count || 0) / ageA);
-          default: // views
-            return (b.view_count || 0) - (a.view_count || 0);
-        }
-      });
-    }
-
-    async function loadMoreClips() {
-      const btn = document.getElementById('loadMoreBtn');
-      if (!btn) return;
-
-      btn.disabled = true;
-      btn.classList.add('loading');
-      btn.textContent = 'Loading...';
-
-      try {
-        const params = new URLSearchParams({
-          login: liveConfig.streamer,
-          range: liveConfig.dateRange,
-          batch: 100
-        });
-        if (liveConfig.cursor) params.set('cursor', liveConfig.cursor);
-
-        const response = await fetch(`/api/live_clips.php?${params}`);
-        const data = await response.json();
-
-        if (!data.success) {
-          throw new Error(data.error || 'Failed to load clips');
-        }
-
-        // Filter and sort new clips
-        const newClips = data.clips.filter(filterClip);
-        sortClips(newClips);
-
-        // Add to grid
-        const grid = document.querySelector('.results-grid');
-        if (grid && newClips.length > 0) {
-          for (const clip of newClips) {
-            liveConfig.loadedClips.add(clip.clip_id);
-            grid.insertAdjacentHTML('beforeend', createClipCard(clip));
-            liveConfig.totalDisplayed++;
-          }
-
-          // Update counter
-          const counter = document.getElementById('liveClipCount');
-          if (counter) counter.textContent = liveConfig.totalDisplayed;
-        }
-
-        // Update cursor for next batch
-        liveConfig.cursor = data.cursor;
-
-        // Hide button if no more clips
-        if (!data.has_more) {
-          btn.textContent = 'All Clips Loaded';
-          btn.disabled = true;
-          btn.classList.remove('loading');
-        } else {
-          btn.disabled = false;
-          btn.classList.remove('loading');
-          btn.textContent = 'Load More Clips';
-        }
-
-      } catch (error) {
-        console.error('Load more failed:', error);
-        btn.disabled = false;
-        btn.classList.remove('loading');
-        btn.textContent = 'Error - Try Again';
-      }
-    }
-  </script>
-  <?php endif; ?>
+  <?php /* Load More JS removed — live mode now uses DB cache with SQL pagination */ ?>
 
   <?php if ($canManageClips): ?>
   <script>

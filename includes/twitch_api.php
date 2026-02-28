@@ -377,6 +377,49 @@ class TwitchAPI {
   }
 
   /**
+   * Two-wave clip fetch: recent (7 days) + popular (all time), merged & deduped.
+   * Ensures fresh clips appear even for huge channels where popular clips dominate.
+   *
+   * @param string $username Twitch username
+   * @param int $recentLimit Max clips for the "recent" wave (last 7 days)
+   * @param int $popularLimit Max clips for the "popular" wave (all time)
+   * @return array ['broadcaster_id' => ..., 'clips' => [...], 'count' => ...]
+   */
+  public function getTwoWaveClips(string $username, int $recentLimit = 100, int $popularLimit = 500): array {
+    $broadcasterId = $this->getBroadcasterId($username);
+    if (!$broadcasterId) {
+      return ['error' => 'Streamer not found', 'clips' => []];
+    }
+
+    // Wave 1: Recent clips (last 7 days) — guarantees fresh content
+    $now = new DateTime('now', new DateTimeZone('UTC'));
+    $recentStart = (clone $now)->modify('-7 days')->format('Y-m-d\TH:i:s\Z');
+    $recentClips = $this->getAllClips($broadcasterId, $recentLimit, null, $recentStart);
+
+    // Wave 2: Popular clips (all time) — the viral/classic clips
+    $popularClips = $this->getAllClips($broadcasterId, $popularLimit);
+
+    // Merge: recent clips take precedence (fresher view counts)
+    $merged = [];
+    foreach ($recentClips as $clip) {
+      $merged[$clip['clip_id']] = $clip;
+    }
+    foreach ($popularClips as $clip) {
+      if (!isset($merged[$clip['clip_id']])) {
+        $merged[$clip['clip_id']] = $clip;
+      }
+    }
+
+    $clips = array_values($merged);
+
+    return [
+      'broadcaster_id' => $broadcasterId,
+      'clips' => $clips,
+      'count' => count($clips),
+    ];
+  }
+
+  /**
    * Get clips with pagination cursor support (for AJAX deep search)
    *
    * @param string $username Twitch username
