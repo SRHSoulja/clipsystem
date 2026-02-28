@@ -1064,6 +1064,32 @@ if ($currentUser) {
                             <span class="slider-value" id="bannerScrollSpeedValue">8s</span>
                         </div>
                     </div>
+
+                    <div class="full-width" style="border-top:1px solid #2a2a2d;padding-top:16px;margin-top:8px;">
+                        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="bannerTimedEnabled" onchange="updateBannerPreview(); debouncedSaveBanner();">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <span>Timed Display <span style="color:#666;font-size:12px;">Show banner on an interval instead of always</span></span>
+                        </div>
+                    </div>
+
+                    <div id="timedDisplayGroup" style="display:none;">
+                        <label>Show For</label>
+                        <div class="slider-group">
+                            <input type="range" id="bannerShowDuration" min="5" max="120" step="5" value="15" oninput="updateBannerPreview(); debouncedSaveBanner();">
+                            <span class="slider-value" id="bannerShowDurationValue">15s</span>
+                        </div>
+                    </div>
+
+                    <div id="timedIntervalGroup" style="display:none;">
+                        <label>Every</label>
+                        <div class="slider-group">
+                            <input type="range" id="bannerInterval" min="1" max="30" value="5" oninput="updateBannerPreview(); debouncedSaveBanner();">
+                            <span class="slider-value" id="bannerIntervalValue">5 min</span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -2186,7 +2212,10 @@ if ($currentUser) {
                 border_style: getSelectedOption('bannerBorderSelector') || 'none',
                 animation: getSelectedOption('bannerAnimationSelector') || 'none',
                 scroll_speed: 23 - (parseInt(document.getElementById('bannerScrollSpeed').value) || 15),
-                shape: getSelectedOption('bannerShapeSelector') || 'rectangle'
+                shape: getSelectedOption('bannerShapeSelector') || 'rectangle',
+                timed_enabled: document.getElementById('bannerTimedEnabled').checked,
+                show_duration: parseInt(document.getElementById('bannerShowDuration').value) || 15,
+                interval: parseInt(document.getElementById('bannerInterval').value) || 5
             };
         }
 
@@ -2199,6 +2228,11 @@ if ($currentUser) {
             document.getElementById('bannerFontSizeValue').textContent = config.font_size + 'px';
             document.getElementById('bannerScrollSpeedValue').textContent = config.scroll_speed + 's';
             document.getElementById('scrollSpeedGroup').style.display = config.animation === 'scroll' ? '' : 'none';
+            document.getElementById('bannerShowDurationValue').textContent = config.show_duration + 's';
+            document.getElementById('bannerIntervalValue').textContent = config.interval + ' min';
+            const showTimed = config.timed_enabled;
+            document.getElementById('timedDisplayGroup').style.display = showTimed ? '' : 'none';
+            document.getElementById('timedIntervalGroup').style.display = showTimed ? '' : 'none';
 
             if (!config.enabled) {
                 preview.style.display = 'none';
@@ -2301,6 +2335,9 @@ if ($currentUser) {
             document.getElementById('bannerFontSize').value = config.font_size || 32;
             document.getElementById('bannerScrollSpeed').value = 23 - (config.scroll_speed || 8);
             document.getElementById('bannerFontFamily').value = config.font_family || 'Inter';
+            document.getElementById('bannerTimedEnabled').checked = !!config.timed_enabled;
+            document.getElementById('bannerShowDuration').value = config.show_duration || 15;
+            document.getElementById('bannerInterval').value = config.interval || 5;
 
             // Set option selectors without triggering save
             ['bannerPositionSelector', 'bannerBorderSelector', 'bannerAnimationSelector', 'bannerShapeSelector'].forEach(id => {

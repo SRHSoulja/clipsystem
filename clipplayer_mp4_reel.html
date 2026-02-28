@@ -472,17 +472,53 @@ window.addEventListener('beforeunload', e => { e.preventDefault(); });
   // Banner overlay
   let currentBannerJSON = null;
   let bannerFontLoaded = null;
+  let bannerTimerId = null;
+  let bannerTimedState = null; // tracks timed_enabled + show_duration + interval
+
+  function setupBannerTimer(config, overlay) {
+    const key = `${config.timed_enabled}|${config.show_duration}|${config.interval}`;
+    if (key === bannerTimedState) return;
+    bannerTimedState = key;
+
+    if (bannerTimerId) { clearInterval(bannerTimerId); bannerTimerId = null; }
+
+    if (!config.timed_enabled) {
+      overlay.style.display = 'flex';
+      overlay.style.opacity = '1';
+      return;
+    }
+
+    const showMs = (config.show_duration || 15) * 1000;
+    const intervalMs = (config.interval || 5) * 60 * 1000;
+    const cycleMs = showMs + intervalMs;
+
+    // Start visible
+    overlay.style.display = 'flex';
+    overlay.style.opacity = '1';
+    overlay.style.transition = 'opacity 0.5s ease';
+    let start = Date.now();
+
+    bannerTimerId = setInterval(() => {
+      const elapsed = (Date.now() - start) % cycleMs;
+      if (elapsed < showMs) {
+        overlay.style.display = 'flex';
+        overlay.style.opacity = '1';
+      } else {
+        overlay.style.opacity = '0';
+      }
+    }, 250);
+  }
 
   function applyBannerConfig(config) {
     const overlay = document.getElementById('bannerOverlay');
     const textEl = document.getElementById('bannerText');
-    console.log('[Banner] applyBannerConfig called', config, 'overlay:', !!overlay, 'textEl:', !!textEl);
     if (!overlay || !textEl) return;
 
     if (!config || !config.enabled) {
       overlay.style.display = 'none';
       currentBannerJSON = null;
-      console.log('[Banner] disabled - config.enabled:', config?.enabled);
+      if (bannerTimerId) { clearInterval(bannerTimerId); bannerTimerId = null; }
+      bannerTimedState = null;
       return;
     }
 
@@ -490,6 +526,7 @@ window.addEventListener('beforeunload', e => { e.preventDefault(); });
     if (configStr === currentBannerJSON) return;
     currentBannerJSON = configStr;
 
+    // Apply all visual styles first
     overlay.style.display = 'flex';
     textEl.textContent = config.text || 'Be right back!';
     console.log('[Banner] SHOWING banner -', config.text, 'position:', config.position, 'display:', overlay.style.display);
@@ -564,6 +601,9 @@ window.addEventListener('beforeunload', e => { e.preventDefault(); });
       textEl.style.animation = 'none';
       textEl.style.whiteSpace = '';
     }
+
+    // Handle timed display cycling
+    setupBannerTimer(config, overlay);
   }
 
   async function pollHudPosition() {

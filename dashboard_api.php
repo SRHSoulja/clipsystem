@@ -324,6 +324,9 @@ switch ($action) {
                     $validated['scroll_speed'] = max(3, min(20, intval($config['scroll_speed'] ?? 8)));
                     $validShapes = ['rectangle', 'rounded', 'pill'];
                     $validated['shape'] = in_array($config['shape'] ?? '', $validShapes) ? $config['shape'] : 'rectangle';
+                    $validated['timed_enabled'] = !empty($config['timed_enabled']);
+                    $validated['show_duration'] = max(5, min(120, intval($config['show_duration'] ?? 15)));
+                    $validated['interval'] = max(1, min(30, intval($config['interval'] ?? 5)));
                     $value = json_encode($validated);
                     error_log("Banner save - final value: " . $value);
                     break;
