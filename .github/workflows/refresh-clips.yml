@@ -1,0 +1,28 @@
+name: Auto Refresh Clips
+
+on:
+  schedule:
+    # Run every 4 hours
+    - cron: '0 */4 * * *'
+  workflow_dispatch: # Allow manual trigger from GitHub Actions tab
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger clip refresh
+        run: |
+          response=$(curl -s -w "\n%{http_code}" \
+            "https://clips.gmgnrepeat.com/cron_refresh.php?key=${{ secrets.ADMIN_KEY }}")
+
+          http_code=$(echo "$response" | tail -1)
+          body=$(echo "$response" | head -n -1)
+
+          echo "HTTP Status: $http_code"
+          echo "Response: $body"
+
+          if [ "$http_code" != "200" ]; then
+            echo "::error::Refresh failed with HTTP $http_code"
+            exit 1
+          fi
