@@ -73,9 +73,8 @@ function process_all_windows($pdo, $login, $job) {
   $broadcasterId = $job['broadcaster_id'];
   $totalWindows = (int)$job['total_windows'];
   $currentWindow = (int)$job['current_window'];
-  $years = 5;
   $windowSec = 30 * 86400;
-  $archiveStart = time() - ($years * 365 * 86400);
+  $archiveStart = !empty($job['archive_start']) ? strtotime($job['archive_start']) : time() - (5 * 365 * 86400);
 
   $clientId = getenv('TWITCH_CLIENT_ID') ?: '';
   $twitchApi = new TwitchAPI();
@@ -351,32 +350,38 @@ case 'start':
     json_out(["error" => "rate_limited", "message" => "Archive queue is full. Try again in a few minutes."]);
   }
 
-  // Resolve broadcaster ID
+  // Resolve broadcaster info (ID + account created date)
   $twitchApi = new TwitchAPI();
   if (!$twitchApi->isConfigured()) { json_err("Twitch API not configured", 500); }
-  $broadcasterId = $twitchApi->getBroadcasterId($login);
-  if (!$broadcasterId) { json_out(["error" => "streamer_not_found", "message" => "Streamer '$login' not found on Twitch."]); }
+  $userInfo = $twitchApi->getUserInfo($login);
+  if (!$userInfo || empty($userInfo['id'])) { json_out(["error" => "streamer_not_found", "message" => "Streamer '$login' not found on Twitch."]); }
+  $broadcasterId = $userInfo['id'];
 
-  // Calculate windows (5 years, 30-day chunks)
-  $totalWindows = (int)ceil((5 * 365) / 30);
+  // Calculate windows from account creation date (not a hardcoded 5 years)
+  $createdAt = strtotime($userInfo['created_at'] ?? '2020-01-01');
+  $archiveStart = max($createdAt, strtotime('2016-05-26')); // Clips API launched May 2016
+  $daysSinceCreation = max(1, (int)ceil((time() - $archiveStart) / 86400));
+  $totalWindows = (int)ceil($daysSinceCreation / 30);
+
+  $archiveStartDate = gmdate('Y-m-d\TH:i:s\Z', $archiveStart);
 
   // Upsert job (keep current_window if resuming)
   if ($job) {
     $stmt = $pdo->prepare("
       UPDATE archive_jobs SET broadcaster_id = ?, status = 'pending', started_by = ?,
-        total_windows = ?, updated_at = NOW(), error_message = NULL
+        total_windows = ?, archive_start = ?, updated_at = NOW(), error_message = NULL
       WHERE login = ?
     ");
-    $stmt->execute([$broadcasterId, $user['login'], $totalWindows, $login]);
+    $stmt->execute([$broadcasterId, $user['login'], $totalWindows, $archiveStartDate, $login]);
   } else {
     $stmt = $pdo->prepare("
-      INSERT INTO archive_jobs (login, broadcaster_id, status, started_by, total_windows, current_window, clips_found, clips_inserted)
-      VALUES (?, ?, 'pending', ?, ?, 0, 0, 0)
+      INSERT INTO archive_jobs (login, broadcaster_id, status, started_by, total_windows, archive_start, current_window, clips_found, clips_inserted)
+      VALUES (?, ?, 'pending', ?, ?, ?, 0, 0, 0)
       ON CONFLICT (login) DO UPDATE SET
         broadcaster_id = EXCLUDED.broadcaster_id, status = 'pending', started_by = EXCLUDED.started_by,
-        total_windows = EXCLUDED.total_windows, updated_at = NOW(), error_message = NULL
+        total_windows = EXCLUDED.total_windows, archive_start = EXCLUDED.archive_start, updated_at = NOW(), error_message = NULL
     ");
-    $stmt->execute([$login, $broadcasterId, $user['login'], $totalWindows]);
+    $stmt->execute([$login, $broadcasterId, $user['login'], $totalWindows, $archiveStartDate]);
   }
 
   // Reload job

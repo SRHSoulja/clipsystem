@@ -309,7 +309,7 @@ header("Content-Type: text/html; charset=utf-8");
       <input type="text" id="loginInput" placeholder="Enter streamer name..." value="<?= htmlspecialchars($prefillLogin) ?>" autofocus>
       <button type="submit" id="archiveBtn">Archive</button>
     </form>
-    <p class="form-hint">Fetches the last 5 years of clips. Takes 5-20 minutes depending on channel size.</p>
+    <p class="form-hint">Fetches all clips since the channel was created. Takes 5-20 minutes depending on channel age.</p>
 
     <div class="progress-section" id="progressSection">
       <div class="progress-header">

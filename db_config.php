@@ -248,6 +248,7 @@ function init_votes_tables($pdo) {
                 clips_found INTEGER DEFAULT 0,
                 clips_inserted INTEGER DEFAULT 0,
                 error_message TEXT,
+                archive_start TIMESTAMP,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 completed_at TIMESTAMP,
@@ -255,6 +256,8 @@ function init_votes_tables($pdo) {
             )
         ");
         $pdo->exec("CREATE INDEX IF NOT EXISTS idx_archive_jobs_status ON archive_jobs(status)");
+        // Add archive_start column if table already existed
+        try { $pdo->exec("ALTER TABLE archive_jobs ADD COLUMN IF NOT EXISTS archive_start TIMESTAMP"); } catch (PDOException $e) { /* already exists */ }
 
         return true;
     } catch (PDOException $e) {
