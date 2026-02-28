@@ -468,8 +468,9 @@
     const textEl = document.getElementById('bannerText');
     if (!overlay || !textEl) return;
 
-    if (!config || !config.enabled || !config.text) {
+    if (!config || !config.enabled) {
       overlay.style.display = 'none';
+      currentBannerJSON = null;
       return;
     }
 
@@ -478,7 +479,7 @@
     currentBannerJSON = configStr;
 
     overlay.style.display = 'flex';
-    textEl.textContent = config.text;
+    textEl.textContent = config.text || 'Be right back!';
 
     const bgColor = config.bg_color || '#9147ff';
     const opacity = config.bg_opacity ?? 0.85;

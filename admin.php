@@ -134,6 +134,15 @@ if ($authenticated) {
     try {
       $stmt = $pdo->query("SELECT c.login, COUNT(*) as clip_count, MAX(c.created_at) as latest_clip, cs.last_refresh FROM clips c LEFT JOIN channel_settings cs ON cs.login = c.login GROUP BY c.login, cs.last_refresh ORDER BY c.login");
       $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+      // Sync: ensure all archived streamers have bot_channels entries
+      $pdo->exec("
+        INSERT INTO bot_channels (channel_login, added_by, active)
+        SELECT DISTINCT c.login, 'system', FALSE
+        FROM clips c
+        WHERE c.login NOT IN (SELECT channel_login FROM bot_channels)
+        ON CONFLICT (channel_login) DO NOTHING
+      ");
     } catch (PDOException $e) {
       // Ignore errors
     }

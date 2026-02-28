@@ -107,6 +107,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['set'])) {
 }
 
 // GET - return current position(s)
+$debug = isset($_GET['debug']);
+
 if ($pdo) {
   try {
     $stmt = $pdo->prepare("SELECT hud_position, top_position, banner_config FROM channel_settings WHERE login = ?");
@@ -115,25 +117,48 @@ if ($pdo) {
 
     $hudPosition = $row && isset($row['hud_position']) ? $row['hud_position'] : 'tr';
     $topPosition = $row && isset($row['top_position']) ? $row['top_position'] : 'br';
-    $bannerConfig = $row && !empty($row['banner_config']) ? json_decode($row['banner_config'], true) : new stdClass();
-    if (!$bannerConfig) $bannerConfig = new stdClass();
 
-    echo json_encode([
+    // Parse banner_config - handle empty/default cases
+    $rawBanner = $row ? ($row['banner_config'] ?? null) : null;
+    $bannerConfig = null;
+    if ($rawBanner && $rawBanner !== '{}' && $rawBanner !== '') {
+        $bannerConfig = json_decode($rawBanner, true);
+    }
+    if (!$bannerConfig || !is_array($bannerConfig) || empty($bannerConfig)) {
+        $bannerConfig = new stdClass();
+    }
+
+    $response = [
       "login" => $login,
       "position" => $type === 'top' ? $topPosition : $hudPosition,
       "hud_position" => $hudPosition,
       "top_position" => $topPosition,
       "banner_config" => $bannerConfig
-    ]);
+    ];
+
+    if ($debug) {
+      $response['_debug'] = [
+        'row_found' => $row ? true : false,
+        'raw_banner' => $rawBanner,
+        'raw_banner_length' => $rawBanner ? strlen($rawBanner) : 0,
+        'decoded_type' => gettype($bannerConfig),
+      ];
+    }
+
+    echo json_encode($response);
   } catch (PDOException $e) {
     // Table might not exist yet, return defaults
-    echo json_encode([
+    $response = [
       "login" => $login,
       "position" => $defaultPos,
       "hud_position" => "tr",
       "top_position" => "br",
       "banner_config" => new stdClass()
-    ]);
+    ];
+    if ($debug) {
+      $response['_debug'] = ['error' => $e->getMessage()];
+    }
+    echo json_encode($response);
   }
 } else {
   echo json_encode([

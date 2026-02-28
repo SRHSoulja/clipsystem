@@ -918,16 +918,16 @@ if ($currentUser) {
 
         <div class="tabs">
             <div class="tab active" data-tab="settings">Settings</div>
-            <div class="tab" data-tab="weighting">Clip Weighting</div>
-            <div class="tab" data-tab="clips">Clip Management</div>
-            <div class="tab" data-tab="playlists">Playlists</div>
-            <div class="tab" data-tab="stats">Stats</div>
+            <div class="tab" data-tab="weighting" data-permission="edit_weighting">Clip Weighting</div>
+            <div class="tab" data-tab="clips" data-permission="block_clips">Clip Management</div>
+            <div class="tab" data-tab="playlists" data-permission="manage_playlists">Playlists</div>
+            <div class="tab" data-tab="stats" data-permission="view_stats">Stats</div>
         </div>
 
         <div class="tab-content active" id="tab-settings">
             <div id="settingsMessage"></div>
 
-            <div class="card">
+            <div class="card" data-permission="edit_hud">
                 <h3>HUD Position</h3>
                 <p style="color: #adadb8; margin-bottom: 12px;">Position of the clip info overlay on screen.</p>
                 <div class="position-picker" id="hudPositionPicker">
@@ -938,7 +938,7 @@ if ($currentUser) {
                 </div>
             </div>
 
-            <div class="card">
+            <div class="card" data-permission="edit_hud">
                 <h3>Top Clips Overlay Position</h3>
                 <p style="color: #adadb8; margin-bottom: 12px;">Position of the !ctop overlay.</p>
                 <div class="position-picker" id="topPositionPicker">
@@ -949,7 +949,7 @@ if ($currentUser) {
                 </div>
             </div>
 
-            <div class="card" id="bannerOverlayCard">
+            <div class="card" id="bannerOverlayCard" data-permission="edit_hud">
                 <h3>Banner Overlay</h3>
                 <p style="color: #adadb8; margin-bottom: 16px; font-size: 13px;">
                     Add a customizable text banner to your clip player. Great for BRB messages, announcements, or branding.
@@ -1061,7 +1061,7 @@ if ($currentUser) {
                 </div>
             </div>
 
-            <div class="card">
+            <div class="card" data-permission="edit_voting">
                 <h3>Chat Voting</h3>
                 <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 12px;">
                     <label class="toggle-switch">
@@ -1079,7 +1079,7 @@ if ($currentUser) {
                 </div>
             </div>
 
-            <div class="card">
+            <div class="card" data-permission="edit_bot_settings">
                 <h3>Chat Bot</h3>
                 <p style="color: #adadb8; margin-bottom: 12px; font-size: 13px;">
                     The ClipArchive bot enables chat commands like !cclip, !like, !dislike, !cfind and more.
@@ -1098,7 +1098,7 @@ if ($currentUser) {
                 </div>
             </div>
 
-            <div class="card">
+            <div class="card" data-permission="edit_bot_settings">
                 <h3>Bot Response Mode</h3>
                 <div style="display: flex; align-items: center; gap: 16px;">
                     <label class="toggle-switch">
@@ -1113,7 +1113,7 @@ if ($currentUser) {
                 </p>
             </div>
 
-            <div class="card" id="commandSettingsCard">
+            <div class="card" id="commandSettingsCard" data-permission="toggle_commands">
                 <h3>Bot Commands</h3>
                 <p style="color: #adadb8; margin-bottom: 16px;">Enable or disable individual chat commands for your channel.</p>
 
@@ -1290,14 +1290,14 @@ if ($currentUser) {
                 </div>
             </div>
 
-            <div class="card" id="refreshCard">
+            <div class="card" id="refreshCard" data-permission="refresh_clips">
                 <h3>Refresh Clips</h3>
                 <p style="color: #adadb8; margin-bottom: 12px;">Fetch new clips from Twitch.</p>
                 <p style="color: #666; font-size: 13px; margin-bottom: 12px;">Last refresh: <span id="lastRefresh">Never</span></p>
                 <button class="btn btn-primary" id="refreshClipsBtn" onclick="refreshClips()">Get New Clips</button>
             </div>
 
-            <div class="card" id="modManagementCard">
+            <div class="card" id="modManagementCard" data-permission="manage_mods">
                 <h3>Mod Access & Permissions</h3>
                 <p style="color: #adadb8; margin-bottom: 12px;">Add Twitch users who can access your Playlist Manager. Customize what each mod can do.</p>
 
@@ -1607,9 +1607,16 @@ if ($currentUser) {
 
         // View As Mode state
         let viewAsMode = null;
+        let userPermissions = ['view_dashboard', 'manage_playlists', 'block_clips', 'edit_hud', 'edit_voting', 'edit_weighting', 'edit_bot_settings', 'view_stats', 'toggle_commands', 'manage_mods', 'refresh_clips'];
+        const actualPermissions = [...userPermissions]; // Store original for restoring
         const defaultModPermissions = ['view_dashboard', 'manage_playlists', 'block_clips'];
         const limitedModPermissions = ['view_dashboard'];
-        const allPermissions = ['view_dashboard', 'manage_playlists', 'block_clips', 'edit_hud', 'edit_voting', 'edit_weighting', 'edit_bot_settings', 'view_stats', 'toggle_commands', 'manage_mods', 'refresh_clips'];
+        const allPermissions = [...userPermissions];
+
+        // Permission checking helper
+        function hasPermission(perm) {
+            return userPermissions.includes(perm);
+        }
 
         // View As Mode functions
         function enterViewAsMode(role) {
@@ -1627,10 +1634,10 @@ if ($currentUser) {
             const description = document.getElementById('viewAsDescription');
 
             const roleInfo = {
-                'admin': { name: 'Super Admin', desc: 'Full access to all features' },
-                'streamer': { name: 'Streamer', desc: 'Channel owner view' },
-                'mod': { name: 'Mod (default)', desc: 'Default mod permissions: playlists, block clips' },
-                'mod_limited': { name: 'Mod (minimal)', desc: 'Only view access, no editing' }
+                'admin': { name: 'Super Admin', desc: 'Full access to all features', perms: allPermissions },
+                'streamer': { name: 'Streamer', desc: 'Channel owner view (no super admin tools)', perms: allPermissions },
+                'mod': { name: 'Mod (default)', desc: 'Default mod permissions: playlists, block clips', perms: defaultModPermissions },
+                'mod_limited': { name: 'Mod (minimal)', desc: 'Only view access, no editing', perms: limitedModPermissions }
             };
 
             const info = roleInfo[role] || roleInfo['mod'];
@@ -1638,7 +1645,14 @@ if ($currentUser) {
             description.textContent = `(${info.desc})`;
             banner.style.display = 'flex';
 
-            applyViewAsRestrictions(role);
+            // Hide admin bars when viewing as non-admin
+            if (role !== 'admin') {
+                document.querySelectorAll('.admin-bar-wrapper').forEach(el => el.style.display = 'none');
+            }
+
+            // Apply permission restrictions
+            userPermissions = [...info.perms];
+            applyViewAsRestrictions();
         }
 
         function exitViewAsMode() {
@@ -1649,43 +1663,37 @@ if ($currentUser) {
             const banner = document.getElementById('viewAsBanner');
             if (banner) banner.style.display = 'none';
 
+            // Show admin bars again
+            document.querySelectorAll('.admin-bar-wrapper').forEach(el => el.style.display = '');
+
             // Reset select
             const select = document.getElementById('viewAsSelect');
             if (select) select.value = '';
+
+            // Restore original permissions
+            userPermissions = [...actualPermissions];
 
             // Remove restrictions
             removeViewAsRestrictions();
         }
 
-        function applyViewAsRestrictions(role) {
-            // Hide tabs that mods shouldn't see
-            const restrictedTabs = {
-                'mod': ['weighting'],  // Default mods can't see weighting
-                'mod_limited': ['weighting', 'clips', 'stats']  // Limited mods only see settings and playlists
-            };
-
-            const hidden = restrictedTabs[role] || [];
-            document.querySelectorAll('.tab').forEach(tab => {
-                if (hidden.includes(tab.dataset.tab)) {
-                    tab.style.display = 'none';
-                }
+        function applyViewAsRestrictions() {
+            // Show/hide elements based on data-permission attributes
+            document.querySelectorAll('[data-permission]').forEach(el => {
+                const perm = el.dataset.permission;
+                el.style.display = userPermissions.includes(perm) ? '' : 'none';
             });
 
-            // Also hide mod management section for non-admin/streamer views
-            if (role === 'mod' || role === 'mod_limited') {
-                document.querySelectorAll('.mod-management, #modAccessSection').forEach(el => {
-                    el.style.display = 'none';
-                });
+            // If the currently active tab is now hidden, switch to settings
+            const activeTab = document.querySelector('.tab.active');
+            if (activeTab && activeTab.style.display === 'none') {
+                document.querySelector('.tab[data-tab="settings"]').click();
             }
         }
 
         function removeViewAsRestrictions() {
-            // Show all tabs
-            document.querySelectorAll('.tab').forEach(tab => {
-                tab.style.display = '';
-            });
-            // Show mod management
-            document.querySelectorAll('.mod-management, #modAccessSection').forEach(el => {
+            // Show all permission-gated elements
+            document.querySelectorAll('[data-permission]').forEach(el => {
                 el.style.display = '';
             });
         }

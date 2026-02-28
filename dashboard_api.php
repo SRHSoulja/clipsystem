@@ -299,8 +299,13 @@ switch ($action) {
                     $value = json_encode($obj);
                     break;
                 case 'banner_config':
+                    error_log("Banner save - raw value length: " . strlen($value));
                     $config = json_decode($value, true);
-                    if (!is_array($config)) $config = [];
+                    if (!is_array($config)) {
+                        error_log("Banner save - json_decode failed: " . json_last_error_msg());
+                        $config = [];
+                    }
+                    error_log("Banner save - decoded keys: " . implode(',', array_keys($config)));
                     $validated = [];
                     $validated['enabled'] = !empty($config['enabled']);
                     $validated['text'] = mb_substr(trim($config['text'] ?? ''), 0, 200);
@@ -319,6 +324,7 @@ switch ($action) {
                     $validShapes = ['rectangle', 'rounded', 'pill'];
                     $validated['shape'] = in_array($config['shape'] ?? '', $validShapes) ? $config['shape'] : 'rectangle';
                     $value = json_encode($validated);
+                    error_log("Banner save - final value: " . $value);
                     break;
             }
 
@@ -328,6 +334,16 @@ switch ($action) {
                 ON CONFLICT (login) DO UPDATE SET {$field} = ?, updated_at = NOW()
             ");
             $stmt->execute([$login, $value, $value]);
+
+            error_log("Settings save - login: {$login}, field: {$field}, rowCount: " . $stmt->rowCount());
+
+            // Verify the save by reading it back
+            if ($field === 'banner_config') {
+                $verify = $pdo->prepare("SELECT banner_config FROM channel_settings WHERE login = ?");
+                $verify->execute([$login]);
+                $verifyRow = $verify->fetch(PDO::FETCH_ASSOC);
+                error_log("Banner verify - stored value: " . ($verifyRow ? $verifyRow['banner_config'] : 'NO ROW'));
+            }
 
             json_response(["success" => true]);
         } catch (PDOException $e) {
