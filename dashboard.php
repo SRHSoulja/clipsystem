@@ -351,10 +351,7 @@ if ($currentUser) {
             0%, 100% { transform: scale(1); }
             50% { transform: scale(1.02); }
         }
-        @keyframes bannerScroll {
-            0% { transform: translateX(300px); }
-            100% { transform: translateX(-300px); }
-        }
+        /* bannerScroll keyframes set dynamically via JS to match container width */
 
         /* Stats */
         .stats-grid {
@@ -2257,13 +2254,24 @@ if ($currentUser) {
                 preview.style.boxShadow = 'none';
             }
 
+            // Cancel any previous scroll animation
+            if (previewText._scrollAnim) { previewText._scrollAnim.cancel(); previewText._scrollAnim = null; }
+            previewText.style.animation = 'none';
+
             if (config.animation === 'pulse') {
                 previewText.style.animation = 'bannerPulse 2s ease-in-out infinite';
             } else if (config.animation === 'scroll') {
-                previewText.style.animation = `bannerScroll ${config.scroll_speed || 8}s linear infinite`;
                 previewText.style.whiteSpace = 'nowrap';
-            } else {
-                previewText.style.animation = 'none';
+                // Scale duration proportionally: player is ~1920px wide, preview is smaller
+                const containerW = preview.offsetWidth || 400;
+                const textW = previewText.offsetWidth || 100;
+                const playerW = 1920;
+                const playerDuration = (config.scroll_speed || 8) * 1000;
+                const previewDuration = playerDuration * (containerW + textW) / (playerW + textW);
+                previewText._scrollAnim = previewText.animate([
+                    { transform: `translateX(${containerW / 2 + textW / 2}px)` },
+                    { transform: `translateX(${-(containerW / 2 + textW / 2)}px)` }
+                ], { duration: Math.max(previewDuration, 1000), iterations: Infinity, easing: 'linear' });
             }
         }
 
