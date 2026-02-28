@@ -394,7 +394,7 @@ $notArchivedRedirect = isset($_GET['not_archived']) && $_GET['not_archived'] ===
             <div class="admin-controls">
                 <div class="admin-input-row">
                     <input type="text" id="adminChannelInput" placeholder="Enter channel name...">
-                    <button class="btn btn-secondary" onclick="goToChannel('mod')">Mod Dashboard</button>
+                    <button class="btn btn-secondary" onclick="goToChannel('mod')">Playlist Manager</button>
                     <button class="btn btn-secondary" onclick="goToChannel('streamer')">Streamer Dashboard</button>
                 </div>
                 <a href="/admin.php" class="btn btn-danger">Admin Panel</a>
@@ -458,7 +458,7 @@ $notArchivedRedirect = isset($_GET['not_archived']) && $_GET['not_archived'] ===
                         </div>
                     </div>
                     <div class="channel-actions">
-                        <a href="/mod/<?= urlencode($ch['channel_login'] ?? '') ?>" class="btn btn-primary">Mod Dashboard</a>
+                        <a href="/mod/<?= urlencode($ch['channel_login'] ?? '') ?>" class="btn btn-primary">Playlist Manager</a>
                     </div>
                 </div>
                 <?php endforeach; ?>

@@ -1111,7 +1111,14 @@ if ($currentUser) {
 
             <div class="card" id="modManagementCard">
                 <h3>Mod Access & Permissions</h3>
-                <p style="color: #adadb8; margin-bottom: 12px;">Add Twitch users who can access your mod dashboard. Customize what each mod can do.</p>
+                <p style="color: #adadb8; margin-bottom: 12px;">Add Twitch users who can access your Playlist Manager. Customize what each mod can do.</p>
+
+                <div style="background: #0e0e10; border-radius: 6px; padding: 14px; margin-bottom: 16px;">
+                    <p style="color: #adadb8; font-size: 13px; margin-bottom: 8px;">Share this link with your mods:</p>
+                    <div class="url-box" id="modShareUrl" onclick="copyModUrl()" style="font-size: 13px;">Loading...</div>
+                    <p style="color: #666; font-size: 11px; margin-top: 6px;">Click to copy. Mods can also find your channel at <strong>/channels</strong> after logging in with Twitch.</p>
+                </div>
+
                 <div class="form-group">
                     <input type="text" id="newModUsername" placeholder="Enter Twitch username" onkeypress="if(event.key==='Enter')addMod()">
                     <button class="btn btn-primary" id="addModBtn" style="margin-top: 8px;" onclick="addMod()">Add Mod</button>
@@ -1139,6 +1146,22 @@ if ($currentUser) {
                 <p style="color: #adadb8; margin-bottom: 12px;">Use this URL as a Browser Source in OBS.</p>
                 <div class="url-box" id="playerUrl" onclick="copyPlayerUrl()">Loading...</div>
                 <p style="color: #666; font-size: 12px; margin-top: 8px;">Click to copy</p>
+
+                <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #3a3a3d;">
+                    <h4 style="color: #adadb8; font-size: 13px; margin-bottom: 10px;">Recommended OBS Browser Source Settings</h4>
+                    <div style="display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; font-size: 13px; color: #adadb8;">
+                        <span style="color: #666;">Width:</span><span style="color: #efeff1;">1920</span>
+                        <span style="color: #666;">Height:</span><span style="color: #efeff1;">1080</span>
+                        <span style="color: #666;">FPS:</span><span style="color: #efeff1;">30 (or match your canvas)</span>
+                        <span style="color: #666;">Custom CSS:</span><span style="color: #efeff1;">Leave empty</span>
+                    </div>
+                    <div style="margin-top: 10px; font-size: 12px; color: #666; display: flex; flex-direction: column; gap: 4px;">
+                        <span>&#9745; Control audio via OBS</span>
+                        <span>&#9744; Shutdown source when not visible</span>
+                        <span>&#9744; Refresh browser when scene becomes active</span>
+                    </div>
+                    <p style="color: #666; font-size: 11px; margin-top: 8px;">Tip: Keep "Shutdown source" and "Refresh browser" unchecked so clips keep playing when you switch scenes.</p>
+                </div>
             </div>
         </div>
 
@@ -1753,6 +1776,7 @@ if ($currentUser) {
 
                 // Update player URL with instance
                 updatePlayerUrl();
+                updateModShareUrl();
 
                 // HUD positions
                 setPositionPicker('hudPositionPicker', settings.hud_position || 'tr');
@@ -2247,6 +2271,22 @@ if ($currentUser) {
                 showToast('success', 'URL Copied', 'Player URL copied to clipboard');
             }).catch(() => {
                 showToast('error', 'Copy Failed', 'Could not copy URL - try selecting and copying manually');
+            });
+        }
+
+        function updateModShareUrl() {
+            const el = document.getElementById('modShareUrl');
+            if (el && authLogin) {
+                el.textContent = `${window.location.origin}/mod/${authLogin}`;
+            }
+        }
+
+        function copyModUrl() {
+            const url = document.getElementById('modShareUrl').textContent;
+            navigator.clipboard.writeText(url).then(() => {
+                showToast('success', 'Link Copied', 'Mod link copied to clipboard - send it to your mods!');
+            }).catch(() => {
+                showToast('error', 'Copy Failed', 'Could not copy URL');
             });
         }
 
