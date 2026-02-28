@@ -76,6 +76,13 @@ $perPage = max(25, min(200, (int)($_GET["per_page"] ?? 100))); // 25-200, defaul
 $dateRange = $_GET["range"] ?? "year"; // Date range for live mode
 $minDuration = $_GET["duration"] ?? ""; // short, medium, long, or empty for all
 $minViews = max(0, (int)($_GET["min_views"] ?? 0)); // Minimum view count filter
+$exclude = trim((string)($_GET["exclude"] ?? "")); // Exclude clips with these phrases in title
+
+// Parse exclude phrases (comma-separated)
+$excludeWords = [];
+if ($exclude) {
+  $excludeWords = array_filter(array_map('trim', explode(',', $exclude)), function($w) { return strlen($w) >= 2; });
+}
 
 // Validate sort option
 $validSorts = ['views', 'date', 'oldest', 'title', 'titlez', 'trending'];
@@ -112,6 +119,7 @@ $isLiveMode = false;  // True if using live Twitch API instead of archive
 $liveError = "";
 
 $pdo = get_db_connection();
+if ($pdo) init_votes_tables($pdo);
 
 // Check if current user can manage clips for this channel
 $canManageClips = checkClipManagePermission($login, $currentUser, $pdo);
@@ -321,6 +329,12 @@ if ($hasArchivedClips && $pdo) {
       }
     }
 
+    // Exclude phrases from title
+    foreach ($excludeWords as $ex) {
+      $whereClauses[] = "title NOT ILIKE ?";
+      $params[] = '%' . $ex . '%';
+    }
+
     $whereSQL = implode(' AND ', $whereClauses);
 
     // Get total count first
@@ -444,6 +458,12 @@ if ($hasArchivedClips && $pdo) {
             $where[] = "title ILIKE ?";
             $params[] = '%' . $word . '%';
           }
+        }
+
+        // Exclude phrases from title
+        foreach ($excludeWords as $ex) {
+          $where[] = "title NOT ILIKE ?";
+          $params[] = '%' . $ex . '%';
         }
 
         // Clipper filter
@@ -1226,6 +1246,11 @@ if ($hasArchivedClips && $pdo) {
       </div>
 
       <div class="filter-group">
+        <label>Exclude</label>
+        <input type="text" name="exclude" value="<?= htmlspecialchars($exclude) ?>" placeholder="Hide titles with..." title="Comma-separated phrases to exclude from results">
+      </div>
+
+      <div class="filter-group">
         <label>Category</label>
         <select name="game_id">
           <option value="">All Categories</option>
@@ -1285,7 +1310,7 @@ if ($hasArchivedClips && $pdo) {
       <?php /* Date range dropdown removed for live mode — two-wave fetch covers recent + popular automatically */ ?>
 
       <button type="submit" class="filter-btn">Search</button>
-      <?php if ($query || $gameId || $gameName || $clipper || $minDuration || $minViews > 0): ?>
+      <?php if ($query || $gameId || $gameName || $clipper || $minDuration || $minViews > 0 || $exclude): ?>
       <a href="/search/<?= htmlspecialchars(urlencode($login)) ?>" class="clear-btn">Clear All</a>
       <?php endif; ?>
     </form>
@@ -1299,6 +1324,7 @@ if ($hasArchivedClips && $pdo) {
       if ($gameName && !$gameId) $baseFilterParams['game'] = $gameName;
       if ($minDuration) $baseFilterParams['duration'] = $minDuration;
       if ($minViews > 0) $baseFilterParams['min_views'] = $minViews;
+      if ($exclude) $baseFilterParams['exclude'] = $exclude;
       if ($sort !== 'views') $baseFilterParams['sort'] = $sort;
       if ($perPage !== 100) $baseFilterParams['per_page'] = $perPage;
 
@@ -1310,7 +1336,7 @@ if ($hasArchivedClips && $pdo) {
 
       $durationLabels = ['short' => 'Short (<30s)', 'medium' => 'Medium (30-60s)', 'long' => 'Long (>60s)'];
     ?>
-    <?php if ($query || $gameId || $gameName || $clipper || $minDuration || $minViews > 0): ?>
+    <?php if ($query || $gameId || $gameName || $clipper || $minDuration || $minViews > 0 || $exclude): ?>
     <div class="active-filters">
       <?php if ($query): ?>
       <span class="filter-tag">
@@ -1346,6 +1372,12 @@ if ($hasArchivedClips && $pdo) {
       <span class="filter-tag">
         Min Views: <?= number_format($minViews) ?>+
         <a href="<?= buildFilterUrl($login, $baseFilterParams, ['min_views']) ?>">&times;</a>
+      </span>
+      <?php endif; ?>
+      <?php if ($exclude): ?>
+      <span class="filter-tag">
+        Excluding: "<?= htmlspecialchars($exclude) ?>"
+        <a href="<?= buildFilterUrl($login, $baseFilterParams, ['exclude']) ?>">&times;</a>
       </span>
       <?php endif; ?>
     </div>
@@ -1503,6 +1535,7 @@ if ($hasArchivedClips && $pdo) {
         if ($sort !== 'views') $baseParams['sort'] = $sort;
         if ($minDuration) $baseParams['duration'] = $minDuration;
         if ($minViews > 0) $baseParams['min_views'] = $minViews;
+        if ($exclude) $baseParams['exclude'] = $exclude;
         if ($perPage !== 100) $baseParams['per_page'] = $perPage;
 
         function pageUrl($params, $pageNum) {
