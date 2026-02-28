@@ -352,8 +352,8 @@ if ($currentUser) {
             50% { transform: scale(1.02); }
         }
         @keyframes bannerScroll {
-            0% { transform: translateX(calc(100% + 100%)); }
-            100% { transform: translateX(calc(-100% - 100%)); }
+            0% { transform: translateX(300px); }
+            100% { transform: translateX(-300px); }
         }
 
         /* Stats */
