@@ -301,7 +301,7 @@ header("Content-Type: text/html; charset=utf-8");
   <div class="container">
     <div class="archive-icon">📦</div>
     <h1>Archive a Streamer</h1>
-    <p class="subtitle">Permanently save every clip from any Twitch channel</p>
+    <p class="subtitle">Organize your clips. Engage your viewers. Give your community a reason to stick around.</p>
 
     <div id="msg" class="message"></div>
 

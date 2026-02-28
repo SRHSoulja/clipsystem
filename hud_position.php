@@ -77,6 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['set'])) {
         $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS blocked_clippers TEXT DEFAULT '[]'");
         $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS voting_enabled BOOLEAN DEFAULT TRUE");
         $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS last_refresh TIMESTAMP");
+        $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS banner_config TEXT DEFAULT '{}'");
       } catch (PDOException $e) {
         // Columns might already exist, ignore
       }
@@ -108,18 +109,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['set'])) {
 // GET - return current position(s)
 if ($pdo) {
   try {
-    $stmt = $pdo->prepare("SELECT hud_position, top_position FROM channel_settings WHERE login = ?");
+    $stmt = $pdo->prepare("SELECT hud_position, top_position, banner_config FROM channel_settings WHERE login = ?");
     $stmt->execute([$login]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
     $hudPosition = $row && isset($row['hud_position']) ? $row['hud_position'] : 'tr';
     $topPosition = $row && isset($row['top_position']) ? $row['top_position'] : 'br';
+    $bannerConfig = $row && !empty($row['banner_config']) ? json_decode($row['banner_config'], true) : new stdClass();
+    if (!$bannerConfig) $bannerConfig = new stdClass();
 
     echo json_encode([
       "login" => $login,
       "position" => $type === 'top' ? $topPosition : $hudPosition,
       "hud_position" => $hudPosition,
-      "top_position" => $topPosition
+      "top_position" => $topPosition,
+      "banner_config" => $bannerConfig
     ]);
   } catch (PDOException $e) {
     // Table might not exist yet, return defaults
@@ -127,7 +131,8 @@ if ($pdo) {
       "login" => $login,
       "position" => $defaultPos,
       "hud_position" => "tr",
-      "top_position" => "br"
+      "top_position" => "br",
+      "banner_config" => new stdClass()
     ]);
   }
 } else {
@@ -135,6 +140,7 @@ if ($pdo) {
     "login" => $login,
     "position" => $defaultPos,
     "hud_position" => "tr",
-    "top_position" => "br"
+    "top_position" => "br",
+    "banner_config" => new stdClass()
   ]);
 }

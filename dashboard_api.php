@@ -166,6 +166,7 @@ try {
     $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS silent_prefix BOOLEAN DEFAULT FALSE");
     $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS profile_image_url TEXT");
     $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS profile_image_updated_at TIMESTAMP");
+    $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS banner_config TEXT DEFAULT '{}'");
 
     // Ensure channel_mods table exists
     $pdo->exec("
@@ -190,7 +191,7 @@ switch ($action) {
 
         try {
             $stmt = $pdo->prepare("
-                SELECT hud_position, top_position, blocked_words, blocked_clippers, voting_enabled, vote_feedback, silent_prefix, last_refresh, command_settings
+                SELECT hud_position, top_position, blocked_words, blocked_clippers, voting_enabled, vote_feedback, silent_prefix, last_refresh, command_settings, banner_config
                 FROM channel_settings WHERE login = ?
             ");
             $stmt->execute([$login]);
@@ -206,7 +207,8 @@ switch ($action) {
                     'voting_enabled' => true,
                     'silent_prefix' => false,
                     'last_refresh' => null,
-                    'command_settings' => '{}'
+                    'command_settings' => '{}',
+                    'banner_config' => '{}'
                 ];
             }
 
@@ -214,6 +216,7 @@ switch ($action) {
             $settings['blocked_words'] = json_decode($settings['blocked_words'] ?: '[]', true) ?: [];
             $settings['blocked_clippers'] = json_decode($settings['blocked_clippers'] ?: '[]', true) ?: [];
             $settings['command_settings'] = json_decode($settings['command_settings'] ?: '{}', true) ?: [];
+            $settings['banner_config'] = json_decode($settings['banner_config'] ?: '{}', true) ?: [];
 
             // Get clip stats
             $stmt = $pdo->prepare("
@@ -258,7 +261,8 @@ switch ($action) {
             'silent_prefix' => 'toggle_voting',
             'blocked_words' => 'add_blocked_words',
             'blocked_clippers' => 'add_blocked_clippers',
-            'command_settings' => 'toggle_commands'
+            'command_settings' => 'toggle_commands',
+            'banner_config' => 'change_hud'
         ];
 
         if (!isset($allowedFields[$field])) {
@@ -293,6 +297,28 @@ switch ($action) {
                     $obj = json_decode($value, true);
                     if (!is_array($obj)) $obj = [];
                     $value = json_encode($obj);
+                    break;
+                case 'banner_config':
+                    $config = json_decode($value, true);
+                    if (!is_array($config)) $config = [];
+                    $validated = [];
+                    $validated['enabled'] = !empty($config['enabled']);
+                    $validated['text'] = mb_substr(trim($config['text'] ?? ''), 0, 200);
+                    $validated['text_color'] = preg_match('/^#[0-9a-fA-F]{6}$/', $config['text_color'] ?? '') ? $config['text_color'] : '#ffffff';
+                    $validated['bg_color'] = preg_match('/^#[0-9a-fA-F]{6}$/', $config['bg_color'] ?? '') ? $config['bg_color'] : '#9147ff';
+                    $validated['bg_opacity'] = max(0, min(1, floatval($config['bg_opacity'] ?? 0.85)));
+                    $validated['font_size'] = max(12, min(72, intval($config['font_size'] ?? 32)));
+                    $validFonts = ['Inter', 'Roboto', 'Poppins', 'Montserrat', 'Press Start 2P', 'Permanent Marker', 'Bangers', 'Oswald'];
+                    $validated['font_family'] = in_array($config['font_family'] ?? '', $validFonts) ? $config['font_family'] : 'Inter';
+                    $validPositions = ['top', 'center', 'bottom'];
+                    $validated['position'] = in_array($config['position'] ?? '', $validPositions) ? $config['position'] : 'top';
+                    $validBorders = ['none', 'solid', 'glow'];
+                    $validated['border_style'] = in_array($config['border_style'] ?? '', $validBorders) ? $config['border_style'] : 'none';
+                    $validAnimations = ['none', 'pulse', 'scroll'];
+                    $validated['animation'] = in_array($config['animation'] ?? '', $validAnimations) ? $config['animation'] : 'none';
+                    $validShapes = ['rectangle', 'rounded', 'pill'];
+                    $validated['shape'] = in_array($config['shape'] ?? '', $validShapes) ? $config['shape'] : 'rectangle';
+                    $value = json_encode($validated);
                     break;
             }
 

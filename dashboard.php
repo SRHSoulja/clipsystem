@@ -71,6 +71,9 @@ if ($currentUser) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Inter&family=Montserrat&family=Oswald&family=Permanent+Marker&family=Poppins&family=Press+Start+2P&family=Roboto&display=swap" rel="stylesheet">
     <title>Streamer Dashboard - Clip Reel System</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -277,6 +280,79 @@ if ($currentUser) {
             border-color: #9147ff;
             background: #9147ff33;
             color: #efeff1;
+        }
+
+        /* Banner Overlay */
+        .banner-preview-container {
+            background: #000;
+            border-radius: 8px;
+            position: relative;
+            height: 200px;
+            overflow: hidden;
+            margin-bottom: 16px;
+        }
+        .banner-preview-container .placeholder-text {
+            position: absolute; inset: 0;
+            display: flex; align-items: center; justify-content: center;
+            color: #3a3a3d; font-size: 14px;
+        }
+        .banner-preview {
+            position: absolute; left: 0; right: 0;
+            display: flex; align-items: center; justify-content: center;
+            padding: 12px 24px; z-index: 1; transition: all 0.3s ease; font-weight: 600;
+        }
+        .banner-preview.pos-top { top: 0; }
+        .banner-preview.pos-center { top: 50%; transform: translateY(-50%); }
+        .banner-preview.pos-bottom { bottom: 0; }
+        .banner-form-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+        }
+        .banner-form-grid .full-width { grid-column: 1 / -1; }
+        .banner-form-grid label {
+            display: block; font-size: 13px; color: #adadb8; margin-bottom: 6px;
+        }
+        .banner-form-grid input[type="text"],
+        .banner-form-grid select {
+            width: 100%; padding: 8px 12px; background: #1f1f23; border: 1px solid #3a3a3d;
+            border-radius: 4px; color: #efeff1; font-size: 14px;
+        }
+        .banner-form-grid select { cursor: pointer; }
+        .color-input-group {
+            display: flex; align-items: center; gap: 8px;
+        }
+        .color-input-group input[type="color"] {
+            width: 40px; height: 36px; border: 1px solid #3a3a3d; border-radius: 4px;
+            padding: 2px; background: #0e0e10; cursor: pointer;
+        }
+        .color-input-group input[type="text"] { width: 90px; font-family: monospace; }
+        .slider-group {
+            display: flex; align-items: center; gap: 12px;
+        }
+        .slider-group input[type="range"] {
+            flex: 1; -webkit-appearance: none; height: 6px; background: #3a3a3d; border-radius: 3px;
+        }
+        .slider-group input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 16px; height: 16px; background: #9147ff; border-radius: 50%; cursor: pointer;
+        }
+        .slider-group .slider-value {
+            min-width: 40px; text-align: right; color: #adadb8; font-size: 13px;
+        }
+        .option-selector { display: flex; gap: 8px; flex-wrap: wrap; }
+        .option-btn {
+            padding: 8px 16px; background: #26262c; border: 2px solid transparent;
+            border-radius: 4px; color: #adadb8; cursor: pointer; font-size: 13px;
+        }
+        .option-btn:hover { background: #3a3a3d; }
+        .option-btn.active {
+            border-color: #9147ff; background: #9147ff33; color: #efeff1;
+        }
+        @keyframes bannerPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+        }
+        @keyframes bannerScroll {
+            0% { transform: translateX(100%); }
+            100% { transform: translateX(-100%); }
         }
 
         /* Stats */
@@ -870,6 +946,118 @@ if ($currentUser) {
                     <button class="position-btn" data-pos="tr">Top Right</button>
                     <button class="position-btn" data-pos="bl">Bottom Left</button>
                     <button class="position-btn" data-pos="br">Bottom Right</button>
+                </div>
+            </div>
+
+            <div class="card" id="bannerOverlayCard">
+                <h3>Banner Overlay</h3>
+                <p style="color: #adadb8; margin-bottom: 16px; font-size: 13px;">
+                    Add a customizable text banner to your clip player. Great for BRB messages, announcements, or branding.
+                </p>
+
+                <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 20px;">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="bannerEnabled" onchange="updateBannerPreview(); debouncedSaveBanner();">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span>Enable Banner Overlay</span>
+                </div>
+
+                <!-- Live Preview -->
+                <div class="banner-preview-container" id="bannerPreviewContainer">
+                    <span class="placeholder-text">Banner Preview</span>
+                    <div class="banner-preview pos-top" id="bannerPreview" style="display:none;">
+                        <span id="bannerPreviewText">Be right back!</span>
+                    </div>
+                </div>
+
+                <div class="banner-form-grid">
+                    <div class="full-width">
+                        <label>Banner Text (max 200 chars)</label>
+                        <input type="text" id="bannerText" maxlength="200" placeholder="Be right back!" oninput="updateBannerPreview(); debouncedSaveBanner();">
+                    </div>
+
+                    <div>
+                        <label>Text Color</label>
+                        <div class="color-input-group">
+                            <input type="color" id="bannerTextColor" value="#ffffff" oninput="syncColorText('bannerTextColor','bannerTextColorHex'); updateBannerPreview(); debouncedSaveBanner();">
+                            <input type="text" id="bannerTextColorHex" value="#ffffff" maxlength="7" oninput="syncColorPicker('bannerTextColorHex','bannerTextColor'); updateBannerPreview(); debouncedSaveBanner();">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label>Background Color</label>
+                        <div class="color-input-group">
+                            <input type="color" id="bannerBgColor" value="#9147ff" oninput="syncColorText('bannerBgColor','bannerBgColorHex'); updateBannerPreview(); debouncedSaveBanner();">
+                            <input type="text" id="bannerBgColorHex" value="#9147ff" maxlength="7" oninput="syncColorPicker('bannerBgColorHex','bannerBgColor'); updateBannerPreview(); debouncedSaveBanner();">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label>Background Opacity</label>
+                        <div class="slider-group">
+                            <input type="range" id="bannerOpacity" min="0" max="100" value="85" oninput="updateBannerPreview(); debouncedSaveBanner();">
+                            <span class="slider-value" id="bannerOpacityValue">85%</span>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label>Font Size</label>
+                        <div class="slider-group">
+                            <input type="range" id="bannerFontSize" min="12" max="72" value="32" oninput="updateBannerPreview(); debouncedSaveBanner();">
+                            <span class="slider-value" id="bannerFontSizeValue">32px</span>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label>Font</label>
+                        <select id="bannerFontFamily" onchange="updateBannerPreview(); debouncedSaveBanner();">
+                            <option value="Inter">Inter (Clean)</option>
+                            <option value="Roboto">Roboto (Readable)</option>
+                            <option value="Poppins">Poppins (Friendly)</option>
+                            <option value="Montserrat">Montserrat (Bold)</option>
+                            <option value="Press Start 2P">Press Start 2P (Retro)</option>
+                            <option value="Permanent Marker">Permanent Marker (Handwritten)</option>
+                            <option value="Bangers">Bangers (Comic)</option>
+                            <option value="Oswald">Oswald (Condensed)</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label>Position</label>
+                        <div class="option-selector" id="bannerPositionSelector">
+                            <button class="option-btn active" data-value="top" onclick="selectBannerOption('bannerPositionSelector', 'top')">Top</button>
+                            <button class="option-btn" data-value="center" onclick="selectBannerOption('bannerPositionSelector', 'center')">Center</button>
+                            <button class="option-btn" data-value="bottom" onclick="selectBannerOption('bannerPositionSelector', 'bottom')">Bottom</button>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label>Shape</label>
+                        <div class="option-selector" id="bannerShapeSelector">
+                            <button class="option-btn active" data-value="rectangle" onclick="selectBannerOption('bannerShapeSelector', 'rectangle')">Rectangle</button>
+                            <button class="option-btn" data-value="rounded" onclick="selectBannerOption('bannerShapeSelector', 'rounded')">Rounded</button>
+                            <button class="option-btn" data-value="pill" onclick="selectBannerOption('bannerShapeSelector', 'pill')">Pill</button>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label>Border</label>
+                        <div class="option-selector" id="bannerBorderSelector">
+                            <button class="option-btn active" data-value="none" onclick="selectBannerOption('bannerBorderSelector', 'none')">None</button>
+                            <button class="option-btn" data-value="solid" onclick="selectBannerOption('bannerBorderSelector', 'solid')">Solid</button>
+                            <button class="option-btn" data-value="glow" onclick="selectBannerOption('bannerBorderSelector', 'glow')">Glow</button>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label>Animation</label>
+                        <div class="option-selector" id="bannerAnimationSelector">
+                            <button class="option-btn active" data-value="none" onclick="selectBannerOption('bannerAnimationSelector', 'none')">None</button>
+                            <button class="option-btn" data-value="pulse" onclick="selectBannerOption('bannerAnimationSelector', 'pulse')">Pulse</button>
+                            <button class="option-btn" data-value="scroll" onclick="selectBannerOption('bannerAnimationSelector', 'scroll')">Scroll</button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -1803,6 +1991,9 @@ if ($currentUser) {
                 // Command settings
                 loadCommandSettings(settings.command_settings || {});
 
+                // Banner overlay
+                loadBannerConfig(settings.banner_config || {});
+
                 // Stats
                 if (data.stats) {
                     document.getElementById('statTotal').textContent = Number(data.stats.total).toLocaleString();
@@ -1921,6 +2112,159 @@ if ($currentUser) {
             if (success) {
                 showToast('success', 'Silent Mode ' + (enabled ? 'Enabled' : 'Disabled'), 'Bot responses will ' + (enabled ? 'now start with ! to hide from on-screen chat' : 'appear normally in chat'));
             }
+        }
+
+        // ===== BANNER OVERLAY =====
+        let bannerSaveTimeout = null;
+
+        function selectBannerOption(selectorId, value) {
+            document.querySelectorAll(`#${selectorId} .option-btn`).forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.value === value);
+            });
+            updateBannerPreview();
+            debouncedSaveBanner();
+        }
+
+        function getSelectedOption(selectorId) {
+            const active = document.querySelector(`#${selectorId} .option-btn.active`);
+            return active ? active.dataset.value : null;
+        }
+
+        function syncColorText(pickerId, textId) {
+            document.getElementById(textId).value = document.getElementById(pickerId).value;
+        }
+
+        function syncColorPicker(textId, pickerId) {
+            const val = document.getElementById(textId).value;
+            if (/^#[0-9a-fA-F]{6}$/.test(val)) {
+                document.getElementById(pickerId).value = val;
+            }
+        }
+
+        function getBannerConfig() {
+            return {
+                enabled: document.getElementById('bannerEnabled').checked,
+                text: document.getElementById('bannerText').value,
+                text_color: document.getElementById('bannerTextColor').value,
+                bg_color: document.getElementById('bannerBgColor').value,
+                bg_opacity: parseInt(document.getElementById('bannerOpacity').value) / 100,
+                font_family: document.getElementById('bannerFontFamily').value,
+                font_size: parseInt(document.getElementById('bannerFontSize').value),
+                position: getSelectedOption('bannerPositionSelector') || 'top',
+                border_style: getSelectedOption('bannerBorderSelector') || 'none',
+                animation: getSelectedOption('bannerAnimationSelector') || 'none',
+                shape: getSelectedOption('bannerShapeSelector') || 'rectangle'
+            };
+        }
+
+        function updateBannerPreview() {
+            const config = getBannerConfig();
+            const preview = document.getElementById('bannerPreview');
+            const previewText = document.getElementById('bannerPreviewText');
+
+            document.getElementById('bannerOpacityValue').textContent = Math.round(config.bg_opacity * 100) + '%';
+            document.getElementById('bannerFontSizeValue').textContent = config.font_size + 'px';
+
+            if (!config.enabled) {
+                preview.style.display = 'none';
+                return;
+            }
+            preview.style.display = 'flex';
+
+            previewText.textContent = config.text || 'Be right back!';
+
+            const r = parseInt(config.bg_color.slice(1,3), 16);
+            const g = parseInt(config.bg_color.slice(3,5), 16);
+            const b = parseInt(config.bg_color.slice(5,7), 16);
+            preview.style.background = `rgba(${r},${g},${b},${config.bg_opacity})`;
+            preview.style.color = config.text_color;
+
+            preview.style.fontFamily = `'${config.font_family}', sans-serif`;
+            preview.style.fontSize = Math.max(10, Math.round(config.font_size * 0.6)) + 'px';
+
+            preview.classList.remove('pos-top', 'pos-center', 'pos-bottom');
+            preview.classList.add('pos-' + config.position);
+
+            // Reset transform before applying shape
+            if (config.shape === 'pill') {
+                preview.style.borderRadius = '50px';
+                preview.style.width = 'auto';
+                preview.style.left = '50%';
+                preview.style.right = 'auto';
+                preview.style.transform = config.position === 'center' ? 'translate(-50%, -50%)' : 'translateX(-50%)';
+            } else if (config.shape === 'rounded') {
+                preview.style.borderRadius = '12px';
+                preview.style.width = 'auto';
+                preview.style.left = '50%';
+                preview.style.right = 'auto';
+                preview.style.transform = config.position === 'center' ? 'translate(-50%, -50%)' : 'translateX(-50%)';
+            } else {
+                preview.style.borderRadius = '0';
+                preview.style.width = '';
+                preview.style.left = '0';
+                preview.style.right = '0';
+                preview.style.transform = config.position === 'center' ? 'translateY(-50%)' : '';
+            }
+
+            if (config.border_style === 'solid') {
+                preview.style.border = '1px solid rgba(255,255,255,0.6)';
+                preview.style.boxShadow = 'none';
+            } else if (config.border_style === 'glow') {
+                preview.style.border = 'none';
+                preview.style.boxShadow = `0 0 15px ${config.bg_color}, 0 0 30px ${config.bg_color}40`;
+            } else {
+                preview.style.border = 'none';
+                preview.style.boxShadow = 'none';
+            }
+
+            if (config.animation === 'pulse') {
+                previewText.style.animation = 'bannerPulse 2s ease-in-out infinite';
+            } else if (config.animation === 'scroll') {
+                previewText.style.animation = 'bannerScroll 8s linear infinite';
+                previewText.style.whiteSpace = 'nowrap';
+            } else {
+                previewText.style.animation = 'none';
+            }
+        }
+
+        function debouncedSaveBanner() {
+            if (bannerSaveTimeout) clearTimeout(bannerSaveTimeout);
+            bannerSaveTimeout = setTimeout(saveBannerConfig, 500);
+        }
+
+        async function saveBannerConfig() {
+            const config = getBannerConfig();
+            const success = await saveSetting('banner_config', JSON.stringify(config), false);
+            if (success) {
+                showToast('success', 'Banner Updated', 'Your banner overlay has been saved');
+            }
+        }
+
+        function loadBannerConfig(config) {
+            if (!config || typeof config !== 'object') config = {};
+
+            document.getElementById('bannerEnabled').checked = !!config.enabled;
+            document.getElementById('bannerText').value = config.text || '';
+            document.getElementById('bannerTextColor').value = config.text_color || '#ffffff';
+            document.getElementById('bannerTextColorHex').value = config.text_color || '#ffffff';
+            document.getElementById('bannerBgColor').value = config.bg_color || '#9147ff';
+            document.getElementById('bannerBgColorHex').value = config.bg_color || '#9147ff';
+            document.getElementById('bannerOpacity').value = Math.round((config.bg_opacity ?? 0.85) * 100);
+            document.getElementById('bannerFontSize').value = config.font_size || 32;
+            document.getElementById('bannerFontFamily').value = config.font_family || 'Inter';
+
+            // Set option selectors without triggering save
+            ['bannerPositionSelector', 'bannerBorderSelector', 'bannerAnimationSelector', 'bannerShapeSelector'].forEach(id => {
+                const val = id === 'bannerPositionSelector' ? (config.position || 'top')
+                    : id === 'bannerBorderSelector' ? (config.border_style || 'none')
+                    : id === 'bannerAnimationSelector' ? (config.animation || 'none')
+                    : (config.shape || 'rectangle');
+                document.querySelectorAll(`#${id} .option-btn`).forEach(btn => {
+                    btn.classList.toggle('active', btn.dataset.value === val);
+                });
+            });
+
+            updateBannerPreview();
         }
 
         // Bot management functions

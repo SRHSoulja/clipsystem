@@ -267,7 +267,7 @@ header("Content-Type: text/html; charset=utf-8");
   <div class="container">
     <div class="logo">📺</div>
     <h1>ClipArchive</h1>
-    <p class="tagline">Twitch Clip Archive & Playback System</p>
+    <p class="tagline">Your stream's greatest hits, on demand</p>
 
     <form class="search-box" onsubmit="goToSearch(event)">
       <input type="text" id="streamer" placeholder="Enter streamer name..." autofocus>
@@ -278,23 +278,23 @@ header("Content-Type: text/html; charset=utf-8");
     <div class="features">
       <div class="feature">
         <div class="feature-icon">🎬</div>
-        <div class="feature-title">Archive</div>
-        <div class="feature-desc">Browse thousands of clips</div>
+        <div class="feature-title">Browse</div>
+        <div class="feature-desc">Your clip library, fully searchable</div>
       </div>
       <div class="feature">
         <div class="feature-icon">🔍</div>
         <div class="feature-title">Search</div>
-        <div class="feature-desc">Find clips by title or clipper</div>
+        <div class="feature-desc">By game, title, date, or clipper</div>
       </div>
       <div class="feature">
         <div class="feature-icon">🤖</div>
-        <div class="feature-title">Bot</div>
-        <div class="feature-desc">Twitch chat commands</div>
+        <div class="feature-title">Chat Bot</div>
+        <div class="feature-desc">Viewers play clips from chat</div>
       </div>
       <div class="feature">
         <div class="feature-icon">📊</div>
         <div class="feature-title">Vote</div>
-        <div class="feature-desc">Like & dislike clips</div>
+        <div class="feature-desc">Your community picks the best</div>
       </div>
     </div>
 

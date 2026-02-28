@@ -50,20 +50,20 @@ $ctaUrl = '/auth/login.php?return=' . urlencode($ctaReturn);
 // Hero text
 if ($login && $isArchived) {
   $heroTitle = htmlspecialchars($login);
-  $heroSub = 'You have ' . number_format($clipCount) . ' clips archived and ready to go';
+  $heroSub = number_format($clipCount) . ' clips organized and ready for your viewers to browse, share, and vote on';
 } elseif ($login) {
   $heroTitle = htmlspecialchars($login);
-  $heroSub = "Let's save your clips before Twitch deletes them";
+  $heroSub = "Your community made the clips. Give them a way to find and enjoy them.";
 } else {
-  $heroTitle = 'Your clips deserve a permanent home';
-  $heroSub = 'Archive, search, and replay every Twitch clip — forever';
+  $heroTitle = "Your stream's greatest hits, on demand";
+  $heroSub = 'Let your viewers browse, share, and relive your best moments';
 }
 
 // OG meta
 $ogTitle = $login ? "ClipArchive — " . htmlspecialchars($login) : "ClipArchive — Twitch Clip Archive";
 $ogDesc = $login && $isArchived
   ? number_format($clipCount) . " clips archived for " . htmlspecialchars($login) . ". Search, play, and manage your clips."
-  : "Every Twitch clip, permanently archived. Search, play, and manage your clips.";
+  : "Give your viewers a way to browse, share, and relive your best clips. BRB overlay, ClipTV, chat bot, and more.";
 $ogImage = $profileImage ?: 'https://clips.gmgnrepeat.com/favicon.svg';
 $ogUrl = 'https://clips.gmgnrepeat.com/invite' . ($login ? '/' . urlencode($login) : '');
 
@@ -306,16 +306,16 @@ header("Content-Type: text/html; charset=utf-8");
       <div class="feature-card">
         <div class="feature-emoji">🗄️</div>
         <div class="feature-text">
-          <h3>Permanent Archive</h3>
-          <p>Every clip saved forever — searchable by title, game, clipper, or date. Never lose a clip to Twitch again.</p>
+          <h3>Browse &amp; Share</h3>
+          <p>Your clips are already out there — now they're findable. Search by title, game, clipper, or date, and share the best moments with your community.</p>
         </div>
       </div>
 
       <div class="feature-card">
         <div class="feature-emoji">📺</div>
         <div class="feature-text">
-          <h3>ClipTV</h3>
-          <p>Auto-playing channel reel your viewers can binge anytime.<?php if ($isArchived): ?> <a href="/tv/<?= htmlspecialchars($login) ?>">Watch now</a><?php endif; ?></p>
+          <h3>ClipTV &amp; BRB Overlay</h3>
+          <p>Turn dead air into a highlight reel. Auto-play your clips as a BRB screen or let viewers binge your best moments.<?php if ($isArchived): ?> <a href="/tv/<?= htmlspecialchars($login) ?>">Watch now</a><?php endif; ?></p>
         </div>
       </div>
 
@@ -323,7 +323,7 @@ header("Content-Type: text/html; charset=utf-8");
         <div class="feature-emoji">🤖</div>
         <div class="feature-text">
           <h3>Chat Bot</h3>
-          <p>Viewers use <code style="background:rgba(145,71,255,0.2);padding:2px 6px;border-radius:4px;">!clip</code> to play clips on stream. Voting, playlists, and more — all from chat.</p>
+          <p>Your viewers pick the clips. <code style="background:rgba(145,71,255,0.2);padding:2px 6px;border-radius:4px;">!clip</code> in chat and the community decides what plays next — voting, playlists, and requests on autopilot.</p>
         </div>
       </div>
     </div>
@@ -333,11 +333,11 @@ header("Content-Type: text/html; charset=utf-8");
     <div class="social-proof">
       <div class="proof-stat">
         <div class="number"><?= number_format($totalStreamers) ?></div>
-        <div class="label">Streamers Archived</div>
+        <div class="label">Communities Active</div>
       </div>
       <div class="proof-stat">
         <div class="number"><?= number_format($totalClips) ?></div>
-        <div class="label">Clips Saved</div>
+        <div class="label">Clips Indexed</div>
       </div>
       <?php if ($isArchived): ?>
       <div class="proof-stat">
