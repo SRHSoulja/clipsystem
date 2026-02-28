@@ -448,15 +448,17 @@ $notArchivedRedirect = isset($_GET['not_archived']) && $_GET['not_archived'] ===
                 <div class="channel-item">
                     <div class="channel-info">
                         <div>
-                            <div class="channel-name"><?= htmlspecialchars($ch['channel_login']) ?></div>
+                            <div class="channel-name"><?= htmlspecialchars($ch['channel_login'] ?? '') ?></div>
                             <div class="channel-meta">
-                                <?= number_format($ch['clip_count']) ?> clips
+                                <?= number_format($ch['clip_count'] ?? 0) ?> clips
+                                <?php if (!empty($ch['added_at'])): ?>
                                 &middot; Added <?= date('M j, Y', strtotime($ch['added_at'])) ?>
+                                <?php endif; ?>
                             </div>
                         </div>
                     </div>
                     <div class="channel-actions">
-                        <a href="/mod/<?= urlencode($ch['channel_login']) ?>" class="btn btn-primary">Mod Dashboard</a>
+                        <a href="/mod/<?= urlencode($ch['channel_login'] ?? '') ?>" class="btn btn-primary">Mod Dashboard</a>
                     </div>
                 </div>
                 <?php endforeach; ?>
