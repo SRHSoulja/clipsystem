@@ -1950,7 +1950,7 @@ if ($currentUser) {
         }
 
         function updatePlayerUrl() {
-            let playerUrl = `https://gmgnrepeat.com/flop/clipplayer_mp4_reel.html?login=${encodeURIComponent(authLogin)}`;
+            let playerUrl = `https://clips.gmgnrepeat.com/clipplayer_mp4_reel.html?login=${encodeURIComponent(authLogin)}`;
             if (authInstance) {
                 playerUrl += `&instance=${encodeURIComponent(authInstance)}`;
             }
