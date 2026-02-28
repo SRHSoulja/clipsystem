@@ -331,6 +331,15 @@
   <div id="bannerOverlay"><span id="bannerText"></span></div>
 
 <script>
+// Block all navigation — this is an OBS browser source, not an interactive page
+document.addEventListener('click', e => {
+  const a = e.target.closest('a');
+  if (a && a.href && a.href !== '#' && !a.href.startsWith('javascript:')) {
+    e.preventDefault();
+  }
+});
+window.addEventListener('beforeunload', e => { e.preventDefault(); });
+
 (() => {
   const qs = new URLSearchParams(location.search);
 
