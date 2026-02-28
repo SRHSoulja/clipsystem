@@ -915,15 +915,39 @@ if ($currentUser) {
         <?php endif; ?>
 
         <div class="tabs">
-            <div class="tab active" data-tab="settings">Settings</div>
+            <div class="tab active" data-tab="overlays">Overlays</div>
+            <div class="tab" data-tab="bot">Bot</div>
+            <div class="tab" data-tab="settings">Settings</div>
             <div class="tab" data-tab="weighting" data-permission="edit_weighting">Clip Weighting</div>
             <div class="tab" data-tab="clips" data-permission="block_clips">Clip Management</div>
             <div class="tab" data-tab="playlists" data-permission="manage_playlists">Playlists</div>
             <div class="tab" data-tab="stats" data-permission="view_stats">Stats</div>
         </div>
 
-        <div class="tab-content active" id="tab-settings">
-            <div id="settingsMessage"></div>
+        <div class="tab-content active" id="tab-overlays">
+
+            <div class="card">
+                <h3>Player URL</h3>
+                <p style="color: #adadb8; margin-bottom: 12px;">Use this URL as a Browser Source in OBS. All overlays below appear on this player.</p>
+                <div class="url-box" id="playerUrl" onclick="copyPlayerUrl()">Loading...</div>
+                <p style="color: #666; font-size: 12px; margin-top: 8px;">Click to copy</p>
+
+                <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #3a3a3d;">
+                    <h4 style="color: #adadb8; font-size: 13px; margin-bottom: 10px;">Recommended OBS Browser Source Settings</h4>
+                    <div style="display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; font-size: 13px; color: #adadb8;">
+                        <span style="color: #666;">Width:</span><span style="color: #efeff1;">1920</span>
+                        <span style="color: #666;">Height:</span><span style="color: #efeff1;">1080</span>
+                        <span style="color: #666;">FPS:</span><span style="color: #efeff1;">30 (or match your canvas)</span>
+                        <span style="color: #666;">Custom CSS:</span><span style="color: #efeff1;">Leave empty</span>
+                    </div>
+                    <div style="margin-top: 10px; font-size: 12px; color: #666; display: flex; flex-direction: column; gap: 4px;">
+                        <span>&#9745; Control audio via OBS</span>
+                        <span>&#9745; Shutdown source when not visible</span>
+                        <span>&#9745; Refresh browser when scene becomes active</span>
+                    </div>
+                    <p style="color: #666; font-size: 11px; margin-top: 8px;">Tip: Check all three so clips stop playing and reset when you switch away from the scene.</p>
+                </div>
+            </div>
 
             <div class="card" data-permission="edit_hud">
                 <h3>HUD Position</h3>
@@ -1092,23 +1116,13 @@ if ($currentUser) {
                     </div>
                 </div>
             </div>
+        </div>
 
-            <div class="card" data-permission="edit_voting">
-                <h3>Chat Voting</h3>
-                <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 12px;">
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="votingEnabled" onchange="saveVoting()">
-                        <span class="toggle-slider"></span>
-                    </label>
-                    <span>Enable !like and !dislike commands</span>
-                </div>
-                <div style="display: flex; align-items: center; gap: 16px;">
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="voteFeedback" onchange="saveVoteFeedback()">
-                        <span class="toggle-slider"></span>
-                    </label>
-                    <span>Show vote confirmation in chat</span>
-                </div>
+        <div class="tab-content" id="tab-bot">
+            <div id="botSetupPrompt" style="display:none; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border: 1px solid #9147ff40; border-radius: 12px; padding: 24px; margin-bottom: 20px; text-align: center;">
+                <p style="color: #efeff1; font-size: 16px; font-weight: 600; margin-bottom: 8px;">Get started by inviting the bot to your channel</p>
+                <p style="color: #adadb8; font-size: 13px; margin-bottom: 16px;">The ClipArchive bot powers all chat commands below. Invite it first, then customize your settings.</p>
+                <button onclick="inviteBot()" class="btn btn-primary" style="font-size: 15px; padding: 10px 28px;">Invite Bot to Channel</button>
             </div>
 
             <div class="card" data-permission="edit_bot_settings">
@@ -1143,6 +1157,24 @@ if ($currentUser) {
                     When enabled, bot responses start with "!" so they won't appear in chat overlays that filter out commands.
                     Useful if viewers use commands like !cfind frequently.
                 </p>
+            </div>
+
+            <div class="card" data-permission="edit_voting">
+                <h3>Chat Voting</h3>
+                <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 12px;">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="votingEnabled" onchange="saveVoting()">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span>Enable !like and !dislike commands</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 16px;">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="voteFeedback" onchange="saveVoteFeedback()">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span>Show vote confirmation in chat</span>
+                </div>
             </div>
 
             <div class="card" id="commandSettingsCard" data-permission="toggle_commands">
@@ -1321,6 +1353,10 @@ if ($currentUser) {
                     </div>
                 </div>
             </div>
+        </div>
+
+        <div class="tab-content" id="tab-settings">
+            <div id="settingsMessage"></div>
 
             <div class="card" id="refreshCard" data-permission="refresh_clips">
                 <h3>Refresh Clips</h3>
@@ -1358,29 +1394,6 @@ if ($currentUser) {
                         <span title="Access stats tab">Stats</span>
                         <span title="Enable/disable commands">Commands</span>
                     </div>
-                </div>
-            </div>
-
-            <div class="card">
-                <h3>Player URL</h3>
-                <p style="color: #adadb8; margin-bottom: 12px;">Use this URL as a Browser Source in OBS.</p>
-                <div class="url-box" id="playerUrl" onclick="copyPlayerUrl()">Loading...</div>
-                <p style="color: #666; font-size: 12px; margin-top: 8px;">Click to copy</p>
-
-                <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #3a3a3d;">
-                    <h4 style="color: #adadb8; font-size: 13px; margin-bottom: 10px;">Recommended OBS Browser Source Settings</h4>
-                    <div style="display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; font-size: 13px; color: #adadb8;">
-                        <span style="color: #666;">Width:</span><span style="color: #efeff1;">1920</span>
-                        <span style="color: #666;">Height:</span><span style="color: #efeff1;">1080</span>
-                        <span style="color: #666;">FPS:</span><span style="color: #efeff1;">30 (or match your canvas)</span>
-                        <span style="color: #666;">Custom CSS:</span><span style="color: #efeff1;">Leave empty</span>
-                    </div>
-                    <div style="margin-top: 10px; font-size: 12px; color: #666; display: flex; flex-direction: column; gap: 4px;">
-                        <span>&#9745; Control audio via OBS</span>
-                        <span>&#9745; Shutdown source when not visible</span>
-                        <span>&#9745; Refresh browser when scene becomes active</span>
-                    </div>
-                    <p style="color: #666; font-size: 11px; margin-top: 8px;">Tip: Check all three so clips stop playing and reset when you switch away from the scene.</p>
                 </div>
             </div>
         </div>
@@ -1719,7 +1732,7 @@ if ($currentUser) {
             // If the currently active tab is now hidden, switch to settings
             const activeTab = document.querySelector('.tab.active');
             if (activeTab && activeTab.style.display === 'none') {
-                document.querySelector('.tab[data-tab="settings"]').click();
+                document.querySelector('.tab[data-tab="overlays"]').click();
             }
         }
 
@@ -2382,17 +2395,20 @@ if ($currentUser) {
             const text = document.getElementById('botStatusText');
             const inviteBtn = document.getElementById('inviteBotBtn');
             const removeBtn = document.getElementById('removeBotBtn');
+            const setupPrompt = document.getElementById('botSetupPrompt');
 
             if (botIsActive) {
                 indicator.style.background = '#00ad03';
                 text.textContent = 'Bot is active in your channel';
                 inviteBtn.style.display = 'none';
                 removeBtn.style.display = 'inline-block';
+                if (setupPrompt) setupPrompt.style.display = 'none';
             } else {
                 indicator.style.background = '#ff4757';
                 text.textContent = 'Bot is not in your channel';
                 inviteBtn.style.display = 'inline-block';
                 removeBtn.style.display = 'none';
+                if (setupPrompt) setupPrompt.style.display = 'block';
             }
         }
 
