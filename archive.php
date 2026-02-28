@@ -51,8 +51,8 @@ header("Content-Type: text/html; charset=utf-8");
       font-weight: 700;
       margin-bottom: 8px;
       background: linear-gradient(90deg, #9147ff, #bf94ff);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+     -webkit-background-clip: text;
+     -webkit-text-fill-color: transparent;
       background-clip: text;
     }
 
@@ -331,7 +331,7 @@ header("Content-Type: text/html; charset=utf-8");
       </div>
       <div class="progress-status">
         <span id="statusText"><span class="spinner"></span>Processing...</span>
-        <div class="safe-msg">Keep this tab open. If you close it, just come back — it'll resume where it left off.</div>
+        <div class="safe-msg">Keep this tab open. If you close it, just come back. It'll resume where it left off.</div>
       </div>
     </div>
 
@@ -443,7 +443,7 @@ header("Content-Type: text/html; charset=utf-8");
         }
 
         if (data.status === 'in_progress') {
-          // Another tab is processing — just show progress and poll
+          // Another tab is processing - just show progress and poll
           showProgress(data.job);
           pollUntilDone();
           return;
@@ -452,11 +452,11 @@ header("Content-Type: text/html; charset=utf-8");
         if (data.status === 'started') {
           showProgress(data.job);
           if (data.driver === 'github') {
-            // GitHub Actions handles processing — just watch
-            updateSafeMsg('You can close this tab — archiving continues in the background.');
+            // GitHub Actions handles processing - just watch
+            updateSafeMsg('You can close this tab. Archiving continues in the background.');
             pollUntilDone();
           } else {
-            // No GitHub worker — browser drives processing
+            // No GitHub worker - browser drives processing
             processLoop(login);
           }
           return;
@@ -475,7 +475,7 @@ header("Content-Type: text/html; charset=utf-8");
     }
 
     /**
-     * Main processing loop — calls process once per window.
+     * Main processing loop - calls process once per window.
      * Each call processes one 30-day window and returns immediately.
      * Progress updates in real-time after each window completes.
      */
@@ -512,7 +512,7 @@ header("Content-Type: text/html; charset=utf-8");
           }
 
           if (data.done || data.status === 'windows_complete') {
-            // All windows done — finalize
+            // All windows done - finalize
             updateStatus('Setting up streamer...', true);
             const fin = await apiCall('finalize', login);
 
@@ -532,7 +532,7 @@ header("Content-Type: text/html; charset=utf-8");
           console.error('Process loop error:', err);
           retries++;
           if (retries > 5) {
-            showMsg('Lost connection. Refresh the page to resume — progress is saved.', 'error');
+            showMsg('Lost connection. Refresh the page to resume. Progress is saved.', 'error');
             resetForm();
             return;
           }
@@ -542,7 +542,7 @@ header("Content-Type: text/html; charset=utf-8");
     }
 
     /**
-     * Observer mode — another tab is driving the process.
+     * Observer mode - another tab is driving the process.
      * Just poll status until done.
      */
     async function pollUntilDone() {
@@ -568,7 +568,7 @@ header("Content-Type: text/html; charset=utf-8");
           if (data.status === 'pending') {
             pendingTicks++;
             if (pendingTicks > 20) { // ~60 seconds
-              updateSafeMsg('Keep this tab open — processing from your browser.');
+              updateSafeMsg('Keep this tab open. Processing from your browser.');
               processLoop(currentLogin);
               return;
             }
@@ -580,7 +580,7 @@ header("Content-Type: text/html; charset=utf-8");
             updateProgress(data.job);
           }
         } catch (e) {
-          // Network hiccup — keep polling
+          // Network hiccup - keep polling
         }
       }
     }
@@ -649,7 +649,7 @@ header("Content-Type: text/html; charset=utf-8");
       setFormDisabled(false);
     }
 
-    // On page load — check for existing job, resume if needed
+    // On page load - check for existing job, resume if needed
     document.addEventListener('DOMContentLoaded', async () => {
       const prefill = '<?= addslashes($prefillLogin) ?>';
       if (!prefill) return;
@@ -660,7 +660,7 @@ header("Content-Type: text/html; charset=utf-8");
         if (data.status === 'running') {
           currentLogin = prefill;
           showProgress(data.job);
-          updateSafeMsg('Archiving in progress — you can close this tab safely.');
+          updateSafeMsg('Archiving in progress. You can close this tab safely.');
           pollUntilDone();
           return;
         }
@@ -679,7 +679,7 @@ header("Content-Type: text/html; charset=utf-8");
           return;
         }
 
-        // Pending or failed job — restart (triggers GitHub Actions if available)
+        // Pending or failed job - restart (triggers GitHub Actions if available)
         if (data.status === 'pending' || data.status === 'failed') {
           <?php if ($currentUser): ?>
           startArchive();
@@ -690,7 +690,7 @@ header("Content-Type: text/html; charset=utf-8");
         console.error('Status check error:', e);
       }
 
-      // No existing job — auto-start if user is logged in
+      // No existing job - auto-start if user is logged in
       <?php if ($currentUser): ?>
       startArchive();
       <?php endif; ?>

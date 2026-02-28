@@ -297,11 +297,11 @@ case 'start':
       json_out(["status" => "already_archived", "clip_count" => $existingClips, "redirect" => "/search/$login"]);
     }
     if (in_array($job['status'], ['running', 'resolving_games']) && $job['updated_at'] && strtotime($job['updated_at']) > time() - 300) {
-      // Active job — observer mode
+      // Active job - observer mode
       $job['progress_pct'] = $job['total_windows'] > 0 ? round($job['current_window'] / $job['total_windows'] * 100) : 0;
       json_out(["status" => "in_progress", "job" => $job]);
     }
-    // Stale or failed — will resume from current_window
+    // Stale or failed - will resume from current_window
   } elseif ($existingClips > 0) {
     json_out(["status" => "already_archived", "clip_count" => $existingClips, "redirect" => "/search/$login"]);
   }

@@ -399,7 +399,7 @@ if ($hasArchivedClips && $pdo) {
       $cacheHit = (int)$cacheStmt->fetchColumn() > 0;
 
       if (!$cacheHit) {
-        // Cache miss — fetch from Twitch API using two-wave strategy
+        // Cache miss - fetch from Twitch API using two-wave strategy
         $result = $twitchApi->getTwoWaveClips($login);
 
         if (isset($result['error'])) {
@@ -576,7 +576,7 @@ if ($hasArchivedClips && $pdo) {
               $gameNames[$gid] = $gameInfo['name'];
               try {
                 $pdo->prepare("INSERT INTO games_cache (game_id, name) VALUES (?, ?) ON CONFLICT (game_id) DO UPDATE SET name = EXCLUDED.name")
-                  ->execute([$gid, $gameInfo['name']]);
+                 ->execute([$gid, $gameInfo['name']]);
               } catch (PDOException $e) {
                 // Ignore
               }
@@ -910,8 +910,8 @@ if ($hasArchivedClips && $pdo) {
       margin-bottom: 8px;
       line-height: 1.35;
       display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
+     -webkit-line-clamp: 2;
+     -webkit-box-orient: vertical;
       overflow: hidden;
       font-size: 14px;
     }
@@ -1307,7 +1307,7 @@ if ($hasArchivedClips && $pdo) {
         </select>
       </div>
 
-      <?php /* Date range dropdown removed for live mode — two-wave fetch covers recent + popular automatically */ ?>
+      <?php /* Date range dropdown removed for live mode - two-wave fetch covers recent + popular automatically */ ?>
 
       <button type="submit" class="filter-btn">Search</button>
       <?php if ($query || $gameId || $gameName || $clipper || $minDuration || $minViews > 0 || $exclude): ?>
@@ -1385,7 +1385,7 @@ if ($hasArchivedClips && $pdo) {
 
     <?php if ($isLiveMode && !$liveError): ?>
     <div class="info-msg" style="background: linear-gradient(90deg, rgba(145,71,255,0.2), rgba(145,71,255,0.1)); border-color: #9147ff;">
-      <strong>Live from Twitch</strong> — cached <?= $liveCacheCount ?> clips (refreshes hourly).
+      <strong>Live from Twitch</strong> - cached <?= $liveCacheCount ?> clips (refreshes hourly).
       <span style="color: #adadb8; font-size: 12px; display: block; margin-top: 5px;">
         Showing <?= $totalCount ?> clips<?= $totalCount < $liveCacheCount ? ' (filtered)' : '' ?>. Use filters above to narrow results. No voting or clip numbers in live mode.
       </span>
@@ -1522,7 +1522,7 @@ if ($hasArchivedClips && $pdo) {
       <?php endforeach; ?>
     </div>
 
-    <?php /* Load More removed for live mode — all clips are cached and pagination is SQL-based */ ?>
+    <?php /* Load More removed for live mode - all clips are cached and pagination is SQL-based */ ?>
 
     <?php if ($totalPages > 1): ?>
     <div class="pagination">
@@ -1685,7 +1685,7 @@ if ($hasArchivedClips && $pdo) {
   </script>
   <?php endif; ?>
 
-  <?php /* Load More JS removed — live mode now uses DB cache with SQL pagination */ ?>
+  <?php /* Load More JS removed - live mode now uses DB cache with SQL pagination */ ?>
 
   <?php if ($canManageClips): ?>
   <script>

@@ -60,7 +60,7 @@ if ($login && $isArchived) {
 }
 
 // OG meta
-$ogTitle = $login ? "ClipArchive — " . htmlspecialchars($login) : "ClipArchive — Twitch Clip Archive";
+$ogTitle = $login ? "ClipArchive - " . htmlspecialchars($login) : "ClipArchive - Twitch Clip Archive";
 $ogDesc = $login && $isArchived
   ? number_format($clipCount) . " clips archived for " . htmlspecialchars($login) . ". Search, play, and manage your clips."
   : "Give your viewers a way to browse, share, and relive your best clips. BRB overlay, ClipTV, chat bot, and more.";
@@ -307,7 +307,7 @@ header("Content-Type: text/html; charset=utf-8");
         <div class="feature-emoji">🗄️</div>
         <div class="feature-text">
           <h3>Browse &amp; Share</h3>
-          <p>Your clips are already out there — now they're findable. Search by title, game, clipper, or date, and share the best moments with your community.</p>
+          <p>Your clips are already out there. Now they're findable. Search by title, game, clipper, or date, and share the best moments with your community.</p>
         </div>
       </div>
 
@@ -323,7 +323,7 @@ header("Content-Type: text/html; charset=utf-8");
         <div class="feature-emoji">🤖</div>
         <div class="feature-text">
           <h3>Chat Bot</h3>
-          <p>Your viewers pick the clips. <code style="background:rgba(145,71,255,0.2);padding:2px 6px;border-radius:4px;">!clip</code> in chat and the community decides what plays next — voting, playlists, and requests on autopilot.</p>
+          <p>Your viewers pick the clips. <code style="background:rgba(145,71,255,0.2);padding:2px 6px;border-radius:4px;">!clip</code> in chat and the community decides what plays next. Voting, playlists, and requests on autopilot.</p>
         </div>
       </div>
     </div>
@@ -354,7 +354,7 @@ header("Content-Type: text/html; charset=utf-8");
         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714Z"/></svg>
         <?= $ctaText ?>
       </a>
-      <p class="cta-hint">Sign in with Twitch — takes 5 seconds</p>
+      <p class="cta-hint">Sign in with Twitch. Takes 5 seconds.</p>
     </div>
 
     <div class="invite-footer">

@@ -848,7 +848,7 @@ if ($currentUser) {
                 <p style="color: #adadb8; margin-bottom: 16px;">Enter your dashboard key or login with Twitch.</p>
                 <input type="text" id="dashboardKey" placeholder="Dashboard Key" autofocus>
                 <button onclick="loginWithKey()">Enter</button>
-                <div style="text-align: center; margin: 16px 0; color: #666;">— or —</div>
+                <div style="text-align: center; margin: 16px 0; color: #666;">or</div>
                 <a href="/auth/login.php?return=<?= urlencode('/dashboard.php') ?>" style="display: block; text-align: center; padding: 12px; background: #9147ff; color: white; border-radius: 4px; text-decoration: none;">Login with Twitch</a>
             <?php endif; ?>
         </div>

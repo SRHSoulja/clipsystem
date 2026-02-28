@@ -393,12 +393,12 @@ class TwitchAPI {
       return ['error' => 'Streamer not found', 'clips' => []];
     }
 
-    // Wave 1: Recent clips (last 7 days) — guarantees fresh content
+    // Wave 1: Recent clips (last 7 days) - guarantees fresh content
     $now = new DateTime('now', new DateTimeZone('UTC'));
     $recentStart = (clone $now)->modify('-7 days')->format('Y-m-d\TH:i:s\Z');
     $recentClips = $this->getAllClips($broadcasterId, $recentLimit, null, $recentStart);
 
-    // Wave 2: Popular clips (all time) — the viral/classic clips
+    // Wave 2: Popular clips (all time) - the viral/classic clips
     $popularClips = $this->getAllClips($broadcasterId, $popularLimit);
 
     // Merge: recent clips take precedence (fresher view counts)

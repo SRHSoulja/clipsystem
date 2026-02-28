@@ -1209,7 +1209,7 @@
       <button class="chat-close" id="chatClose">✕</button>
     </div>
     <div class="chat-messages" id="chatMessages">
-      <div class="chat-empty">No messages yet — say something!</div>
+      <div class="chat-empty">No messages yet - say something!</div>
     </div>
     <div class="chat-input-area" id="chatInputArea" style="display:none">
       <input type="text" id="chatInput" placeholder="Say something..." maxlength="200" autocomplete="off" />
@@ -2920,7 +2920,7 @@
       clipPreview.className = 'clip-preview';
       const dur = clip.duration ? (clip.duration < 60 ? `${Math.round(clip.duration)}s` : `${Math.floor(clip.duration/60)}:${(Math.round(clip.duration)%60).toString().padStart(2,'0')}`) : '';
       clipPreview.innerHTML = `
-        <div class="preview-title">#${clip.seq} — ${escapeHtml(clip.title || 'Untitled')}</div>
+        <div class="preview-title">#${clip.seq} - ${escapeHtml(clip.title || 'Untitled')}</div>
         <div class="preview-meta">
           ${dur ? `<span class="pm-dur">${dur}</span>` : ''}
           ${clip.game_name ? `<span class="pm-game">${escapeHtml(clip.game_name)}</span>` : ''}
@@ -3005,7 +3005,7 @@
     }).join('');
 
     if (list.length > maxShow) {
-      clipList.innerHTML += `<div class="clip-list-status">${list.length - maxShow} more clips — refine your search</div>`;
+      clipList.innerHTML += `<div class="clip-list-status">${list.length - maxShow} more clips - refine your search</div>`;
     }
 
     // Attach play handlers
@@ -3060,7 +3060,7 @@
 
   function renderQueue() {
     if (!upNextQueue.length) {
-      queueList.innerHTML = '<div class="clip-list-status">Queue is empty — waiting for clips to load</div>';
+      queueList.innerHTML = '<div class="clip-list-status">Queue is empty - waiting for clips to load</div>';
       return;
     }
     queueList.innerHTML = upNextQueue.map((c, i) => {
@@ -3069,7 +3069,7 @@
         <div class="clip-row" data-queue-idx="${i}" data-clip-id="${c.id}">
           <span class="cr-pos">${i + 1}</span>
           <div class="cr-info">
-            <div class="cr-title">#${c.seq || '?'} — ${escapeHtml(c.title || 'Untitled')}</div>
+            <div class="cr-title">#${c.seq || '?'} - ${escapeHtml(c.title || 'Untitled')}</div>
             <div class="cr-meta">
               ${dur ? `<span class="cm-dur">${dur}</span> ` : ''}
               ${c.game_name ? `<span class="cm-game">${escapeHtml(c.game_name)}</span>` : ''}
@@ -3127,7 +3127,7 @@
         <div class="clip-row" data-history-idx="${i}" data-clip-id="${c.id}">
           <span class="cr-pos" style="color:#60a5fa">${i === 0 ? '⏮' : i + 1}</span>
           <div class="cr-info">
-            <div class="cr-title">#${c.seq || '?'} — ${escapeHtml(c.title || 'Untitled')}</div>
+            <div class="cr-title">#${c.seq || '?'} - ${escapeHtml(c.title || 'Untitled')}</div>
             <div class="cr-meta">
               ${dur ? `<span class="cm-dur">${dur}</span> ` : ''}
               ${c.game_name ? `<span class="cm-game">${escapeHtml(c.game_name)}</span>` : ''}

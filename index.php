@@ -410,7 +410,7 @@ header("Content-Type: text/html; charset=utf-8");
       <h1>Your stream's greatest hits, on demand</h1>
       <p class="tagline">
         Let your viewers <strong>browse</strong>, <strong>share</strong>, and <strong>relive</strong> your best clips.
-        BRB overlays, chat bot playback, voting, playlists — all built in.
+        BRB overlays, chat bot playback, voting, playlists. All built in.
       </p>
 
       <form class="search-box" onsubmit="goToSearch(event)">
@@ -446,7 +446,7 @@ header("Content-Type: text/html; charset=utf-8");
         <div class="feature-icon">🔍</div>
         <div>
           <h3>Browse &amp; Search</h3>
-          <p>Your full clip library — searchable by game, title, date, or clipper. Viewers share their favorites.</p>
+          <p>Your full clip library, searchable by game, title, date, or clipper. Viewers share their favorites.</p>
         </div>
       </div>
       <div class="feature-card">
@@ -467,7 +467,7 @@ header("Content-Type: text/html; charset=utf-8");
         <div class="feature-icon">📊</div>
         <div>
           <h3>Community Voting</h3>
-          <p>Your viewers pick the best clips. Favorites rise to the top — engagement that runs itself.</p>
+          <p>Your viewers pick the best clips. Favorites rise to the top. Engagement that runs itself.</p>
         </div>
       </div>
     </div>
