@@ -317,7 +317,7 @@ case 'start':
   if ($_SERVER['REQUEST_METHOD'] !== 'POST') { json_err("POST only", 405); }
 
   $user = getCurrentUser();
-  if (!$user) { json_out(["error" => "login_required", "login_url" => "/auth/login.php?return=/archive"]); }
+  if (!$user) { json_out(["error" => "login_required", "login_url" => "/auth/login.php?return=" . urlencode("/archive?login=$login")]); }
   if (!$login) { json_err("Missing login parameter"); }
 
   // Already archived?

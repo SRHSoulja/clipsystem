@@ -394,7 +394,7 @@ header("Content-Type: text/html; charset=utf-8");
         const data = await res.json();
 
         if (data.error === 'login_required') {
-          window.location.href = data.login_url || '/auth/login.php?return=/archive?login=' + encodeURIComponent(login);
+          window.location.href = data.login_url || '/auth/login.php?return=' + encodeURIComponent('/archive?login=' + login);
           return;
         }
 
