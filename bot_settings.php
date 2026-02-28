@@ -33,7 +33,7 @@ $pdo = get_db_connection();
 if (isset($_GET['set_silent_prefix']) || isset($_POST['set_silent_prefix'])) {
   // Requires admin key
   $key = $_GET["key"] ?? $_POST["key"] ?? "";
-  if ($key !== $ADMIN_KEY || $ADMIN_KEY === '') {
+  if ($ADMIN_KEY === '' || !hash_equals($ADMIN_KEY, (string)$key)) {
     http_response_code(403);
     echo json_encode(["error" => "forbidden"]);
     exit;
@@ -64,7 +64,7 @@ if (isset($_GET['set_silent_prefix']) || isset($_POST['set_silent_prefix'])) {
       ]);
     } catch (PDOException $e) {
       http_response_code(500);
-      echo json_encode(["error" => "database error: " . $e->getMessage()]);
+      echo json_encode(["error" => "Database error"]);
     }
   } else {
     http_response_code(500);

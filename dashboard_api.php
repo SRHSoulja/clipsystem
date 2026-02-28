@@ -719,7 +719,7 @@ switch ($action) {
                 "available_clippers" => $clippers
             ]);
         } catch (Exception $e) {
-            json_error("Error loading weighting config: " . $e->getMessage(), 500);
+            json_error("Error loading weighting config", 500);
         }
         break;
 
@@ -750,7 +750,7 @@ switch ($action) {
                 json_error("Failed to save weighting config");
             }
         } catch (Exception $e) {
-            json_error("Error saving weighting config: " . $e->getMessage(), 500);
+            json_error("Error saving weighting config", 500);
         }
         break;
 
@@ -774,7 +774,7 @@ switch ($action) {
                 json_error("Failed to reset weighting config");
             }
         } catch (Exception $e) {
-            json_error("Error resetting weighting config: " . $e->getMessage(), 500);
+            json_error("Error resetting weighting config", 500);
         }
         break;
 
@@ -818,7 +818,7 @@ switch ($action) {
                 json_error("Clip #{$seq} is already a golden clip");
             }
         } catch (Exception $e) {
-            json_error("Error adding golden clip: " . $e->getMessage(), 500);
+            json_error("Error adding golden clip", 500);
         }
         break;
 
@@ -844,7 +844,7 @@ switch ($action) {
                 "config" => $weighting->getConfig()
             ]);
         } catch (Exception $e) {
-            json_error("Error removing golden clip: " . $e->getMessage(), 500);
+            json_error("Error removing golden clip", 500);
         }
         break;
 

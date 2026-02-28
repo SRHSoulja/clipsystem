@@ -90,5 +90,5 @@ try {
   echo "Skipping current clip...";
 } catch (PDOException $e) {
   error_log("cskip error: " . $e->getMessage());
-  echo "Error: " . $e->getMessage();
+  echo "Error: command failed";
 }

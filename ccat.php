@@ -97,7 +97,7 @@ try {
   }
 } catch (PDOException $e) {
   error_log("ccat db error: " . $e->getMessage());
-  echo "Database error: " . $e->getMessage();
+  echo "Database error";
   exit;
 }
 

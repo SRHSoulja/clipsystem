@@ -34,7 +34,7 @@ $key   = (string)($_GET["key"] ?? "");
 // Load from environment (set ADMIN_KEY in Railway)
 $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
 
-if ($key !== $ADMIN_KEY) { http_response_code(403); echo "forbidden"; exit; }
+if ($ADMIN_KEY === '' || !hash_equals($ADMIN_KEY, (string)$key)) { http_response_code(403); echo "forbidden"; exit; }
 if ($seq <= 0) { echo "Usage: !cremove <clip#>"; exit; }
 
 // Try PostgreSQL first (fast indexed lookup + update)

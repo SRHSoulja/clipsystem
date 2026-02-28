@@ -53,7 +53,7 @@ if ($pdo) {
       echo json_encode(["up_votes" => 0, "down_votes" => 0]);
     }
   } catch (PDOException $e) {
-    echo json_encode(["up_votes" => 0, "down_votes" => 0, "error" => $e->getMessage()]);
+    echo json_encode(["up_votes" => 0, "down_votes" => 0, "error" => "Database error"]);
   }
 } else {
   echo json_encode(["up_votes" => 0, "down_votes" => 0]);

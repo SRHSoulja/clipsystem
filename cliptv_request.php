@@ -65,7 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       $stmt->execute([$login]);
       echo json_encode(["ok" => true]);
     } catch (PDOException $e) {
-      echo json_encode(["error" => $e->getMessage()]);
+      echo json_encode(["error" => "Database error"]);
     }
     exit;
   }
@@ -100,7 +100,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     echo json_encode(["ok" => true, "login" => $login, "clip_id" => $clipId]);
   } catch (PDOException $e) {
     http_response_code(500);
-    echo json_encode(["error" => $e->getMessage()]);
+    echo json_encode(["error" => "Database error"]);
   }
   exit;
 }

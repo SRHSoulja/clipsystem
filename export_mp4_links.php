@@ -33,7 +33,7 @@ require_once __DIR__ . '/db_config.php';
 // Auth check
 $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
 $key = $_GET['key'] ?? '';
-if ($key !== $ADMIN_KEY) {
+if ($ADMIN_KEY === '' || !hash_equals($ADMIN_KEY, (string)$key)) {
     http_response_code(403);
     header("Content-Type: text/plain");
     echo "Forbidden. Use ?key=YOUR_ADMIN_KEY";
@@ -94,7 +94,7 @@ try {
 } catch (PDOException $e) {
     http_response_code(500);
     header("Content-Type: text/plain");
-    echo "Database error: " . $e->getMessage();
+    echo "Database error";
     exit;
 }
 

@@ -35,7 +35,7 @@ $key   = (string)($_GET["key"] ?? "");
 // Load from environment
 $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
 
-if ($key !== $ADMIN_KEY) { http_response_code(403); echo "forbidden"; exit; }
+if ($ADMIN_KEY === '' || !hash_equals($ADMIN_KEY, (string)$key)) { http_response_code(403); echo "forbidden"; exit; }
 
 // If no query provided, just return the search page link
 $baseUrl = getenv('API_BASE_URL') ?: 'https://clips.gmgnrepeat.com';

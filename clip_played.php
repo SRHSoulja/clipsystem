@@ -80,5 +80,5 @@ try {
 
 } catch (PDOException $e) {
   error_log("clip_played error: " . $e->getMessage());
-  json_response(false, "Database error: " . $e->getMessage());
+  json_response(false, "Database error");
 }

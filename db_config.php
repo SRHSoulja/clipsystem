@@ -7,10 +7,17 @@
  */
 
 function get_db_connection() {
+    static $cached = null;
+
+    if ($cached !== null) {
+        return $cached ?: null;
+    }
+
     $dbUrl = getenv('DATABASE_URL');
 
     if (!$dbUrl) {
         // Return null if no database configured - will fall back to file storage
+        $cached = false;
         return null;
     }
 
@@ -19,6 +26,7 @@ function get_db_connection() {
 
     if (!$parsed) {
         error_log("Failed to parse DATABASE_URL");
+        $cached = false;
         return null;
     }
 
@@ -34,9 +42,11 @@ function get_db_connection() {
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
         ]);
+        $cached = $pdo;
         return $pdo;
     } catch (PDOException $e) {
         error_log("Database connection failed: " . $e->getMessage());
+        $cached = false;
         return null;
     }
 }

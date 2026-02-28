@@ -88,5 +88,5 @@ try {
   echo "Going back to previous clip...";
 } catch (PDOException $e) {
   error_log("cprev error: " . $e->getMessage());
-  echo "Error: " . $e->getMessage();
+  echo "Error: command failed";
 }

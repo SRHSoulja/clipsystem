@@ -48,10 +48,12 @@ class DashboardAuth {
     ];
 
     /**
-     * Create tables if they don't exist
+     * Create tables if they don't exist (runs once per request)
      */
     private function ensureTableExists() {
-        if (!$this->pdo) return;
+        static $done = false;
+        if ($done || !$this->pdo) return;
+        $done = true;
 
         try {
             $this->pdo->exec("

@@ -28,7 +28,8 @@ $count = max(3, min(6, $count));
 
 $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
 
-if ($key !== $ADMIN_KEY) {
+if ($ADMIN_KEY === '' || !hash_equals($ADMIN_KEY, (string)$key)) {
+  http_response_code(403);
   echo "forbidden";
   exit;
 }
@@ -92,5 +93,5 @@ try {
 
   echo "Showing top {$count} clips...";
 } catch (PDOException $e) {
-  echo "Error: " . $e->getMessage();
+  echo "Error: command failed";
 }

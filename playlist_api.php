@@ -127,7 +127,7 @@ switch ($action) {
       $playlists = $stmt->fetchAll(PDO::FETCH_ASSOC);
       json_response(["playlists" => $playlists]);
     } catch (PDOException $e) {
-      json_error("Database error: " . $e->getMessage(), 500);
+      json_error("Database error", 500);
     }
     break;
 
@@ -164,7 +164,7 @@ switch ($action) {
       $playlist['total_duration'] = $totalDuration;
       json_response(["playlist" => $playlist]);
     } catch (PDOException $e) {
-      json_error("Database error: " . $e->getMessage(), 500);
+      json_error("Database error", 500);
     }
     break;
 
@@ -183,7 +183,7 @@ switch ($action) {
       if (strpos($e->getMessage(), 'duplicate') !== false || strpos($e->getMessage(), 'unique') !== false) {
         json_error("Playlist with that name already exists");
       }
-      json_error("Database error: " . $e->getMessage(), 500);
+      json_error("Database error", 500);
     }
     break;
 
@@ -200,7 +200,7 @@ switch ($action) {
       }
       json_response(["success" => true]);
     } catch (PDOException $e) {
-      json_error("Database error: " . $e->getMessage(), 500);
+      json_error("Database error", 500);
     }
     break;
 
@@ -236,7 +236,7 @@ switch ($action) {
 
       json_response(["success" => true, "added" => $added]);
     } catch (PDOException $e) {
-      json_error("Database error: " . $e->getMessage(), 500);
+      json_error("Database error", 500);
     }
     break;
 
@@ -257,7 +257,7 @@ switch ($action) {
       $stmt->execute([$id, $seq]);
       json_response(["success" => true]);
     } catch (PDOException $e) {
-      json_error("Database error: " . $e->getMessage(), 500);
+      json_error("Database error", 500);
     }
     break;
 
@@ -315,7 +315,7 @@ switch ($action) {
         ]
       ]);
     } catch (PDOException $e) {
-      json_error("Database error: " . $e->getMessage(), 500);
+      json_error("Database error", 500);
     }
     break;
 
@@ -338,7 +338,7 @@ switch ($action) {
       if (strpos($e->getMessage(), 'duplicate') !== false || strpos($e->getMessage(), 'unique') !== false) {
         json_error("Playlist with that name already exists");
       }
-      json_error("Database error: " . $e->getMessage(), 500);
+      json_error("Database error", 500);
     }
     break;
 
@@ -356,7 +356,7 @@ switch ($action) {
 
       json_response(["playlist" => $playlist]);
     } catch (PDOException $e) {
-      json_error("Database error: " . $e->getMessage(), 500);
+      json_error("Database error", 500);
     }
     break;
 
@@ -367,7 +367,7 @@ switch ($action) {
       $stmt->execute([$login]);
       json_response(["success" => true, "message" => "Playlist stopped"]);
     } catch (PDOException $e) {
-      json_error("Database error: " . $e->getMessage(), 500);
+      json_error("Database error", 500);
     }
     break;
 
@@ -400,7 +400,7 @@ switch ($action) {
         json_response(["active" => false]);
       }
     } catch (PDOException $e) {
-      json_error("Database error: " . $e->getMessage(), 500);
+      json_error("Database error", 500);
     }
     break;
 
@@ -443,7 +443,7 @@ switch ($action) {
       json_response(["success" => true]);
     } catch (PDOException $e) {
       if ($pdo->inTransaction()) $pdo->rollBack();
-      json_error("Database error: " . $e->getMessage(), 500);
+      json_error("Database error", 500);
     }
     break;
 
@@ -481,7 +481,7 @@ switch ($action) {
       json_response(["success" => true]);
     } catch (PDOException $e) {
       if ($pdo->inTransaction()) $pdo->rollBack();
-      json_error("Database error: " . $e->getMessage(), 500);
+      json_error("Database error", 500);
     }
     break;
 
