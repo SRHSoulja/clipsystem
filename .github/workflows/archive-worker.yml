@@ -1,0 +1,70 @@
+name: Archive Worker
+
+on:
+  repository_dispatch:
+    types: [archive-channel]
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Process archive job
+        env:
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          BASE_URL: https://clips.gmgnrepeat.com
+        run: |
+          LOGIN="${{ github.event.client_payload.login }}"
+          echo "Starting archive for: $LOGIN"
+
+          RETRIES=0
+          MAX_RETRIES=5
+
+          while true; do
+            response=$(curl -s -X POST \
+              "$BASE_URL/archive_api.php?action=process" \
+              -d "login=$LOGIN&key=$ADMIN_KEY")
+
+            status=$(echo "$response" | jq -r '.status // "unknown"')
+            done_flag=$(echo "$response" | jq -r '.done // false')
+            error=$(echo "$response" | jq -r '.error // empty')
+
+            if [ -n "$error" ] && [ "$error" != "null" ]; then
+              echo "Error: $error"
+              RETRIES=$((RETRIES + 1))
+              if [ $RETRIES -ge $MAX_RETRIES ]; then
+                echo "::error::Archive failed after $MAX_RETRIES retries"
+                exit 1
+              fi
+              sleep 5
+              continue
+            fi
+
+            RETRIES=0
+
+            window=$(echo "$response" | jq -r '.job.current_window // "?"')
+            total=$(echo "$response" | jq -r '.job.total_windows // "?"')
+            clips=$(echo "$response" | jq -r '.job.clips_found // 0')
+            echo "Window $window/$total - $clips clips found so far"
+
+            if [ "$done_flag" = "true" ] || [ "$status" = "windows_complete" ]; then
+              echo "All windows processed, finalizing..."
+
+              fin_response=$(curl -s -X POST \
+                "$BASE_URL/archive_api.php?action=finalize" \
+                -d "login=$LOGIN&key=$ADMIN_KEY")
+
+              fin_status=$(echo "$fin_response" | jq -r '.status // "unknown"')
+              clips_total=$(echo "$fin_response" | jq -r '.clips_total // 0')
+
+              if [ "$fin_status" = "complete" ]; then
+                echo "Archive complete! $clips_total clips archived for $LOGIN"
+              else
+                echo "::error::Finalize failed: $(echo "$fin_response" | jq -r '.error // "unknown"')"
+                exit 1
+              fi
+              break
+            fi
+
+            sleep 1
+          done

@@ -3,14 +3,15 @@
  * archive_api.php - Self-service archive API
  *
  * Flow:
- *   1. Frontend POSTs ?action=start    → creates job
- *   2. Frontend POSTs ?action=process  → processes ONE 30-day window, returns progress
- *   3. Frontend loops process calls until all windows done
- *   4. Frontend POSTs ?action=finalize → reorders clips, resolves games, sets up streamer
- *   5. Frontend redirects to /search/login
+ *   1. Frontend POSTs ?action=start    → creates job, triggers GitHub Actions worker
+ *   2. GitHub Actions (or browser fallback) POSTs ?action=process in a loop
+ *   3. Each process call handles ONE 30-day window and returns progress
+ *   4. After all windows: ?action=finalize → reorders clips, resolves games, sets up streamer
+ *   5. Frontend polls ?action=status to show progress bar
  *
- * If the user closes the tab, the current window finishes. When they return,
- * the job resumes from where it left off.
+ * GitHub Actions drives processing via repository_dispatch (needs GITHUB_PAT env var).
+ * If GITHUB_PAT is not set, falls back to browser-driven processing.
+ * Process/finalize accept ADMIN_KEY auth so GitHub Actions can call them.
  */
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
@@ -43,6 +44,37 @@ function clean_login($s) {
 function sleep_backoff($attempt) {
   $base = min(8, 1 + $attempt);
   usleep($base * 1000000);
+}
+
+/**
+ * Trigger a GitHub Actions workflow to process this archive job.
+ * Uses repository_dispatch so the worker runs in GitHub's infrastructure.
+ * Returns true if triggered successfully, false otherwise (falls back to browser).
+ */
+function trigger_github_archive($login) {
+  $pat = getenv('GITHUB_PAT') ?: '';
+  if (!$pat) return false;
+
+  $ch = curl_init('https://api.github.com/repos/SRHSoulja/clipsystem/dispatches');
+  curl_setopt_array($ch, [
+    CURLOPT_POST => true,
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_HTTPHEADER => [
+      'Authorization: token ' . $pat,
+      'Accept: application/vnd.github.v3+json',
+      'User-Agent: ClipArchive',
+      'Content-Type: application/json',
+    ],
+    CURLOPT_POSTFIELDS => json_encode([
+      'event_type' => 'archive-channel',
+      'client_payload' => ['login' => $login]
+    ]),
+    CURLOPT_TIMEOUT => 10,
+  ]);
+  curl_exec($ch);
+  $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+  curl_close($ch);
+  return $httpCode >= 200 && $httpCode < 300;
 }
 
 /**
@@ -321,7 +353,13 @@ case 'start':
   $job = $stmt->fetch(PDO::FETCH_ASSOC);
   $job['progress_pct'] = 0;
 
-  json_out(["status" => "started", "job" => $job]);
+  // Try to trigger GitHub Actions worker (falls back to browser if no PAT)
+  $driver = 'browser';
+  if (trigger_github_archive($login)) {
+    $driver = 'github';
+  }
+
+  json_out(["status" => "started", "job" => $job, "driver" => $driver]);
   break;
 
 // ─────────────────────────────────────────────
@@ -355,7 +393,9 @@ case 'process':
   if ($_SERVER['REQUEST_METHOD'] !== 'POST') { json_err("POST only", 405); }
 
   $user = getCurrentUser();
-  if (!$user) { json_out(["error" => "login_required"]); }
+  $pAdminKey = getenv('ADMIN_KEY') ?: '';
+  $pProvidedKey = $_REQUEST['key'] ?? '';
+  if (!$user && !($pAdminKey && $pProvidedKey === $pAdminKey)) { json_out(["error" => "login_required"]); }
   if (!$login) { json_err("Missing login parameter"); }
 
   // Load job
@@ -393,7 +433,9 @@ case 'finalize':
   if ($_SERVER['REQUEST_METHOD'] !== 'POST') { json_err("POST only", 405); }
 
   $user = getCurrentUser();
-  if (!$user) { json_out(["error" => "login_required"]); }
+  $fAdminKey = getenv('ADMIN_KEY') ?: '';
+  $fProvidedKey = $_REQUEST['key'] ?? '';
+  if (!$user && !($fAdminKey && $fProvidedKey === $fAdminKey)) { json_out(["error" => "login_required"]); }
   if (!$login) { json_err("Missing login parameter"); }
 
   $stmt = $pdo->prepare("SELECT * FROM archive_jobs WHERE login = ?");

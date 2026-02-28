@@ -131,7 +131,7 @@ if ($authenticated) {
   $pdo = get_db_connection();
   if ($pdo) {
     try {
-      $stmt = $pdo->query("SELECT login, COUNT(*) as clip_count, MAX(created_at) as latest_clip FROM clips GROUP BY login ORDER BY login");
+      $stmt = $pdo->query("SELECT c.login, COUNT(*) as clip_count, MAX(c.created_at) as latest_clip, cs.last_refresh FROM clips c LEFT JOIN channel_settings cs ON cs.login = c.login GROUP BY c.login, cs.last_refresh ORDER BY c.login");
       $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
     } catch (PDOException $e) {
       // Ignore errors
@@ -444,6 +444,7 @@ if ($authenticated) {
             <th>Username</th>
             <th>Clips</th>
             <th>Latest Clip</th>
+            <th>Last Updated</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -457,6 +458,7 @@ if ($authenticated) {
             </td>
             <td><?= number_format($user['clip_count']) ?></td>
             <td><?= $user['latest_clip'] ? date('M j, Y', strtotime($user['latest_clip'])) : '-' ?></td>
+            <td><?= !empty($user['last_refresh']) ? date('M j, Y', strtotime($user['last_refresh'])) : '-' ?></td>
             <td>
               <form method="POST" style="display: inline;">
                 <input type="hidden" name="action" value="refresh_user">

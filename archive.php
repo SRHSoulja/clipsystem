@@ -451,7 +451,14 @@ header("Content-Type: text/html; charset=utf-8");
 
         if (data.status === 'started') {
           showProgress(data.job);
-          processLoop(login);
+          if (data.driver === 'github') {
+            // GitHub Actions handles processing — just watch
+            updateSafeMsg('You can close this tab — archiving continues in the background.');
+            pollUntilDone();
+          } else {
+            // No GitHub worker — browser drives processing
+            processLoop(login);
+          }
           return;
         }
 
@@ -539,6 +546,8 @@ header("Content-Type: text/html; charset=utf-8");
      * Just poll status until done.
      */
     async function pollUntilDone() {
+      let pendingTicks = 0;
+
       while (true) {
         await sleep(3000);
         try {
@@ -553,6 +562,18 @@ header("Content-Type: text/html; charset=utf-8");
             showMsg('Archive failed: ' + (data.job?.error_message || 'Unknown error') + '. You can try again.', 'error');
             resetForm();
             return;
+          }
+
+          // If stuck in pending too long, GitHub Actions may have failed to start
+          if (data.status === 'pending') {
+            pendingTicks++;
+            if (pendingTicks > 20) { // ~60 seconds
+              updateSafeMsg('Keep this tab open — processing from your browser.');
+              processLoop(currentLogin);
+              return;
+            }
+          } else {
+            pendingTicks = 0;
           }
 
           if (data.job) {
@@ -588,6 +609,11 @@ header("Content-Type: text/html; charset=utf-8");
 
       document.getElementById('progressTitle').textContent = 'Archiving ' + currentLogin + '...';
       document.getElementById('statusText').innerHTML = '<span class="spinner"></span>Processing window ' + current + ' of ' + total + '...';
+    }
+
+    function updateSafeMsg(text) {
+      const el = document.querySelector('.safe-msg');
+      if (el) el.textContent = text;
     }
 
     function updateStatus(text, isFinalize) {
@@ -632,9 +658,9 @@ header("Content-Type: text/html; charset=utf-8");
         const data = await apiCall('status', prefill, 'GET');
 
         if (data.status === 'running') {
-          // Another process is driving — observe
           currentLogin = prefill;
           showProgress(data.job);
+          updateSafeMsg('Archiving in progress — you can close this tab safely.');
           pollUntilDone();
           return;
         }
@@ -653,12 +679,10 @@ header("Content-Type: text/html; charset=utf-8");
           return;
         }
 
-        // Pending or failed job exists — resume processing
+        // Pending or failed job — restart (triggers GitHub Actions if available)
         if (data.status === 'pending' || data.status === 'failed') {
           <?php if ($currentUser): ?>
-          currentLogin = prefill;
-          showProgress(data.job);
-          processLoop(prefill);
+          startArchive();
           return;
           <?php endif; ?>
         }
