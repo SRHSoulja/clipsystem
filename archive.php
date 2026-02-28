@@ -354,7 +354,7 @@ header("Content-Type: text/html; charset=utf-8");
 
     let currentLogin = '';
     let pollTimer = null;
-    let isObserver = false;
+    let busy = false;
 
     function showMsg(text, type) {
       msg.className = 'message visible ' + type;
@@ -372,12 +372,15 @@ header("Content-Type: text/html; charset=utf-8");
     }
 
     async function startArchive(e) {
-      e.preventDefault();
+      if (e && e.preventDefault) e.preventDefault();
+      if (busy) return;
+      busy = true;
       hideMsg();
 
       const login = loginInput.value.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
       if (!login) {
         showMsg('Please enter a streamer name.', 'error');
+        busy = false;
         return;
       }
 
@@ -391,7 +394,18 @@ header("Content-Type: text/html; charset=utf-8");
           body: 'login=' + encodeURIComponent(login)
         });
 
-        const data = await res.json();
+        // Handle non-JSON responses (PHP errors)
+        const text = await res.text();
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch (parseErr) {
+          console.error('Archive API returned non-JSON:', text);
+          showMsg('Server error. Check console for details.', 'error');
+          setFormDisabled(false);
+          busy = false;
+          return;
+        }
 
         if (data.error === 'login_required') {
           window.location.href = data.login_url || '/auth/login.php?return=' + encodeURIComponent('/archive?login=' + login);
@@ -401,61 +415,62 @@ header("Content-Type: text/html; charset=utf-8");
         if (data.error === 'rate_limited') {
           showMsg(data.message || 'Archive queue is full. Try again in a few minutes.', 'error');
           setFormDisabled(false);
+          busy = false;
           return;
         }
 
         if (data.error === 'streamer_not_found') {
           showMsg(data.message || 'Streamer not found on Twitch.', 'error');
           setFormDisabled(false);
+          busy = false;
           return;
         }
 
         if (data.error) {
-          showMsg(data.error, 'error');
+          showMsg('Error: ' + (data.message || data.error), 'error');
           setFormDisabled(false);
+          busy = false;
           return;
         }
 
         if (data.status === 'already_archived') {
           showMsg('This streamer is already archived! <a href="' + data.redirect + '">Browse their clips</a>', 'success');
           setFormDisabled(false);
+          busy = false;
           return;
         }
 
         if (data.status === 'in_progress') {
-          // Observer mode — someone else started this, just poll
-          isObserver = true;
           showProgress(data.job);
           startPolling();
           return;
         }
 
         if (data.status === 'started') {
-          // We started it — fire off process (fire-and-forget) then poll
-          isObserver = false;
           showProgress(data.job);
           fireProcess(login);
           startPolling();
           return;
         }
 
-        showMsg('Unexpected response.', 'error');
+        console.error('Unexpected archive response:', data);
+        showMsg('Unexpected response from server.', 'error');
         setFormDisabled(false);
+        busy = false;
       } catch (err) {
-        showMsg('Network error. Please try again.', 'error');
+        console.error('Archive fetch error:', err);
+        showMsg('Network error: ' + err.message + '. Please try again.', 'error');
         setFormDisabled(false);
+        busy = false;
       }
     }
 
     function fireProcess(login) {
-      // Fire-and-forget: we don't need the response
       fetch('/archive_api.php?action=process', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: 'login=' + encodeURIComponent(login)
-      }).catch(() => {
-        // Ignore — background processing continues server-side
-      });
+      }).catch(() => {});
     }
 
     function showProgress(job) {
@@ -513,6 +528,7 @@ header("Content-Type: text/html; charset=utf-8");
           document.querySelector('.form-hint').style.display = '';
           showMsg('Archive failed: ' + (data.job?.error_message || 'Unknown error') + '. You can try again.', 'error');
           setFormDisabled(false);
+          busy = false;
           return;
         }
 
@@ -535,37 +551,40 @@ header("Content-Type: text/html; charset=utf-8");
       const redirect = job?.redirect || '/search/' + encodeURIComponent(currentLogin);
       document.getElementById('completeBtn').href = redirect;
 
-      // Auto-redirect after 3 seconds
-      setTimeout(() => {
-        window.location.href = redirect;
-      }, 3000);
+      setTimeout(() => { window.location.href = redirect; }, 3000);
     }
 
-    // Auto-start if login is prefilled and user is logged in
-    <?php if ($prefillLogin && $currentUser): ?>
-    document.addEventListener('DOMContentLoaded', () => {
-      startArchive(new Event('submit'));
-    });
-    <?php endif; ?>
-
-    // Also check if there's an existing in-progress job on page load
-    <?php if ($prefillLogin): ?>
+    // Single init on page load — check for existing job first, then auto-start if needed
     document.addEventListener('DOMContentLoaded', async () => {
+      const prefill = '<?= addslashes($prefillLogin) ?>';
+      if (!prefill) return;
+
+      // First check if there's already a running/complete job
       try {
-        const res = await fetch('/archive_api.php?action=status&login=<?= urlencode($prefillLogin) ?>');
+        const res = await fetch('/archive_api.php?action=status&login=' + encodeURIComponent(prefill));
         const data = await res.json();
+
         if (data.status === 'running' || data.status === 'resolving_games') {
-          currentLogin = '<?= $prefillLogin ?>';
-          isObserver = true;
+          currentLogin = prefill;
           showProgress(data.job);
           startPolling();
-        } else if (data.status === 'complete') {
-          currentLogin = '<?= $prefillLogin ?>';
-          showComplete(data.job);
+          return;
         }
-      } catch (e) {}
+
+        if (data.status === 'complete' && data.job) {
+          currentLogin = prefill;
+          showComplete(data.job);
+          return;
+        }
+      } catch (e) {
+        console.error('Status check error:', e);
+      }
+
+      // No existing job — auto-start if user is logged in
+      <?php if ($currentUser): ?>
+      startArchive();
+      <?php endif; ?>
     });
-    <?php endif; ?>
   </script>
 </body>
 </html>
