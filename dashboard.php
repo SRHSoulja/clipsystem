@@ -1058,7 +1058,7 @@ if ($currentUser) {
                     </div>
 
                     <div id="scrollSpeedGroup" style="display:none;">
-                        <label>Scroll Speed <span style="color:#666;font-weight:normal;font-size:12px;">(preview speed will differ from stream)</span></label>
+                        <label>Scroll Speed <span style="color:#666;font-weight:normal;font-size:12px;">(preview speed may differ from stream)</span></label>
                         <div class="slider-group">
                             <input type="range" id="bannerScrollSpeed" min="3" max="20" value="8" oninput="updateBannerPreview(); debouncedSaveBanner();">
                             <span class="slider-value" id="bannerScrollSpeedValue">8s</span>
