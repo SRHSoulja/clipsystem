@@ -1157,10 +1157,10 @@ if ($currentUser) {
                     </div>
                     <div style="margin-top: 10px; font-size: 12px; color: #666; display: flex; flex-direction: column; gap: 4px;">
                         <span>&#9745; Control audio via OBS</span>
-                        <span>&#9744; Shutdown source when not visible</span>
-                        <span>&#9744; Refresh browser when scene becomes active</span>
+                        <span>&#9745; Shutdown source when not visible</span>
+                        <span>&#9745; Refresh browser when scene becomes active</span>
                     </div>
-                    <p style="color: #666; font-size: 11px; margin-top: 8px;">Tip: Keep "Shutdown source" and "Refresh browser" unchecked so clips keep playing when you switch scenes.</p>
+                    <p style="color: #666; font-size: 11px; margin-top: 8px;">Tip: Check all three so clips stop playing and reset when you switch away from the scene.</p>
                 </div>
             </div>
         </div>

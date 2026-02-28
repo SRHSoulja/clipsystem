@@ -285,7 +285,7 @@ if ($currentUser && $login === $oauthChannel && !$isStreamerOfChannel && !$isSup
     body.view-as-active #viewAsBanner { display: flex !important; }
 
     .dashboard { display: none; }
-    .dashboard.active { display: flex; flex-direction: column; height: 100vh; }
+    .dashboard.active { display: flex; flex-direction: column; height: calc(100vh - 56px); }
 
     .header {
       background: #18181b;
@@ -334,11 +334,12 @@ if ($currentUser && $login === $oauthChannel && !$isStreamerOfChannel && !$isSup
 
     /* ===== CLIPS TAB ===== */
     .search-bar {
-      padding: 16px;
+      padding: 12px 16px;
       background: #18181b;
       border-bottom: 1px solid #3a3a3d;
       display: flex;
-      gap: 12px;
+      gap: 10px;
+      flex-shrink: 0;
     }
     .search-bar input {
       flex: 1;
@@ -359,9 +360,12 @@ if ($currentUser && $login === $oauthChannel && !$isStreamerOfChannel && !$isSup
       min-width: 150px;
     }
 
-    .clips-grid {
+    .clips-scroll {
       flex: 1;
       overflow-y: auto;
+    }
+
+    .clips-grid {
       padding: 16px;
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -375,7 +379,7 @@ if ($currentUser && $login === $oauthChannel && !$isStreamerOfChannel && !$isSup
       padding: 12px;
       cursor: pointer;
       border: 2px solid transparent;
-      transition: border-color 0.2s;
+      transition: border-color 0.2s, background 0.2s;
     }
     .clip-card:hover { border-color: #9147ff55; }
     .clip-card.selected { border-color: #9147ff; background: #9147ff22; }
@@ -410,16 +414,78 @@ if ($currentUser && $login === $oauthChannel && !$isStreamerOfChannel && !$isSup
       justify-content: space-between;
     }
 
-    .actions-bar {
-      padding: 12px 16px;
-      background: #18181b;
-      border-top: 1px solid #3a3a3d;
+    .clips-pagination {
+      padding: 14px 16px;
+      background: #1a1a1e;
       display: flex;
-      gap: 12px;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: center;
+    }
+    .pagination-info {
+      color: #adadb8;
+      font-size: 13px;
+    }
+    .pagination-controls {
+      display: flex;
+      gap: 8px;
       align-items: center;
     }
-    .actions-bar button, .actions-bar select {
+    .pagination-controls .page-num {
+      padding: 0 8px;
+      color: #efeff1;
+      font-size: 13px;
+    }
+    .pagination-controls .page-input {
+      width: 55px;
+      padding: 6px 8px;
+      border: 1px solid #3a3a3d;
+      border-radius: 4px;
+      background: #0e0e10;
+      color: #efeff1;
+      font-size: 13px;
+      text-align: center;
+    }
+    .pagination-controls .page-goto {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-left: 12px;
+      padding-left: 12px;
+      border-left: 1px solid #3a3a3d;
+    }
+
+    /* Playlist action bar - pinned at bottom of Clips tab */
+    .actions-bar {
+      padding: 14px 20px;
+      background: linear-gradient(180deg, #1e1e2a, #18181b);
+      border-top: 2px solid #9147ff;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+    .actions-bar .playlist-section {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .actions-bar .playlist-section label {
+      color: #adadb8;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    .actions-bar button {
       padding: 10px 16px;
+      border: none;
+      border-radius: 4px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .actions-bar select {
+      padding: 10px 14px;
       border: none;
       border-radius: 4px;
       font-size: 14px;
@@ -431,56 +497,25 @@ if ($currentUser && $login === $oauthChannel && !$isStreamerOfChannel && !$isSup
     .btn-secondary:hover { background: #464649; }
     .btn-danger { background: #eb0400; color: white; }
     .btn-danger:hover { background: #bf0000; }
-    .selected-count { color: #adadb8; margin-left: auto; font-size: 14px; }
+    .btn-add { background: #9147ff; color: white; padding: 10px 20px; font-weight: 600; font-size: 14px; }
+    .btn-add:hover { background: #772ce8; }
+    .btn-add:disabled { background: #3a3a3d; color: #666; cursor: not-allowed; }
+    .btn-new-playlist { background: #2d2d3d; color: #bf94ff; border: 1px dashed #9147ff; padding: 10px 14px; }
+    .btn-new-playlist:hover { background: #3a3a4d; }
+    .selected-count {
+      margin-left: auto;
+      font-size: 14px;
+      color: #adadb8;
+    }
+    .selected-count strong { color: #bf94ff; }
     .playlist-dropdown {
       padding: 10px 14px;
-      border: 1px solid #3a3a3d;
+      border: 1px solid #9147ff55;
       border-radius: 4px;
       background: #0e0e10;
       color: #efeff1;
       font-size: 14px;
-      min-width: 160px;
-    }
-
-    .clips-pagination {
-      padding: 16px;
-      background: #18181b;
-      border-top: 1px solid #3a3a3d;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      align-items: center;
-    }
-    .pagination-info {
-      color: #adadb8;
-      font-size: 14px;
-    }
-    .pagination-controls {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-    }
-    .pagination-controls .page-num {
-      padding: 0 12px;
-      color: #efeff1;
-    }
-    .pagination-controls .page-input {
-      width: 60px;
-      padding: 6px 8px;
-      border: 1px solid #3a3a3d;
-      border-radius: 4px;
-      background: #0e0e10;
-      color: #efeff1;
-      font-size: 14px;
-      text-align: center;
-    }
-    .pagination-controls .page-goto {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      margin-left: 16px;
-      padding-left: 16px;
-      border-left: 1px solid #3a3a3d;
+      min-width: 180px;
     }
 
     /* ===== PLAYLISTS TAB ===== */
@@ -713,15 +748,19 @@ if ($currentUser && $login === $oauthChannel && !$isStreamerOfChannel && !$isSup
       .clip-card .title { font-size: 13px; }
 
       .actions-bar {
-        flex-wrap: wrap;
-        gap: 8px;
         padding: 12px;
+        gap: 8px;
       }
-      .actions-bar button { padding: 10px 14px; font-size: 13px; }
-      .selected-count { width: 100%; text-align: center; order: -1; margin-left: 0; }
-      .playlist-dropdown { width: 100%; min-width: unset; }
+      .actions-bar .playlist-section {
+        width: 100%;
+        flex-wrap: wrap;
+      }
+      .actions-bar .playlist-section label { display: none; }
+      .playlist-dropdown { flex: 1; min-width: unset; }
+      .btn-add { flex: 1; }
+      .selected-count { width: 100%; text-align: center; margin-left: 0; }
 
-      .clips-pagination { padding: 12px; }
+      .clips-pagination { padding: 10px; gap: 8px; }
       .pagination-controls { flex-wrap: wrap; justify-content: center; }
       .pagination-controls .page-goto {
         width: 100%;
@@ -870,17 +909,24 @@ if ($currentUser && $login === $oauthChannel && !$isStreamerOfChannel && !$isSup
         </select>
       </div>
 
-      <div class="clips-grid" id="clipsGrid">
-        <div class="loading">Loading clips...</div>
+      <div class="clips-scroll">
+        <div class="clips-grid" id="clipsGrid">
+          <div class="loading">Loading clips...</div>
+        </div>
+        <div class="clips-pagination" id="clipsPagination"></div>
       </div>
 
-      <div class="actions-bar">
-        <select class="playlist-dropdown" id="playlistDropdown">
-          <option value="">Select playlist...</option>
-        </select>
-        <button class="btn-primary" onclick="addSelectedToPlaylist()">Add to Playlist</button>
+      <div class="actions-bar" data-permission="manage_playlists">
+        <div class="playlist-section">
+          <label>Add to:</label>
+          <select class="playlist-dropdown" id="playlistDropdown">
+            <option value="">Select playlist...</option>
+          </select>
+          <button class="btn-new-playlist" onclick="showNewPlaylistModal()" title="Create new playlist">+ New</button>
+        </div>
+        <button class="btn-add" onclick="addSelectedToPlaylist()">Add to Playlist</button>
         <button class="btn-secondary" onclick="playSelected()" title="Double-click any clip to play it instantly!">Play One</button>
-        <span class="selected-count"><span id="selectedCount">0</span> selected</span>
+        <span class="selected-count"><strong id="selectedCount">0</strong> selected</span>
       </div>
     </div>
 
@@ -1049,22 +1095,12 @@ if ($currentUser && $login === $oauthChannel && !$isStreamerOfChannel && !$isSup
         const perm = el.dataset.permission;
         el.style.display = userPermissions.includes(perm) ? '' : 'none';
       });
-      // Also update clips tab add-to-playlist controls
-      const canManage = userPermissions.includes('manage_playlists');
-      const addBtn = document.querySelector('.actions-bar .btn-primary');
-      const dropdown = document.getElementById('playlistDropdown');
-      if (addBtn) addBtn.style.display = canManage ? '' : 'none';
-      if (dropdown) dropdown.style.display = canManage ? '' : 'none';
     }
 
     function removeViewAsRestrictions() {
       document.querySelectorAll('[data-permission]').forEach(el => {
         el.style.display = '';
       });
-      const addBtn = document.querySelector('.actions-bar .btn-primary');
-      const dropdown = document.getElementById('playlistDropdown');
-      if (addBtn) addBtn.style.display = '';
-      if (dropdown) dropdown.style.display = '';
     }
 
     // Permission checking helper
@@ -1179,19 +1215,11 @@ if ($currentUser && $login === $oauthChannel && !$isStreamerOfChannel && !$isSup
 
     // Apply permission-based visibility to UI elements
     function applyPermissions() {
-      const canManagePlaylists = hasPermission('manage_playlists');
-
       // Show/hide elements based on data-permission attribute
       document.querySelectorAll('[data-permission]').forEach(el => {
         const perm = el.dataset.permission;
         el.style.display = userPermissions.includes(perm) ? '' : 'none';
       });
-
-      // If mod has no manage_playlists permission, hide add-to-playlist controls
-      const addBtn = document.querySelector('.actions-bar .btn-primary');
-      const dropdown = document.getElementById('playlistDropdown');
-      if (addBtn) addBtn.style.display = canManagePlaylists ? '' : 'none';
-      if (dropdown) dropdown.style.display = canManagePlaylists ? '' : 'none';
 
       // Load accessible channels for the channel switcher dropdown
       loadAccessibleChannels();
@@ -1355,36 +1383,31 @@ if ($currentUser && $login === $oauthChannel && !$isStreamerOfChannel && !$isSup
     }
 
     function renderPagination() {
-      let paginationHtml = `<div class="pagination-info">Showing ${allClips.length} of ${totalClips.toLocaleString()} clips (Page ${currentPage} of ${totalPages})</div>`;
+      const paginationEl = document.getElementById('clipsPagination');
+      if (!paginationEl) return;
+
+      let html = `<span class="pagination-info">Showing ${allClips.length} of ${totalClips.toLocaleString()} clips (Page ${currentPage} of ${totalPages})</span>`;
 
       if (totalPages > 1) {
-        paginationHtml += '<div class="pagination-controls">';
+        html += '<div class="pagination-controls">';
         if (currentPage > 1) {
-          paginationHtml += `<button onclick="goToPage(1)" class="btn-secondary">First</button>`;
-          paginationHtml += `<button onclick="goToPage(${currentPage - 1})" class="btn-secondary">Prev</button>`;
+          html += `<button onclick="goToPage(1)" class="btn-secondary" style="padding:6px 12px;font-size:13px;">First</button>`;
+          html += `<button onclick="goToPage(${currentPage - 1})" class="btn-secondary" style="padding:6px 12px;font-size:13px;">Prev</button>`;
         }
-        paginationHtml += `<span class="page-num">Page ${currentPage} of ${totalPages}</span>`;
+        html += `<span class="page-num">Page ${currentPage} of ${totalPages}</span>`;
         if (currentPage < totalPages) {
-          paginationHtml += `<button onclick="goToPage(${currentPage + 1})" class="btn-secondary">Next</button>`;
-          paginationHtml += `<button onclick="goToPage(${totalPages})" class="btn-secondary">Last</button>`;
+          html += `<button onclick="goToPage(${currentPage + 1})" class="btn-secondary" style="padding:6px 12px;font-size:13px;">Next</button>`;
+          html += `<button onclick="goToPage(${totalPages})" class="btn-secondary" style="padding:6px 12px;font-size:13px;">Last</button>`;
         }
-        paginationHtml += `<div class="page-goto">
-          <span>Go to:</span>
+        html += `<div class="page-goto">
+          <span style="color:#adadb8;font-size:13px;">Go to:</span>
           <input type="number" class="page-input" id="pageInput" min="1" max="${totalPages}" value="${currentPage}" onkeypress="if(event.key==='Enter')jumpToPage()">
-          <button class="btn-secondary" onclick="jumpToPage()">Go</button>
+          <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="jumpToPage()">Go</button>
         </div>`;
-        paginationHtml += '</div>';
+        html += '</div>';
       }
 
-      // Insert pagination after clips grid
-      let paginationEl = document.getElementById('clipsPagination');
-      if (!paginationEl) {
-        paginationEl = document.createElement('div');
-        paginationEl.id = 'clipsPagination';
-        paginationEl.className = 'clips-pagination';
-        document.getElementById('clipsGrid').after(paginationEl);
-      }
-      paginationEl.innerHTML = paginationHtml;
+      paginationEl.innerHTML = html;
     }
 
     function goToPage(page) {
@@ -1500,20 +1523,42 @@ if ($currentUser && $login === $oauthChannel && !$isStreamerOfChannel && !$isSup
       }
     }
 
+    // Toast notification
+    function showToast(message, type = 'success') {
+      const existing = document.getElementById('toast');
+      if (existing) existing.remove();
+
+      const toast = document.createElement('div');
+      toast.id = 'toast';
+      toast.textContent = message;
+      Object.assign(toast.style, {
+        position: 'fixed', bottom: '80px', left: '50%', transform: 'translateX(-50%)',
+        padding: '12px 24px', borderRadius: '6px', fontSize: '14px', fontWeight: '500',
+        zIndex: '9999', color: 'white', boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+        background: type === 'success' ? '#00c853' : type === 'error' ? '#eb0400' : '#9147ff',
+        transition: 'opacity 0.3s', opacity: '1'
+      });
+      document.body.appendChild(toast);
+      setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 2500);
+    }
+
     async function addSelectedToPlaylist() {
       const dropdown = document.getElementById('playlistDropdown');
       const playlistId = dropdown ? dropdown.value : '';
 
       if (!playlistId) {
-        alert('Select a playlist from the dropdown first');
+        showToast('Select a playlist first', 'error');
         return;
       }
       if (selectedClips.size === 0) {
-        alert('Select some clips first');
+        showToast('Click clips to select them first', 'error');
         return;
       }
 
       const seqs = Array.from(selectedClips);
+      const count = seqs.length;
+      const playlistName = dropdown.options[dropdown.selectedIndex]?.textContent || 'playlist';
+
       try {
         const res = await fetch(`${API_BASE}/playlist_api.php?action=add_clips&login=${LOGIN}&${getAuthParams()}&id=${playlistId}&seqs=${seqs.join(',')}`, { credentials: 'same-origin' });
         const data = await res.json();
@@ -1521,15 +1566,19 @@ if ($currentUser && $login === $oauthChannel && !$isStreamerOfChannel && !$isSup
         if (data.success) {
           selectedClips.clear();
           document.getElementById('selectedCount').textContent = 0;
+          showToast(`Added ${count} clip${count !== 1 ? 's' : ''} to ${playlistName}`);
           // Refresh playlist if it's currently viewed
           if (currentPlaylist && currentPlaylist.id == playlistId) {
             await selectPlaylist(currentPlaylist.id);
           }
           await loadPlaylists();
           renderClips();
+        } else {
+          showToast(data.error || 'Failed to add clips', 'error');
         }
       } catch (err) {
         console.error('Error adding clips:', err);
+        showToast('Error adding clips', 'error');
       }
     }
 
@@ -1573,19 +1622,17 @@ if ($currentUser && $login === $oauthChannel && !$isStreamerOfChannel && !$isSup
       try {
         const res = await fetch(`${API_BASE}/playlist_api.php?action=play&login=${LOGIN}&${getAuthParams()}&id=${currentPlaylist.id}`, { credentials: 'same-origin' });
         const data = await res.json();
-        console.log('Playlist play response:', data);
         if (data.error) {
-          alert('Error: ' + data.error);
+          showToast('Error: ' + data.error, 'error');
         } else if (data.success && data.first_clip) {
-          // Force play the first clip immediately
           await playClip(data.first_clip.seq);
-          alert(data.message);
+          showToast('Playing "' + currentPlaylist.name + '"', 'info');
         } else if (data.message) {
-          alert(data.message);
+          showToast(data.message, 'info');
         }
       } catch (err) {
         console.error('Error playing playlist:', err);
-        alert('Error playing playlist: ' + err.message);
+        showToast('Error playing playlist', 'error');
       }
     }
 
@@ -1593,15 +1640,14 @@ if ($currentUser && $login === $oauthChannel && !$isStreamerOfChannel && !$isSup
       try {
         const res = await fetch(`${API_BASE}/playlist_api.php?action=stop&login=${LOGIN}&${getAuthParams()}`, { credentials: 'same-origin' });
         const data = await res.json();
-        console.log('Playlist stop response:', data);
         if (data.error) {
-          alert('Error: ' + data.error);
+          showToast('Error: ' + data.error, 'error');
         } else {
-          alert('Playlist stopped. Player will return to normal mode after current clip.');
+          showToast('Playlist stopped', 'info');
         }
       } catch (err) {
         console.error('Error stopping playlist:', err);
-        alert('Error stopping playlist: ' + err.message);
+        showToast('Error stopping playlist', 'error');
       }
     }
 
@@ -1656,9 +1702,10 @@ if ($currentUser && $login === $oauthChannel && !$isStreamerOfChannel && !$isSup
           closeModal();
           currentPlaylist.name = newName;
           document.getElementById('currentPlaylistName').textContent = newName;
+          showToast('Playlist renamed');
           await loadPlaylists();
         } else if (data.error) {
-          alert(data.error);
+          showToast(data.error, 'error');
         }
       } catch (err) {
         console.error('Error renaming playlist:', err);
@@ -1680,12 +1727,13 @@ if ($currentUser && $login === $oauthChannel && !$isStreamerOfChannel && !$isSup
 
         if (data.success) {
           closeModal();
+          showToast('Playlist deleted');
           currentPlaylist = null;
           document.getElementById('playlistContent').style.display = 'none';
           document.getElementById('playlistEmpty').style.display = 'flex';
           await loadPlaylists();
         } else if (data.error) {
-          alert(data.error);
+          showToast(data.error, 'error');
         }
       } catch (err) {
         console.error('Error deleting playlist:', err);
@@ -1784,28 +1832,27 @@ if ($currentUser && $login === $oauthChannel && !$isStreamerOfChannel && !$isSup
 
     async function shufflePlaylist() {
       if (!currentPlaylist) {
-        alert('No playlist selected');
+        showToast('No playlist selected', 'error');
         return;
       }
       if (!currentPlaylist.clips || currentPlaylist.clips.length < 2) {
-        alert('Need at least 2 clips to shuffle');
+        showToast('Need at least 2 clips to shuffle', 'error');
         return;
       }
 
       try {
         const res = await fetch(`${API_BASE}/playlist_api.php?action=shuffle&login=${LOGIN}&${getAuthParams()}&id=${currentPlaylist.id}`, { credentials: 'same-origin' });
         const data = await res.json();
-        console.log('Shuffle response:', data);
 
         if (data.success) {
-          // Reload playlist to get new order
+          showToast('Playlist shuffled');
           await selectPlaylist(currentPlaylist.id);
         } else if (data.error) {
-          alert('Error: ' + data.error);
+          showToast('Error: ' + data.error, 'error');
         }
       } catch (err) {
         console.error('Error shuffling playlist:', err);
-        alert('Error shuffling playlist: ' + err.message);
+        showToast('Error shuffling playlist', 'error');
       }
     }
 
