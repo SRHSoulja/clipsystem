@@ -466,11 +466,13 @@
   function applyBannerConfig(config) {
     const overlay = document.getElementById('bannerOverlay');
     const textEl = document.getElementById('bannerText');
+    console.log('[Banner] applyBannerConfig called', config, 'overlay:', !!overlay, 'textEl:', !!textEl);
     if (!overlay || !textEl) return;
 
     if (!config || !config.enabled) {
       overlay.style.display = 'none';
       currentBannerJSON = null;
+      console.log('[Banner] disabled - config.enabled:', config?.enabled);
       return;
     }
 
@@ -480,6 +482,7 @@
 
     overlay.style.display = 'flex';
     textEl.textContent = config.text || 'Be right back!';
+    console.log('[Banner] SHOWING banner -', config.text, 'position:', config.position, 'display:', overlay.style.display);
 
     const bgColor = config.bg_color || '#9147ff';
     const opacity = config.bg_opacity ?? 0.85;
