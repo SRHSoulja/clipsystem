@@ -47,6 +47,7 @@ function sleep_backoff($attempt) {
 
 /**
  * Process ONE 30-day window. Returns clips found/inserted for this window.
+ * Uses TwitchAPI::getClips() which handles auth internally.
  */
 function process_one_window($pdo, $login, $job) {
   $broadcasterId = $job['broadcaster_id'];
@@ -60,19 +61,12 @@ function process_one_window($pdo, $login, $job) {
   $startedAt = gmdate('Y-m-d\TH:i:s\Z', $windowStart);
   $endedAt = gmdate('Y-m-d\TH:i:s\Z', $windowEnd);
 
-  $clientId = getenv('TWITCH_CLIENT_ID') ?: '';
   $twitchApi = new TwitchAPI();
-  $token = $twitchApi->getAccessToken();
-  if (!$token) {
-    $pdo->prepare("UPDATE archive_jobs SET status = 'failed', error_message = 'Failed to get Twitch token', updated_at = NOW() WHERE login = ?")
+  if (!$twitchApi->isConfigured()) {
+    $pdo->prepare("UPDATE archive_jobs SET status = 'failed', error_message = 'Twitch API not configured', updated_at = NOW() WHERE login = ?")
       ->execute([$login]);
-    return ['error' => 'Failed to get Twitch token'];
+    return ['error' => 'Twitch API not configured'];
   }
-
-  $headers = [
-    "Authorization: Bearer $token",
-    "Client-Id: $clientId"
-  ];
 
   $pdo->prepare("UPDATE archive_jobs SET status = 'running', updated_at = NOW() WHERE login = ?")->execute([$login]);
 
@@ -83,57 +77,25 @@ function process_one_window($pdo, $login, $job) {
 
   $windowFound = 0;
   $windowInserted = 0;
-  $cursor = '';
+  $cursor = null;
   $pages = 0;
+
+  $insertStmt = $pdo->prepare("
+    INSERT INTO clips (login, clip_id, seq, title, duration, created_at, view_count, game_id, video_id, vod_offset, thumbnail_url, creator_name)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT (login, clip_id) DO NOTHING
+  ");
 
   while ($pages < 30) {
     $pages++;
 
-    $url = 'https://api.twitch.tv/helix/clips?broadcaster_id=' . urlencode($broadcasterId)
-      . '&first=100'
-      . '&started_at=' . urlencode($startedAt)
-      . '&ended_at=' . urlencode($endedAt);
-    if ($cursor) $url .= '&after=' . urlencode($cursor);
+    $result = $twitchApi->getClips($broadcasterId, 100, null, $cursor, $startedAt, $endedAt);
+    $clips = $result['clips'] ?? [];
 
-    // Fetch with retry
-    $attempt = 0;
-    $httpCode = 0;
-    $raw = '';
-    while (true) {
-      $ch = curl_init($url);
-      curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_HTTPGET => true,
-        CURLOPT_HTTPHEADER => $headers,
-        CURLOPT_TIMEOUT => 30,
-      ]);
-      $raw = curl_exec($ch);
-      $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-      curl_close($ch);
+    if (empty($clips)) break;
 
-      if ($httpCode === 429 || $httpCode >= 500) {
-        $attempt++;
-        if ($attempt > 6) break;
-        sleep_backoff($attempt);
-        continue;
-      }
-      break;
-    }
-
-    if ($httpCode < 200 || $httpCode >= 300) break;
-
-    $json = json_decode($raw, true);
-    $data = $json['data'] ?? [];
-    if (empty($data)) break;
-
-    $insertStmt = $pdo->prepare("
-      INSERT INTO clips (login, clip_id, seq, title, duration, created_at, view_count, game_id, video_id, vod_offset, thumbnail_url, creator_name)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT (login, clip_id) DO NOTHING
-    ");
-
-    foreach ($data as $c) {
-      $clipId = $c['id'] ?? '';
+    foreach ($clips as $c) {
+      $clipId = $c['clip_id'] ?? '';
       if (!$clipId) continue;
 
       $insertStmt->execute([
@@ -156,9 +118,8 @@ function process_one_window($pdo, $login, $job) {
       $windowFound++;
     }
 
-    $next = $json['pagination']['cursor'] ?? '';
-    if (!$next || $next === $cursor) break;
-    $cursor = $next;
+    $cursor = $result['cursor'] ?? null;
+    if (!$cursor) break;
 
     usleep(120000); // 120ms between pages
   }

@@ -231,6 +231,8 @@ class TwitchAPI {
         'thumbnail_url' => $clip['thumbnail_url'],
         'creator_name' => $clip['creator_name'] ?? '',
         'game_id' => $clip['game_id'] ?? '',
+        'video_id' => $clip['video_id'] ?? '',
+        'vod_offset' => $clip['vod_offset'] ?? null,
         'url' => $clip['url'],
       ];
     }
