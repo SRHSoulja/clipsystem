@@ -300,6 +300,7 @@ if ($currentUser) {
             position: absolute; left: 0; right: 0;
             display: flex; align-items: center; justify-content: center;
             padding: 12px 24px; z-index: 1; transition: all 0.3s ease; font-weight: 600;
+            overflow: hidden;
         }
         .banner-preview.pos-top { top: 0; }
         .banner-preview.pos-center { top: 50%; transform: translateY(-50%); }
@@ -351,8 +352,8 @@ if ($currentUser) {
             50% { transform: scale(1.02); }
         }
         @keyframes bannerScroll {
-            0% { transform: translateX(100%); }
-            100% { transform: translateX(-100%); }
+            0% { transform: translateX(calc(100% + 100%)); }
+            100% { transform: translateX(calc(-100% - 100%)); }
         }
 
         /* Stats */
@@ -2129,6 +2130,24 @@ if ($currentUser) {
             document.querySelectorAll(`#${selectorId} .option-btn`).forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.value === value);
             });
+
+            // Scroll animation requires full-width rectangle
+            const isScroll = getSelectedOption('bannerAnimationSelector') === 'scroll';
+            const shapeButtons = document.querySelectorAll('#bannerShapeSelector .option-btn');
+            if (isScroll) {
+                // Force rectangle when scroll is active
+                shapeButtons.forEach(btn => {
+                    btn.classList.toggle('active', btn.dataset.value === 'rectangle');
+                    btn.disabled = true;
+                    btn.style.opacity = btn.dataset.value === 'rectangle' ? '1' : '0.4';
+                });
+            } else {
+                shapeButtons.forEach(btn => {
+                    btn.disabled = false;
+                    btn.style.opacity = '1';
+                });
+            }
+
             updateBannerPreview();
             debouncedSaveBanner();
         }
@@ -2193,14 +2212,16 @@ if ($currentUser) {
             preview.classList.remove('pos-top', 'pos-center', 'pos-bottom');
             preview.classList.add('pos-' + config.position);
 
-            // Reset transform before applying shape
-            if (config.shape === 'pill') {
+            // Scroll animation forces full-width rectangle
+            const effectiveShape = config.animation === 'scroll' ? 'rectangle' : config.shape;
+
+            if (effectiveShape === 'pill') {
                 preview.style.borderRadius = '50px';
                 preview.style.width = 'auto';
                 preview.style.left = '50%';
                 preview.style.right = 'auto';
                 preview.style.transform = config.position === 'center' ? 'translate(-50%, -50%)' : 'translateX(-50%)';
-            } else if (config.shape === 'rounded') {
+            } else if (effectiveShape === 'rounded') {
                 preview.style.borderRadius = '12px';
                 preview.style.width = 'auto';
                 preview.style.left = '50%';
