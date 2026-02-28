@@ -110,7 +110,8 @@ if ($authenticated && $_SERVER['REQUEST_METHOD'] === 'POST') {
       $resolveUrl .= "&login=" . urlencode($login);
     }
 
-    $ctx = stream_context_create(['http' => ['timeout' => 60]]);
+    $cookies = isset($_SERVER['HTTP_COOKIE']) ? $_SERVER['HTTP_COOKIE'] : '';
+    $ctx = stream_context_create(['http' => ['timeout' => 60, 'header' => "Cookie: $cookies\r\n"]]);
     $response = @file_get_contents($resolveUrl, false, $ctx);
     $result = $response ? json_decode($response, true) : null;
 
