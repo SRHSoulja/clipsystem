@@ -1,14 +1,16 @@
 <?php
 /**
- * archive_api.php - Self-service archive API (background processing)
+ * archive_api.php - Self-service archive API
  *
  * Flow:
- *   1. Frontend POSTs to ?action=start   → creates job, returns immediately
- *   2. Frontend POSTs to ?action=process → responds immediately, processes ALL windows server-side
- *   3. Frontend polls  ?action=status    → reads progress from DB
- *   4. When status=complete → frontend redirects to /search/login
+ *   1. Frontend POSTs ?action=start    → creates job
+ *   2. Frontend POSTs ?action=process  → processes ONE 30-day window, returns progress
+ *   3. Frontend loops process calls until all windows done
+ *   4. Frontend POSTs ?action=finalize → reorders clips, resolves games, sets up streamer
+ *   5. Frontend redirects to /search/login
  *
- * The browser can close at any time — processing continues server-side.
+ * If the user closes the tab, the current window finishes. When they return,
+ * the job resumes from where it left off.
  */
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
@@ -44,37 +46,19 @@ function sleep_backoff($attempt) {
 }
 
 /**
- * Send JSON response to client and continue executing in the background.
- * Uses fastcgi_finish_request() on PHP-FPM (Railway) or flush trick otherwise.
+ * Process ONE 30-day window. Returns clips found/inserted for this window.
  */
-function send_and_continue($data) {
-  ignore_user_abort(true);
-  set_time_limit(0);
-
-  $json = json_encode($data, JSON_UNESCAPED_SLASHES);
-
-  // Clean any existing output buffers
-  while (ob_get_level() > 0) { ob_end_clean(); }
-
-  header('Content-Length: ' . strlen($json));
-  header('Connection: close');
-  echo $json;
-  flush();
-
-  if (function_exists('fastcgi_finish_request')) {
-    fastcgi_finish_request();
-  }
-}
-
-/**
- * Process all remaining 30-day windows, then auto-finalize.
- */
-function process_all_windows($pdo, $login, $job) {
+function process_one_window($pdo, $login, $job) {
   $broadcasterId = $job['broadcaster_id'];
   $totalWindows = (int)$job['total_windows'];
-  $currentWindow = (int)$job['current_window'];
+  $w = (int)$job['current_window'];
   $windowSec = 30 * 86400;
   $archiveStart = !empty($job['archive_start']) ? strtotime($job['archive_start']) : time() - (5 * 365 * 86400);
+
+  $windowStart = $archiveStart + ($w * $windowSec);
+  $windowEnd = min(time(), $windowStart + $windowSec);
+  $startedAt = gmdate('Y-m-d\TH:i:s\Z', $windowStart);
+  $endedAt = gmdate('Y-m-d\TH:i:s\Z', $windowEnd);
 
   $clientId = getenv('TWITCH_CLIENT_ID') ?: '';
   $twitchApi = new TwitchAPI();
@@ -82,7 +66,7 @@ function process_all_windows($pdo, $login, $job) {
   if (!$token) {
     $pdo->prepare("UPDATE archive_jobs SET status = 'failed', error_message = 'Failed to get Twitch token', updated_at = NOW() WHERE login = ?")
       ->execute([$login]);
-    return;
+    return ['error' => 'Failed to get Twitch token'];
   }
 
   $headers = [
@@ -92,132 +76,116 @@ function process_all_windows($pdo, $login, $job) {
 
   $pdo->prepare("UPDATE archive_jobs SET status = 'running', updated_at = NOW() WHERE login = ?")->execute([$login]);
 
-  for ($w = $currentWindow; $w < $totalWindows; $w++) {
-    $windowStart = $archiveStart + ($w * $windowSec);
-    $windowEnd = min(time(), $windowStart + $windowSec);
-    $startedAt = gmdate('Y-m-d\TH:i:s\Z', $windowStart);
-    $endedAt = gmdate('Y-m-d\TH:i:s\Z', $windowEnd);
+  // Get current max seq
+  $stmt = $pdo->prepare("SELECT COALESCE(MAX(seq), 0) FROM clips WHERE login = ?");
+  $stmt->execute([$login]);
+  $nextSeq = (int)$stmt->fetchColumn() + 1;
 
-    // Get current max seq
-    $stmt = $pdo->prepare("SELECT COALESCE(MAX(seq), 0) FROM clips WHERE login = ?");
-    $stmt->execute([$login]);
-    $nextSeq = (int)$stmt->fetchColumn() + 1;
+  $windowFound = 0;
+  $windowInserted = 0;
+  $cursor = '';
+  $pages = 0;
 
-    $windowFound = 0;
-    $windowInserted = 0;
-    $cursor = '';
-    $pages = 0;
+  while ($pages < 30) {
+    $pages++;
 
-    try {
-      while ($pages < 30) {
-        $pages++;
+    $url = 'https://api.twitch.tv/helix/clips?broadcaster_id=' . urlencode($broadcasterId)
+      . '&first=100'
+      . '&started_at=' . urlencode($startedAt)
+      . '&ended_at=' . urlencode($endedAt);
+    if ($cursor) $url .= '&after=' . urlencode($cursor);
 
-        $url = 'https://api.twitch.tv/helix/clips?broadcaster_id=' . urlencode($broadcasterId)
-          . '&first=100'
-          . '&started_at=' . urlencode($startedAt)
-          . '&ended_at=' . urlencode($endedAt);
-        if ($cursor) $url .= '&after=' . urlencode($cursor);
+    // Fetch with retry
+    $attempt = 0;
+    $httpCode = 0;
+    $raw = '';
+    while (true) {
+      $ch = curl_init($url);
+      curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPGET => true,
+        CURLOPT_HTTPHEADER => $headers,
+        CURLOPT_TIMEOUT => 30,
+      ]);
+      $raw = curl_exec($ch);
+      $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+      curl_close($ch);
 
-        // Fetch with retry
-        $attempt = 0;
-        $httpCode = 0;
-        $raw = '';
-        while (true) {
-          $ch = curl_init($url);
-          curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPGET => true,
-            CURLOPT_HTTPHEADER => $headers,
-            CURLOPT_TIMEOUT => 30,
-          ]);
-          $raw = curl_exec($ch);
-          $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-          curl_close($ch);
-
-          if ($httpCode === 429 || $httpCode >= 500) {
-            $attempt++;
-            if ($attempt > 6) break;
-            sleep_backoff($attempt);
-            continue;
-          }
-          break;
-        }
-
-        if ($httpCode < 200 || $httpCode >= 300) break;
-
-        $json = json_decode($raw, true);
-        $data = $json['data'] ?? [];
-        if (empty($data)) break;
-
-        $insertStmt = $pdo->prepare("
-          INSERT INTO clips (login, clip_id, seq, title, duration, created_at, view_count, game_id, video_id, vod_offset, thumbnail_url, creator_name)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          ON CONFLICT (login, clip_id) DO NOTHING
-        ");
-
-        foreach ($data as $c) {
-          $clipId = $c['id'] ?? '';
-          if (!$clipId) continue;
-
-          $insertStmt->execute([
-            $login, $clipId, $nextSeq,
-            $c['title'] ?? '',
-            (int)($c['duration'] ?? 0),
-            $c['created_at'] ?? null,
-            (int)($c['view_count'] ?? 0),
-            $c['game_id'] ?? '',
-            $c['video_id'] ?? '',
-            $c['vod_offset'] ?? null,
-            $c['thumbnail_url'] ?? '',
-            $c['creator_name'] ?? '',
-          ]);
-
-          if ($insertStmt->rowCount() > 0) {
-            $nextSeq++;
-            $windowInserted++;
-          }
-          $windowFound++;
-        }
-
-        $next = $json['pagination']['cursor'] ?? '';
-        if (!$next || $next === $cursor) break;
-        $cursor = $next;
-
-        usleep(120000); // 120ms between pages
+      if ($httpCode === 429 || $httpCode >= 500) {
+        $attempt++;
+        if ($attempt > 6) break;
+        sleep_backoff($attempt);
+        continue;
       }
-
-      // Update progress after each window (heartbeat)
-      $pdo->prepare("
-        UPDATE archive_jobs SET
-          current_window = ?,
-          clips_found = clips_found + ?,
-          clips_inserted = clips_inserted + ?,
-          updated_at = NOW()
-        WHERE login = ?
-      ")->execute([$w + 1, $windowFound, $windowInserted, $login]);
-
-    } catch (Exception $e) {
-      error_log("archive process error window $w: " . $e->getMessage());
-      $pdo->prepare("UPDATE archive_jobs SET status = 'failed', error_message = ?, updated_at = NOW() WHERE login = ?")
-        ->execute(["Error at window $w: " . substr($e->getMessage(), 0, 200), $login]);
-      return;
+      break;
     }
 
-    // Refresh token every 10 windows
-    if ($w % 10 === 9) {
-      $newToken = $twitchApi->getAccessToken();
-      if ($newToken) {
-        $token = $newToken;
-        $headers = [
-          "Authorization: Bearer $token",
-          "Client-Id: $clientId"
-        ];
+    if ($httpCode < 200 || $httpCode >= 300) break;
+
+    $json = json_decode($raw, true);
+    $data = $json['data'] ?? [];
+    if (empty($data)) break;
+
+    $insertStmt = $pdo->prepare("
+      INSERT INTO clips (login, clip_id, seq, title, duration, created_at, view_count, game_id, video_id, vod_offset, thumbnail_url, creator_name)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT (login, clip_id) DO NOTHING
+    ");
+
+    foreach ($data as $c) {
+      $clipId = $c['id'] ?? '';
+      if (!$clipId) continue;
+
+      $insertStmt->execute([
+        $login, $clipId, $nextSeq,
+        $c['title'] ?? '',
+        (int)($c['duration'] ?? 0),
+        $c['created_at'] ?? null,
+        (int)($c['view_count'] ?? 0),
+        $c['game_id'] ?? '',
+        $c['video_id'] ?? '',
+        $c['vod_offset'] ?? null,
+        $c['thumbnail_url'] ?? '',
+        $c['creator_name'] ?? '',
+      ]);
+
+      if ($insertStmt->rowCount() > 0) {
+        $nextSeq++;
+        $windowInserted++;
       }
+      $windowFound++;
     }
+
+    $next = $json['pagination']['cursor'] ?? '';
+    if (!$next || $next === $cursor) break;
+    $cursor = $next;
+
+    usleep(120000); // 120ms between pages
   }
 
-  // All windows done — auto-finalize
-  do_finalize($pdo, $login);
+  // Update progress
+  $newWindow = $w + 1;
+  $pdo->prepare("
+    UPDATE archive_jobs SET
+      current_window = ?,
+      clips_found = clips_found + ?,
+      clips_inserted = clips_inserted + ?,
+      updated_at = NOW()
+    WHERE login = ?
+  ")->execute([$newWindow, $windowFound, $windowInserted, $login]);
+
+  // Reload job for response
+  $stmt = $pdo->prepare("SELECT * FROM archive_jobs WHERE login = ?");
+  $stmt->execute([$login]);
+  $updatedJob = $stmt->fetch(PDO::FETCH_ASSOC);
+  $updatedJob['progress_pct'] = $totalWindows > 0 ? round($newWindow / $totalWindows * 100) : 0;
+
+  return [
+    'window_found' => $windowFound,
+    'window_inserted' => $windowInserted,
+    'done' => $newWindow >= $totalWindows,
+    'job' => $updatedJob,
+  ];
 }
 
 /**
@@ -289,12 +257,14 @@ function do_finalize($pdo, $login) {
     }
 
     $pdo->prepare("UPDATE archive_jobs SET status = 'complete', completed_at = NOW(), updated_at = NOW() WHERE login = ?")->execute([$login]);
+    return $clipCount;
 
   } catch (Exception $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();
     error_log("archive finalize error: " . $e->getMessage());
     $pdo->prepare("UPDATE archive_jobs SET status = 'failed', error_message = ?, updated_at = NOW() WHERE login = ?")
       ->execute(["Finalize error: " . substr($e->getMessage(), 0, 200), $login]);
+    return -1;
   }
 }
 
@@ -334,7 +304,7 @@ case 'start':
       json_out(["status" => "already_archived", "clip_count" => $existingClips, "redirect" => "/search/$login"]);
     }
     if (in_array($job['status'], ['running', 'resolving_games']) && $job['updated_at'] && strtotime($job['updated_at']) > time() - 300) {
-      // Active job — observer mode (just poll status, don't call process)
+      // Active job — observer mode
       $job['progress_pct'] = $job['total_windows'] > 0 ? round($job['current_window'] / $job['total_windows'] * 100) : 0;
       json_out(["status" => "in_progress", "job" => $job]);
     }
@@ -418,7 +388,7 @@ case 'status':
   break;
 
 // ─────────────────────────────────────────────
-// PROCESS - Kick off background processing (fire-and-forget)
+// PROCESS - Process ONE window, return progress
 // ─────────────────────────────────────────────
 case 'process':
   if ($_SERVER['REQUEST_METHOD'] !== 'POST') { json_err("POST only", 405); }
@@ -433,20 +403,30 @@ case 'process':
   $job = $stmt->fetch(PDO::FETCH_ASSOC);
   if (!$job) { json_err("No active archive job for this streamer"); }
 
-  // Already done?
-  if ($job['current_window'] >= $job['total_windows']) {
-    json_out(["status" => "windows_complete", "needs_finalize" => true]);
+  // Already done with windows?
+  if ((int)$job['current_window'] >= (int)$job['total_windows']) {
+    json_out(["status" => "windows_complete", "done" => true, "job" => $job]);
   }
 
-  // Send response immediately, then process in background
-  send_and_continue(["status" => "processing", "message" => "Archive started. You can close this page — processing continues in the background."]);
+  // Process one window
+  set_time_limit(120);
+  $result = process_one_window($pdo, $login, $job);
 
-  // ── Everything below runs server-side after the response is sent ──
-  process_all_windows($pdo, $login, $job);
-  exit;
+  if (isset($result['error'])) {
+    json_out(["status" => "failed", "error" => $result['error']]);
+  }
+
+  json_out([
+    "status" => $result['done'] ? "windows_complete" : "processing",
+    "done" => $result['done'],
+    "window_found" => $result['window_found'],
+    "window_inserted" => $result['window_inserted'],
+    "job" => $result['job'],
+  ]);
+  break;
 
 // ─────────────────────────────────────────────
-// FINALIZE - Manual fallback (auto-called by process)
+// FINALIZE - Reorder clips, resolve games, setup streamer
 // ─────────────────────────────────────────────
 case 'finalize':
   if ($_SERVER['REQUEST_METHOD'] !== 'POST') { json_err("POST only", 405); }
@@ -460,11 +440,12 @@ case 'finalize':
   $job = $stmt->fetch(PDO::FETCH_ASSOC);
   if (!$job) { json_err("No archive job found"); }
 
-  do_finalize($pdo, $login);
+  set_time_limit(120);
+  $clipCount = do_finalize($pdo, $login);
 
-  $stmt = $pdo->prepare("SELECT COUNT(*) FROM clips WHERE login = ?");
-  $stmt->execute([$login]);
-  $clipCount = (int)$stmt->fetchColumn();
+  if ($clipCount < 0) {
+    json_out(["status" => "failed", "error" => "Finalize failed"]);
+  }
 
   json_out([
     "status" => "complete",

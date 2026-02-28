@@ -331,7 +331,7 @@ header("Content-Type: text/html; charset=utf-8");
       </div>
       <div class="progress-status">
         <span id="statusText"><span class="spinner"></span>Processing...</span>
-        <div class="safe-msg">You can close this page — archiving continues in the background.</div>
+        <div class="safe-msg">Keep this tab open. If you close it, just come back — it'll resume where it left off.</div>
       </div>
     </div>
 
@@ -353,8 +353,8 @@ header("Content-Type: text/html; charset=utf-8");
     const completeSection = document.getElementById('completeSection');
 
     let currentLogin = '';
-    let pollTimer = null;
     let busy = false;
+    let processing = false;
 
     function showMsg(text, type) {
       msg.className = 'message visible ' + type;
@@ -369,6 +369,25 @@ header("Content-Type: text/html; charset=utf-8");
       loginInput.disabled = disabled;
       archiveBtn.disabled = disabled;
       archiveBtn.textContent = disabled ? 'Archiving...' : 'Archive';
+    }
+
+    async function apiCall(action, login, method = 'POST') {
+      const url = method === 'GET'
+        ? '/archive_api.php?action=' + action + '&login=' + encodeURIComponent(login)
+        : '/archive_api.php?action=' + action;
+      const opts = method === 'GET' ? {} : {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'login=' + encodeURIComponent(login)
+      };
+      const res = await fetch(url, opts);
+      const text = await res.text();
+      try {
+        return JSON.parse(text);
+      } catch (e) {
+        console.error('Non-JSON response from ' + action + ':', text);
+        throw new Error('Server returned invalid response');
+      }
     }
 
     async function startArchive(e) {
@@ -388,24 +407,7 @@ header("Content-Type: text/html; charset=utf-8");
       setFormDisabled(true);
 
       try {
-        const res = await fetch('/archive_api.php?action=start', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: 'login=' + encodeURIComponent(login)
-        });
-
-        // Handle non-JSON responses (PHP errors)
-        const text = await res.text();
-        let data;
-        try {
-          data = JSON.parse(text);
-        } catch (parseErr) {
-          console.error('Archive API returned non-JSON:', text);
-          showMsg('Server error. Check console for details.', 'error');
-          setFormDisabled(false);
-          busy = false;
-          return;
-        }
+        const data = await apiCall('start', login);
 
         if (data.error === 'login_required') {
           window.location.href = data.login_url || '/auth/login.php?return=' + encodeURIComponent('/archive?login=' + login);
@@ -441,37 +443,128 @@ header("Content-Type: text/html; charset=utf-8");
         }
 
         if (data.status === 'in_progress') {
+          // Another tab is processing — just show progress and poll
           showProgress(data.job);
-          startPolling();
+          pollUntilDone();
           return;
         }
 
         if (data.status === 'started') {
           showProgress(data.job);
-          fireProcess(login);
-          startPolling();
+          processLoop(login);
           return;
         }
 
-        console.error('Unexpected archive response:', data);
+        console.error('Unexpected response:', data);
         showMsg('Unexpected response from server.', 'error');
         setFormDisabled(false);
         busy = false;
       } catch (err) {
-        console.error('Archive fetch error:', err);
-        showMsg('Network error: ' + err.message + '. Please try again.', 'error');
+        console.error('Archive error:', err);
+        showMsg('Error: ' + err.message, 'error');
         setFormDisabled(false);
         busy = false;
       }
     }
 
-    function fireProcess(login) {
-      fetch('/archive_api.php?action=process', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'login=' + encodeURIComponent(login)
-      }).catch(() => {});
+    /**
+     * Main processing loop — calls process once per window.
+     * Each call processes one 30-day window and returns immediately.
+     * Progress updates in real-time after each window completes.
+     */
+    async function processLoop(login) {
+      if (processing) return;
+      processing = true;
+      let retries = 0;
+
+      while (processing) {
+        try {
+          const data = await apiCall('process', login);
+
+          if (data.error === 'login_required') {
+            window.location.href = '/auth/login.php?return=' + encodeURIComponent('/archive?login=' + login);
+            return;
+          }
+
+          if (data.error || data.status === 'failed') {
+            showMsg('Error: ' + (data.error || 'Processing failed') + '. Retrying...', 'error');
+            retries++;
+            if (retries > 3) {
+              showMsg('Archive failed after multiple retries. You can refresh to try again.', 'error');
+              resetForm();
+              return;
+            }
+            await sleep(3000);
+            continue;
+          }
+
+          retries = 0; // Reset on success
+
+          if (data.job) {
+            updateProgress(data.job);
+          }
+
+          if (data.done || data.status === 'windows_complete') {
+            // All windows done — finalize
+            updateStatus('Setting up streamer...', true);
+            const fin = await apiCall('finalize', login);
+
+            if (fin.status === 'complete') {
+              showComplete({ total_clips: fin.clips_total, redirect: fin.redirect });
+            } else {
+              showMsg('Finalize error: ' + (fin.error || 'unknown'), 'error');
+              resetForm();
+            }
+            return;
+          }
+
+          // Small pause between windows to be nice
+          await sleep(200);
+
+        } catch (err) {
+          console.error('Process loop error:', err);
+          retries++;
+          if (retries > 5) {
+            showMsg('Lost connection. Refresh the page to resume — progress is saved.', 'error');
+            resetForm();
+            return;
+          }
+          await sleep(3000);
+        }
+      }
     }
+
+    /**
+     * Observer mode — another tab is driving the process.
+     * Just poll status until done.
+     */
+    async function pollUntilDone() {
+      while (true) {
+        await sleep(3000);
+        try {
+          const data = await apiCall('status', currentLogin, 'GET');
+
+          if (data.status === 'complete') {
+            showComplete(data.job);
+            return;
+          }
+
+          if (data.status === 'failed') {
+            showMsg('Archive failed: ' + (data.job?.error_message || 'Unknown error') + '. You can try again.', 'error');
+            resetForm();
+            return;
+          }
+
+          if (data.job) {
+            updateProgress(data.job);
+          }
+        } catch (e) {
+          // Network hiccup — keep polling
+        }
+      }
+    }
+
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
     function showProgress(job) {
       archiveForm.style.display = 'none';
@@ -486,61 +579,28 @@ header("Content-Type: text/html; charset=utf-8");
       const pct = job.progress_pct || 0;
       const found = parseInt(job.clips_found) || 0;
       const current = parseInt(job.current_window) || 0;
-      const total = parseInt(job.total_windows) || 61;
+      const total = parseInt(job.total_windows) || 1;
 
       document.getElementById('progressPct').textContent = pct + '%';
       document.getElementById('progressBar').style.width = pct + '%';
       document.getElementById('statFound').textContent = found.toLocaleString();
       document.getElementById('statWindow').textContent = current + ' / ' + total;
 
-      const status = job.status || 'running';
-      if (status === 'resolving_games') {
-        document.getElementById('progressTitle').textContent = 'Setting up...';
-        document.getElementById('statusText').innerHTML = '<span class="spinner"></span>Resolving game names & configuring streamer...';
+      document.getElementById('progressTitle').textContent = 'Archiving ' + currentLogin + '...';
+      document.getElementById('statusText').innerHTML = '<span class="spinner"></span>Processing window ' + current + ' of ' + total + '...';
+    }
+
+    function updateStatus(text, isFinalize) {
+      document.getElementById('statusText').innerHTML = '<span class="spinner"></span>' + text;
+      if (isFinalize) {
         document.getElementById('progressPct').textContent = '99%';
         document.getElementById('progressBar').style.width = '99%';
-      } else {
-        document.getElementById('progressTitle').textContent = 'Archiving ' + currentLogin + '...';
-        document.getElementById('statusText').innerHTML = '<span class="spinner"></span>Processing window ' + current + ' of ' + total + '...';
-      }
-    }
-
-    function startPolling() {
-      if (pollTimer) clearInterval(pollTimer);
-      pollTimer = setInterval(pollStatus, 3000);
-    }
-
-    async function pollStatus() {
-      try {
-        const res = await fetch('/archive_api.php?action=status&login=' + encodeURIComponent(currentLogin));
-        const data = await res.json();
-
-        if (data.status === 'complete') {
-          clearInterval(pollTimer);
-          showComplete(data.job);
-          return;
-        }
-
-        if (data.status === 'failed') {
-          clearInterval(pollTimer);
-          progressSection.classList.remove('visible');
-          archiveForm.style.display = 'flex';
-          document.querySelector('.form-hint').style.display = '';
-          showMsg('Archive failed: ' + (data.job?.error_message || 'Unknown error') + '. You can try again.', 'error');
-          setFormDisabled(false);
-          busy = false;
-          return;
-        }
-
-        if (data.job) {
-          updateProgress(data.job);
-        }
-      } catch (err) {
-        // Network hiccup — keep polling, server is still processing
+        document.getElementById('progressTitle').textContent = 'Almost done...';
       }
     }
 
     function showComplete(job) {
+      processing = false;
       progressSection.classList.remove('visible');
       completeSection.classList.add('visible');
 
@@ -554,20 +614,36 @@ header("Content-Type: text/html; charset=utf-8");
       setTimeout(() => { window.location.href = redirect; }, 3000);
     }
 
-    // Single init on page load — check for existing job first, then auto-start if needed
+    function resetForm() {
+      processing = false;
+      busy = false;
+      progressSection.classList.remove('visible');
+      archiveForm.style.display = 'flex';
+      document.querySelector('.form-hint').style.display = '';
+      setFormDisabled(false);
+    }
+
+    // On page load — check for existing job, resume if needed
     document.addEventListener('DOMContentLoaded', async () => {
       const prefill = '<?= addslashes($prefillLogin) ?>';
       if (!prefill) return;
 
-      // First check if there's already a running/complete job
       try {
-        const res = await fetch('/archive_api.php?action=status&login=' + encodeURIComponent(prefill));
-        const data = await res.json();
+        const data = await apiCall('status', prefill, 'GET');
 
-        if (data.status === 'running' || data.status === 'resolving_games') {
+        if (data.status === 'running') {
+          // Another process is driving — observe
           currentLogin = prefill;
           showProgress(data.job);
-          startPolling();
+          pollUntilDone();
+          return;
+        }
+
+        if (data.status === 'resolving_games') {
+          currentLogin = prefill;
+          showProgress(data.job);
+          updateStatus('Setting up streamer...', true);
+          pollUntilDone();
           return;
         }
 
@@ -575,6 +651,16 @@ header("Content-Type: text/html; charset=utf-8");
           currentLogin = prefill;
           showComplete(data.job);
           return;
+        }
+
+        // Pending or failed job exists — resume processing
+        if (data.status === 'pending' || data.status === 'failed') {
+          <?php if ($currentUser): ?>
+          currentLogin = prefill;
+          showProgress(data.job);
+          processLoop(prefill);
+          return;
+          <?php endif; ?>
         }
       } catch (e) {
         console.error('Status check error:', e);
