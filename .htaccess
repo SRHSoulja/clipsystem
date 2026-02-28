@@ -21,6 +21,10 @@
 
     # Clean URLs - /archive -> archive.php (self-service archive)
     RewriteRule ^archive/?$ archive.php [QSA,L]
+
+    # Clean URLs - /invite/username -> invite.php (streamer onboarding)
+    RewriteRule ^invite/([a-zA-Z0-9_]+)/?$ invite.php?login=$1 [QSA,L]
+    RewriteRule ^invite/?$ invite.php [QSA,L]
 </IfModule>
 
 # Enable CORS for all origins and security headers
