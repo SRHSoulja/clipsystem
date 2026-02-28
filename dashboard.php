@@ -1063,9 +1063,7 @@ if ($currentUser) {
                     <div id="scrollSpeedGroup" style="display:none;">
                         <label>Scroll Speed</label>
                         <div class="slider-group">
-                            <span style="font-size:12px;color:#adadb8;">Fast</span>
                             <input type="range" id="bannerScrollSpeed" min="3" max="20" value="8" oninput="updateBannerPreview(); debouncedSaveBanner();">
-                            <span style="font-size:12px;color:#adadb8;">Slow</span>
                             <span class="slider-value" id="bannerScrollSpeedValue">8s</span>
                         </div>
                     </div>
@@ -2190,7 +2188,7 @@ if ($currentUser) {
                 position: getSelectedOption('bannerPositionSelector') || 'top',
                 border_style: getSelectedOption('bannerBorderSelector') || 'none',
                 animation: getSelectedOption('bannerAnimationSelector') || 'none',
-                scroll_speed: parseInt(document.getElementById('bannerScrollSpeed').value) || 8,
+                scroll_speed: 23 - (parseInt(document.getElementById('bannerScrollSpeed').value) || 15),
                 shape: getSelectedOption('bannerShapeSelector') || 'rectangle'
             };
         }
@@ -2293,7 +2291,7 @@ if ($currentUser) {
             document.getElementById('bannerBgColorHex').value = config.bg_color || '#9147ff';
             document.getElementById('bannerOpacity').value = Math.round((config.bg_opacity ?? 0.85) * 100);
             document.getElementById('bannerFontSize').value = config.font_size || 32;
-            document.getElementById('bannerScrollSpeed').value = config.scroll_speed || 8;
+            document.getElementById('bannerScrollSpeed').value = 23 - (config.scroll_speed || 8);
             document.getElementById('bannerFontFamily').value = config.font_family || 'Inter';
 
             // Set option selectors without triggering save
