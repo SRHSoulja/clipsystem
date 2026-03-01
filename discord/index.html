@@ -1128,7 +1128,7 @@
       #chatPanel { width: calc(100vw - 24px); left: 12px; bottom: 65px; }
     }
 
-    /* Touch-friendly buttons + move eye toggle to left on mobile (Discord's right-edge bar blocks it) */
+    /* Touch-friendly buttons */
     @media (hover: none) and (pointer: coarse) {
       #skipBtn, #remoteBtn, #backBtn, #chatBtn {
         min-height: 44px;
@@ -1136,6 +1136,10 @@
         padding: 10px 20px;
       }
       #clipActions .action-btn { min-height: 44px; min-width: 44px; padding: 10px 16px; }
+    }
+
+    /* Move eye toggle to left on mobile - Discord's right-edge overlay bar blocks it */
+    @media (max-width: 768px) {
       #hudToggle {
         right: auto;
         left: max(12px, env(safe-area-inset-left));
