@@ -1478,9 +1478,12 @@ if (window.__discordResolve) window.__discordResolve();
     const starChar = isFavorited ? '&#9733;' : '&#9734;';
     const starTitle = isFavorited ? 'Remove from favorites' : 'Add to favorites';
     const initial = (ch.display_name || ch.login || '?')[0].toUpperCase();
-    const avatarHtml = ch.profile_image_url
-      ? `<img src="${ch.profile_image_url}" style="width:40px;height:40px;border-radius:50%;background:#333;flex-shrink:0;" onerror="this.outerHTML='<div style=\\'width:40px;height:40px;border-radius:50%;background:#333;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#888;font-weight:700;font-size:16px;\\'>${initial}</div>'">`
-      : `<div style="width:40px;height:40px;border-radius:50%;background:#333;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#888;font-weight:700;font-size:16px;">${initial}</div>`;
+    const fallbackDiv = `<div style="width:40px;height:40px;border-radius:50%;background:#333;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#888;font-weight:700;font-size:16px;">${initial}</div>`;
+    // Proxy images through our server since Discord's iframe blocks external image loads
+    const imgUrl = ch.profile_image_url ? `/discord/img_proxy.php?url=${encodeURIComponent(ch.profile_image_url)}` : '';
+    const avatarHtml = imgUrl
+      ? `<img src="${imgUrl}" style="width:40px;height:40px;border-radius:50%;background:#333;flex-shrink:0;" onerror="this.outerHTML=this.nextElementSibling.innerHTML" loading="lazy"><template>${fallbackDiv}</template>`
+      : fallbackDiv;
     return `
       <div class="channel-result" data-login="${ch.login}" style="display:flex;align-items:center;gap:12px;padding:10px 16px;cursor:pointer;border-radius:8px;transition:background 0.15s;">
         ${avatarHtml}
@@ -1971,7 +1974,6 @@ if (window.__discordResolve) window.__discordResolve();
   }
 
   // HUD lock toggle
-  let hudToggleTouched = false;
   function doHudToggle() {
     hudLocked = !hudLocked;
     if (hudLocked) {
@@ -1984,18 +1986,13 @@ if (window.__discordResolve) window.__discordResolve();
       showControls();
     }
   }
-  hudToggle.addEventListener('click', (e) => {
-    e.stopPropagation();
-    if (hudToggleTouched) { hudToggleTouched = false; return; }
-    doHudToggle();
-  });
-  // Touch devices (esp. Discord Activity iframe) may not fire click from touch
-  hudToggle.addEventListener('touchend', (e) => {
-    e.stopPropagation();
-    e.preventDefault();
-    hudToggleTouched = true;
-    doHudToggle();
-  });
+  // Desktop only: click handler (touch devices use handleTap instead)
+  if (!('ontouchstart' in window)) {
+    hudToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      doHudToggle();
+    });
+  }
 
   // Handle tap to show controls on mobile (single tap shows, auto-hides after 4s)
   function handleTap(e) {
