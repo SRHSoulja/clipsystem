@@ -203,6 +203,7 @@ $currentUser = getCurrentUser();
     </div>
 
     <div class="feature-box" style="text-align: center; border-color: #5865F2;">
+      <img src="/cliptvlogo.png" alt="ClipTV Discord Activity" style="width: 100px; height: 100px; border-radius: 12px; margin: 0 auto 12px; display: block;">
       <h3 style="color: #5865F2;">Discord Activity</h3>
       <p>Add ClipTV to your Discord server and watch clips together in voice channels.</p>
       <a href="https://discord.com/oauth2/authorize?client_id=1477451341776421046" target="_blank" style="display: inline-block; background: #5865F2; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 500; margin-top: 10px;">Add to Discord</a>
