@@ -1318,6 +1318,7 @@ if ($hasArchivedClips && $pdo) {
       <a href="/search/<?= htmlspecialchars(urlencode($login)) ?>" class="clear-btn">Clear All</a>
       <?php endif; ?>
     </form>
+    <script>document.querySelectorAll('.filters select').forEach(s => s.addEventListener('change', () => s.closest('form').submit()));</script>
 
     <?php
       // Build base params for filter tag removal links
