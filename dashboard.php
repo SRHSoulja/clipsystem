@@ -950,26 +950,6 @@ if ($currentUser) {
             </div>
 
             <div class="card" data-permission="edit_hud">
-                <h3>Desktop ClipTV HUD Position</h3>
-                <p style="color: #adadb8; margin-bottom: 12px;">Position of the clip info overlay on the desktop Clip TV player.</p>
-                <div class="position-picker" id="hudPositionPicker">
-                    <button class="position-btn" data-pos="tl">Top Left</button>
-                    <button class="position-btn" data-pos="tc">Top Center</button>
-                    <button class="position-btn" data-pos="tr">Top Right</button>
-                </div>
-            </div>
-
-            <div class="card" data-permission="edit_hud">
-                <h3>Discord Activity HUD Position</h3>
-                <p style="color: #adadb8; margin-bottom: 12px;">Position of the clip info overlay on the Discord Activity player.</p>
-                <div class="position-picker" id="discordHudPositionPicker">
-                    <button class="position-btn" data-pos="tl">Top Left</button>
-                    <button class="position-btn" data-pos="tc">Top Center</button>
-                    <button class="position-btn" data-pos="tr">Top Right</button>
-                </div>
-            </div>
-
-            <div class="card" data-permission="edit_hud">
                 <h3>Top Clips Overlay Position</h3>
                 <p style="color: #adadb8; margin-bottom: 12px;">Position of the !ctop overlay.</p>
                 <div class="position-picker" id="topPositionPicker">
@@ -1121,6 +1101,27 @@ if ($currentUser) {
                         <div class="slider-group">
                             <input type="range" id="bannerInterval" min="1" max="30" value="5" oninput="updateBannerPreview(); debouncedSaveBanner();">
                             <span class="slider-value" id="bannerIntervalValue">5 min</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="border-top:1px solid #2a2a2d;padding-top:16px;margin-top:16px;">
+                    <div style="display:flex;gap:24px;flex-wrap:wrap;">
+                        <div style="flex:1;min-width:200px;">
+                            <label style="color:#adadb8;font-size:13px;margin-bottom:8px;display:block;">Desktop ClipTV HUD</label>
+                            <div class="position-picker" id="hudPositionPicker" style="display:flex;gap:6px;">
+                                <button class="position-btn" data-pos="tl">Left</button>
+                                <button class="position-btn" data-pos="tc">Center</button>
+                                <button class="position-btn" data-pos="tr">Right</button>
+                            </div>
+                        </div>
+                        <div style="flex:1;min-width:200px;">
+                            <label style="color:#adadb8;font-size:13px;margin-bottom:8px;display:block;">Discord Activity HUD</label>
+                            <div class="position-picker" id="discordHudPositionPicker" style="display:flex;gap:6px;">
+                                <button class="position-btn" data-pos="tl">Left</button>
+                                <button class="position-btn" data-pos="tc">Center</button>
+                                <button class="position-btn" data-pos="tr">Right</button>
+                            </div>
                         </div>
                     </div>
                 </div>
