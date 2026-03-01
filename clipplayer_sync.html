@@ -1127,7 +1127,6 @@
     @media (max-width: 480px) {
       #viewerControls {
         left: max(10px, env(safe-area-inset-left));
-        bottom: max(10px, env(safe-area-inset-bottom));
         gap: 6px;
       }
       #viewerCount { padding: 5px 8px; font-size: 11px; }
@@ -1135,6 +1134,16 @@
       #clipActions .action-btn { padding: 6px 10px; font-size: 11px; }
       #clipActions .action-btn span { display: none; }
       #chatPanel { width: calc(100vw - 24px); left: 12px; bottom: 65px; }
+    }
+
+    /* Override 480px bottom for portrait specifically (must come after 480px block) */
+    @media (max-width: 480px) and (orientation: portrait) {
+      #viewerControls {
+        bottom: max(28px, env(safe-area-inset-bottom));
+      }
+      #clipActions {
+        bottom: calc(max(28px, env(safe-area-inset-bottom)) + 52px);
+      }
     }
 
     /* Touch-friendly buttons */
