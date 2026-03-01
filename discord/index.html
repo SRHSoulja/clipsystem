@@ -1372,6 +1372,11 @@ if (window.__discordResolve) window.__discordResolve();
       twitchUsername = tokenData.twitch_username;
       voteToken = tokenData.vote_token;
       discordAuthComplete = true;
+      console.log('[Discord] Auth result:', {
+        discord_user: discordUser?.global_name,
+        twitch_username: twitchUsername || '(none found)',
+        has_vote_token: !!voteToken
+      });
     } else {
       console.error('[Discord] Token exchange failed:', tokenData);
     }
