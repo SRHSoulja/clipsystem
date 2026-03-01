@@ -320,10 +320,18 @@ header("Content-Type: text/html; charset=utf-8");
       </div>
 
       <div class="feature-card">
+        <div class="feature-emoji">🤖</div>
+        <div class="feature-text">
+          <h3>Twitch Chat Bot</h3>
+          <p>The bot that powers it all. Viewers use <code style="background:rgba(145,71,255,0.2);padding:2px 6px;border-radius:4px;">!cclip</code> to request clips, <code style="background:rgba(145,71,255,0.2);padding:2px 6px;border-radius:4px;">!like</code> and <code style="background:rgba(145,71,255,0.2);padding:2px 6px;border-radius:4px;">!dislike</code> to vote, and mods get full control with skip, play, and filter commands. All from Twitch chat.</p>
+        </div>
+      </div>
+
+      <div class="feature-card">
         <div class="feature-emoji">🎬</div>
         <div class="feature-text">
           <h3>OBS Source &amp; Playlists</h3>
-          <p>A custom OBS browser source to display clips on stream. Curate playlists, let your mods manage them, and use <code style="background:rgba(145,71,255,0.2);padding:2px 6px;border-radius:4px;">!cclip</code> for chat-driven requests and voting.</p>
+          <p>A custom OBS browser source that auto-plays your clips on stream. Curate playlists for BRB screens, pre-stream, or highlight reels, and let your mods manage them.</p>
         </div>
       </div>
     </div>
