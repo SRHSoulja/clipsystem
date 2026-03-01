@@ -1344,8 +1344,11 @@
       <p style="color:#adadb8;font-size:13px;margin:0;">Browse or search for a streamer to start watching clips</p>
       <div id="discordIdentity" style="display:none;margin-top:8px;padding:6px 12px;background:#1a1a2e;border:1px solid #3a3a5d;border-radius:8px;font-size:12px;color:#adadb8;"></div>
     </div>
-    <input type="text" id="channelSearchInput" placeholder="Search streamers..." autofocus
-      style="width:100%;padding:12px 16px;background:#1a1a1d;border:1px solid #555;border-radius:10px;color:#efeff1;font-size:16px;outline:none;box-sizing:border-box;">
+    <div style="display:flex;gap:8px;align-items:center;">
+      <input type="text" id="channelSearchInput" placeholder="Search streamers..." autofocus
+        style="flex:1;padding:12px 16px;background:#1a1a1d;border:1px solid #555;border-radius:10px;color:#efeff1;font-size:16px;outline:none;box-sizing:border-box;">
+      <button id="channelSearchBtn" style="padding:12px 18px;background:#9147ff;border:none;border-radius:10px;color:#fff;font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap;">Go</button>
+    </div>
     <div id="channelSearchResults" style="margin-top:8px;max-height:calc(100vh - 220px);overflow-y:auto;border-radius:10px;background:#18181b;"></div>
   </div>
 </div>
@@ -1617,12 +1620,43 @@ if (window.__discordResolve) window.__discordResolve();
       }, 300);
     });
 
-    // Also allow pressing Enter with exact name
-    searchInput?.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter' && searchInput.value.trim()) {
-        if (pickerOverlay) pickerOverlay.style.display = 'none';
-        resolve(searchInput.value.trim().toLowerCase());
+    // Validate channel exists before selecting
+    async function trySelectChannel(name) {
+      const q = name.trim().toLowerCase();
+      if (!q) return;
+      const goBtn = document.getElementById('channelSearchBtn');
+      goBtn.textContent = '...';
+      goBtn.disabled = true;
+      try {
+        const res = await fetch(`/channel_search.php?q=${encodeURIComponent(q)}`);
+        const channels = await res.json();
+        const match = channels.find(ch => ch.login === q);
+        if (match) {
+          if (pickerOverlay) pickerOverlay.style.display = 'none';
+          resolve(q);
+        } else if (channels.length > 0) {
+          // Show results instead - they typed something close
+          resultsDiv.innerHTML = channels.map(ch => {
+            const isFav = userFavorites.some(f => f.login === ch.login);
+            return renderChannelCard(ch, isFav);
+          }).join('');
+          attachPickerListeners(resultsDiv, resolve);
+        } else {
+          resultsDiv.innerHTML = '<div style="color:#ef4444;padding:12px;text-align:center;">No streamer found with that name</div>';
+        }
+      } catch (e) {
+        resultsDiv.innerHTML = '<div style="color:#ef4444;padding:12px;text-align:center;">Search failed, try again</div>';
       }
+      goBtn.textContent = 'Go';
+      goBtn.disabled = false;
+    }
+
+    // Enter key and Go button both validate
+    searchInput?.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') trySelectChannel(searchInput.value);
+    });
+    document.getElementById('channelSearchBtn')?.addEventListener('click', () => {
+      trySelectChannel(searchInput.value);
     });
   });
 
