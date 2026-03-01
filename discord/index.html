@@ -2499,15 +2499,20 @@ if (window.__discordResolve) window.__discordResolve();
       }
     };
 
-    player.onerror = () => {
+    player.onerror = (e) => {
       if (hasStarted) return;
       hasStarted = true;
-      debugLog("Video error - trying next", "err");
+      const mediaErr = player.error;
+      const errCode = mediaErr ? mediaErr.code : '?';
+      const errMsg = mediaErr ? mediaErr.message : 'unknown';
+      debugLog(`Video error (code=${errCode}): ${errMsg}`, "err");
+      debugLog(`Failed URL: ${mp4Url?.substring(0, 80)}...`, "err");
       setSyncStatus("error", "Error");
       isSwitching = false;
       if (isController) setTimeout(controllerAdvance, 500);
     };
 
+    debugLog(`Setting src: ${mp4Url?.substring(0, 60)}...`);
     // Set source and explicitly load
     player.src = mp4Url;
     player.load();
