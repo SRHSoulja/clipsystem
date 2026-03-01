@@ -1383,19 +1383,24 @@ if (window.__discordResolve) window.__discordResolve();
       });
     } else {
       console.error('[Discord] Token exchange failed:', tokenData);
+      discordUser = { global_name: 'Token exchange failed', id: '' };
+      debugConnections = tokenData?._debug_connections || null;
     }
   } catch (e) {
     console.error('[Discord] Auth error:', e);
+    discordUser = { global_name: 'Auth error: ' + (e.message || e), id: '' };
   }
 
   // Hide loading overlay, show channel picker
   document.getElementById('loadingOverlay').classList.add('hide');
 
-  // Show Discord identity on channel picker screen (immediately visible)
+  // Show Discord identity on channel picker screen (always visible for debug)
   const identityEl = document.getElementById('discordIdentity');
-  if (identityEl && discordUser) {
+  if (identityEl) {
     identityEl.style.display = 'block';
-    if (twitchUsername) {
+    if (!discordUser) {
+      identityEl.innerHTML = `<span style="color:#ff6b6b;">⚠ Discord auth failed — check console</span>`;
+    } else if (twitchUsername) {
       identityEl.innerHTML = `<span style="color:#a78bfa;">👤 ${discordUser.global_name}</span> · <span style="color:#22d3ee;">🎮 ${twitchUsername}</span> <span style="color:#4ade80;">✓ Voting enabled</span>`;
     } else {
       const connTypes = debugConnections && debugConnections.length
