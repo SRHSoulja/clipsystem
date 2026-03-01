@@ -1114,15 +1114,32 @@
       #chatPanel { width: 280px; height: 340px; left: 12px; bottom: 70px; }
     }
 
+    /* Portrait mobile: stack clipActions above viewerControls */
+    @media (max-width: 768px) and (orientation: portrait) {
+      #viewerControls {
+        left: 50%;
+        transform: translateX(-50%);
+      }
+      #clipActions {
+        left: 50%;
+        bottom: calc(max(12px, env(safe-area-inset-bottom)) + 52px);
+      }
+    }
+
     @media (max-width: 480px) {
       #viewerControls {
-        left: max(10px, env(safe-area-inset-left));
+        left: 50%;
+        transform: translateX(-50%);
         bottom: max(10px, env(safe-area-inset-bottom));
         gap: 6px;
       }
       #viewerCount { padding: 5px 8px; font-size: 11px; }
       #skipBtn, #remoteBtn, #backBtn, #chatBtn { padding: 8px 12px; font-size: 11px; min-height: 44px; }
-      #clipActions { bottom: max(10px, env(safe-area-inset-bottom)); }
+      #clipActions {
+        left: 50%;
+        bottom: calc(max(10px, env(safe-area-inset-bottom)) + 52px);
+        gap: 6px;
+      }
       #clipActions .action-btn { padding: 6px 10px; font-size: 11px; }
       #clipActions .action-btn span { display: none; }
       #chatPanel { width: calc(100vw - 24px); left: 12px; bottom: 65px; }
