@@ -94,18 +94,38 @@ if ($isWeb) {
   }
 }
 
-$TWITCH_CLIENT_ID = getenv('TWITCH_CLIENT_ID') ?: '';
-$TWITCH_CLIENT_SECRET = getenv('TWITCH_CLIENT_SECRET') ?: '';
-if (!$TWITCH_CLIENT_ID || !$TWITCH_CLIENT_SECRET) {
-  http_response_code(500);
-  echo "Missing TWITCH_CLIENT_ID or TWITCH_CLIENT_SECRET\n";
-  exit;
-}
-
 $login = strtolower(trim((string) arg('login', 'floppyjimmie')));
 $years = (int) arg('years', 5);
 if ($years < 1) $years = 1;
 if ($years > 10) $years = 10;
+$platform = strtolower(trim((string) arg('platform', '')));
+if ($platform && !in_array($platform, ['twitch', 'kick'])) $platform = '';
+
+// Look up platform from channel_settings if not provided
+if (!$platform) {
+  require_once __DIR__ . '/db_config.php';
+  $pdo = get_db_connection();
+  if ($pdo) {
+    try {
+      $stmt = $pdo->prepare("SELECT platform FROM channel_settings WHERE login = ?");
+      $stmt->execute([$login]);
+      $plat = $stmt->fetchColumn();
+      $platform = ($plat && in_array($plat, ['twitch', 'kick'])) ? $plat : 'twitch';
+    } catch (PDOException $e) {
+      $platform = 'twitch';
+    }
+  } else {
+    $platform = 'twitch';
+  }
+}
+
+$TWITCH_CLIENT_ID = getenv('TWITCH_CLIENT_ID') ?: '';
+$TWITCH_CLIENT_SECRET = getenv('TWITCH_CLIENT_SECRET') ?: '';
+if ($platform !== 'kick' && (!$TWITCH_CLIENT_ID || !$TWITCH_CLIENT_SECRET)) {
+  http_response_code(500);
+  echo "Missing TWITCH_CLIENT_ID or TWITCH_CLIENT_SECRET\n";
+  exit;
+}
 
 // Chunking support for web execution (Railway has ~30s timeout)
 $startWindow = (int) arg('window', 1);  // Which window to start from (1-indexed)
@@ -129,7 +149,7 @@ $metaFile  = $cacheDir . '/clips_index_' . $safeLogin . '.meta.json';
 // Check for existing index in static cache (deployed with app) as fallback
 $staticIndexFile = $staticCacheDir . '/clips_index_' . $safeLogin . '.json';
 
-echo "Backfill starting for login={$login}, years={$years}\n";
+echo "Backfill starting for login={$login}, years={$years}, platform={$platform}\n";
 echo "Index file: {$indexFile}\n";
 echo "Cache dir writable: " . (is_writable($cacheDir) ? "yes" : "no") . "\n";
 
@@ -145,46 +165,51 @@ if ($freshMode && $startWindow === 1) {
     echo "  Deleted: $metaFile\n";
   }
   // Note: static cache is read-only on Railway, can't delete it there
-  echo "  Starting fresh - all clips will be re-fetched from Twitch API\n";
+  echo "  Starting fresh - all clips will be re-fetched from " . ($platform === 'kick' ? 'Kick' : 'Twitch') . " API\n";
 }
 echo "\n";
 
-// App token
-[$code, $raw] = curl_post('https://id.twitch.tv/oauth2/token', [
-  'client_id' => $TWITCH_CLIENT_ID,
-  'client_secret' => $TWITCH_CLIENT_SECRET,
-  'grant_type' => 'client_credentials',
-]);
-if ($code < 200 || $code >= 300) {
-  http_response_code(500);
-  echo "Token request failed http={$code}\n{$raw}\n";
-  exit;
-}
-$token = json_decode($raw, true)['access_token'] ?? '';
-if (!$token) {
-  http_response_code(500);
-  echo "Missing access_token in token response\n";
-  exit;
-}
+// Twitch-specific: get app token and broadcaster ID (skip for Kick)
+$broadcasterId = '';
+$headers = [];
+if ($platform !== 'kick') {
+  // App token
+  [$code, $raw] = curl_post('https://id.twitch.tv/oauth2/token', [
+    'client_id' => $TWITCH_CLIENT_ID,
+    'client_secret' => $TWITCH_CLIENT_SECRET,
+    'grant_type' => 'client_credentials',
+  ]);
+  if ($code < 200 || $code >= 300) {
+    http_response_code(500);
+    echo "Token request failed http={$code}\n{$raw}\n";
+    exit;
+  }
+  $token = json_decode($raw, true)['access_token'] ?? '';
+  if (!$token) {
+    http_response_code(500);
+    echo "Missing access_token in token response\n";
+    exit;
+  }
 
-$headers = [
-  "Authorization: Bearer {$token}",
-  "Client-Id: {$TWITCH_CLIENT_ID}",
-];
+  $headers = [
+    "Authorization: Bearer {$token}",
+    "Client-Id: {$TWITCH_CLIENT_ID}",
+  ];
 
-// User lookup
-[$uCode, $uRaw] = curl_get('https://api.twitch.tv/helix/users?login=' . urlencode($login), $headers);
-if ($uCode < 200 || $uCode >= 300) {
-  http_response_code(500);
-  echo "User lookup failed http={$uCode}\n{$uRaw}\n";
-  exit;
-}
-$userJson = json_decode($uRaw, true);
-$broadcasterId = $userJson['data'][0]['id'] ?? '';
-if (!$broadcasterId) {
-  http_response_code(404);
-  echo "User not found\n";
-  exit;
+  // User lookup
+  [$uCode, $uRaw] = curl_get('https://api.twitch.tv/helix/users?login=' . urlencode($login), $headers);
+  if ($uCode < 200 || $uCode >= 300) {
+    http_response_code(500);
+    echo "User lookup failed http={$uCode}\n{$uRaw}\n";
+    exit;
+  }
+  $userJson = json_decode($uRaw, true);
+  $broadcasterId = $userJson['data'][0]['id'] ?? '';
+  if (!$broadcasterId) {
+    http_response_code(404);
+    echo "User not found\n";
+    exit;
+  }
 }
 
 $now = time();
@@ -198,7 +223,7 @@ $clips = [];
 // NEVER load from static cache in fresh mode - it has old data without creator_name
 if ($freshMode) {
   if ($startWindow === 1) {
-    echo "Fresh mode: starting fresh, will fetch all clips from Twitch\n";
+    echo "Fresh mode: starting fresh, will fetch all clips from " . ($platform === 'kick' ? 'Kick' : 'Twitch') . "\n";
   } else if (file_exists($indexFile)) {
     // Window 2+: load from writable cache (has fresh data from window 1+)
     echo "Fresh mode: loading from writable cache: $indexFile\n";
@@ -237,6 +262,137 @@ if ($freshMode) {
     }
   }
 }
+
+// === Kick platform: use KickAPI for all clip fetching ===
+if ($platform === 'kick') {
+  require_once __DIR__ . '/includes/kick_api.php';
+  $kickApi = new KickAPI();
+
+  echo "Fetching Kick clips for channel: {$login}\n";
+
+  // Check channel exists
+  $channelInfo = $kickApi->getChannelInfo($login);
+  if (!$channelInfo) {
+    http_response_code(404);
+    echo "Kick channel not found: {$login}\n";
+    exit;
+  }
+  echo "Channel found: {$channelInfo['display_name']} (ID: {$channelInfo['id']})\n\n";
+
+  // Fetch all clips via KickAPI (handles pagination internally)
+  $kickClips = $kickApi->getAllClips($login, 2000, 'view');
+  echo "Fetched " . count($kickClips) . " clips from Kick API\n";
+
+  $addedCount = 0;
+  foreach ($kickClips as $kc) {
+    $id = $kc['clip_id'] ?? '';
+    if (!$id) continue;
+    if (isset($seen[$id])) continue;
+
+    $seen[$id] = true;
+    $clips[] = [
+      "id" => $id,
+      "title" => $kc["title"] ?? "",
+      "duration" => $kc["duration"] ?? 0,
+      "created_at" => $kc["created_at"] ?? "",
+      "view_count" => $kc["view_count"] ?? 0,
+      "game_id" => $kc["game_id"] ?? "",
+      "video_id" => "",
+      "vod_offset" => null,
+      "thumbnail_url" => $kc["thumbnail_url"] ?? "",
+      "creator_name" => $kc["creator_name"] ?? "",
+      "mp4_url" => $kc["mp4_url"] ?? "",
+      "platform" => "kick",
+    ];
+    $addedCount++;
+  }
+  echo "New clips added: {$addedCount}, total: " . count($clips) . "\n\n";
+
+  // Sort oldest-first
+  usort($clips, function($a, $b) {
+    return strcmp($a['created_at'] ?? '', $b['created_at'] ?? '');
+  });
+
+  // Assign seq numbers
+  if ($freshMode) {
+    foreach ($clips as $i => &$clip) {
+      $clip['seq'] = $i + 1;
+    }
+    unset($clip);
+  } else {
+    $maxExistingSeq = 0;
+    foreach ($clips as $clip) {
+      if (isset($clip['seq']) && $clip['seq'] > $maxExistingSeq) {
+        $maxExistingSeq = $clip['seq'];
+      }
+    }
+    $nextSeq = $maxExistingSeq + 1;
+    foreach ($clips as &$clip) {
+      if (!isset($clip['seq']) || $clip['seq'] <= 0) {
+        $clip['seq'] = $nextSeq++;
+      }
+    }
+    unset($clip);
+  }
+
+  // Save index
+  $out = [
+    "login" => $login,
+    "broadcaster_id" => $channelInfo['id'] ?? '',
+    "years" => $years,
+    "built_at" => gmdate('c'),
+    "count" => count($clips),
+    "max_seq" => count($clips),
+    "platform" => "kick",
+    "clips" => $clips,
+  ];
+  file_put_contents($indexFile, json_encode($out, JSON_UNESCAPED_SLASHES));
+
+  $meta = [
+    "login" => $login,
+    "broadcaster_id" => $channelInfo['id'] ?? '',
+    "last_window_end" => gmdate('c'),
+    "updated_at" => gmdate('c'),
+    "count" => count($clips),
+    "platform" => "kick",
+  ];
+  file_put_contents($metaFile, json_encode($meta, JSON_UNESCAPED_SLASHES));
+
+  // Count clips with creator_name
+  $withCreatorName = 0;
+  foreach ($clips as $c) {
+    if (!empty($c['creator_name'])) $withCreatorName++;
+  }
+
+  $freshParam = $freshMode ? "&fresh=1" : "";
+  $migrateUrl = "migrate_clips_to_db.php?login=$login&update=1&from_backfill=1&platform=kick" . $freshParam;
+
+  echo "=== Kick Backfill Complete ===\n";
+  echo "Total clips indexed: " . count($clips) . "\n";
+  echo "Clips with creator_name: $withCreatorName\n";
+  echo "\n✅ All clips fetched! Auto-migrating to database...\n";
+
+  // Get buffered output
+  $output = ob_get_clean();
+
+  if ($isWeb) {
+    header('Content-Type: text/html; charset=utf-8');
+    echo "<!DOCTYPE html><html><head><meta charset='utf-8'>";
+    echo "<meta http-equiv='refresh' content='2;url=" . htmlspecialchars($migrateUrl) . "'>";
+    echo "<title>Kick Clips Backfill Complete</title>";
+    echo "<style>body{background:#1a1a2e;color:#0f0;font-family:monospace;padding:20px;font-size:14px;line-height:1.4;} a{color:#0ff;}</style>";
+    echo "</head><body><pre>" . htmlspecialchars($output) . "</pre>";
+    echo "<p>🔄 Auto-redirecting to database migration...</p>";
+    echo "<p><a href='" . htmlspecialchars($migrateUrl) . "'>Click here if not redirected...</a></p>";
+    echo "</body></html>";
+  } else {
+    header('Content-Type: text/plain; charset=utf-8');
+    echo $output;
+  }
+  exit;
+}
+
+// === Twitch platform: windowed fetch via Helix API ===
 
 $windowDays = 30; // 30-day chunks
 $windowSec = $windowDays * 24 * 60 * 60;
@@ -407,11 +563,12 @@ foreach ($clips as $c) {
 // Determine if we need to continue and build next URL
 $needsContinue = $isWeb && $nextWindow > 0 && $nextWindow <= $totalWindows;
 $freshParam = $freshMode ? "&fresh=1" : "";
-$nextUrl = $needsContinue ? "clips_backfill.php?login=$login&years=$years&window=$nextWindow&maxwin=$maxWindows$freshParam" : null;
+$platformParam = $platform !== 'twitch' ? "&platform=$platform" : "";
+$nextUrl = $needsContinue ? "clips_backfill.php?login=$login&years=$years&window=$nextWindow&maxwin=$maxWindows$freshParam$platformParam" : null;
 
 // URL to auto-migrate after backfill completes
 // Pass fresh=1 to migration if we're doing a fresh backfill (so it deletes existing DB clips too)
-$migrateUrl = "migrate_clips_to_db.php?login=$login&update=1&from_backfill=1" . $freshParam;
+$migrateUrl = "migrate_clips_to_db.php?login=$login&update=1&from_backfill=1" . $freshParam . $platformParam;
 
 echo "=== Chunk Complete ===\n";
 echo "Windows processed: $windowsProcessed\n";

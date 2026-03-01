@@ -258,6 +258,12 @@ if ($currentUser) {
         .btn-danger { background: #ff4757; color: white; }
         .btn-danger:hover { background: #ee5a24; }
 
+        /* Platform Picker */
+        .platform-btn { background: #26262c; border: 2px solid transparent; color: #adadb8; transition: all 0.2s; }
+        .platform-btn:hover { border-color: #555; color: #fff; }
+        .platform-btn.active { border-color: #9147ff; color: #fff; background: #2d1a4e; }
+        .platform-btn.active[data-platform="kick"] { border-color: #53fc18; background: #1a3312; }
+
         /* Position Picker */
         .position-picker {
             display: grid;
@@ -1381,9 +1387,25 @@ if ($currentUser) {
         <div class="tab-content" id="tab-settings">
             <div id="settingsMessage"></div>
 
+            <div class="card" id="platformCard" data-permission="refresh_clips">
+                <h3>Clip Source Platform</h3>
+                <p style="color: #adadb8; margin-bottom: 12px;">Choose where to pull clips from.</p>
+                <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+                    <button class="btn platform-btn active" data-platform="twitch" onclick="setPlatform('twitch')" style="display:flex;align-items:center;gap:6px;">
+                        <svg viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px;"><path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714z"/></svg>
+                        Twitch
+                    </button>
+                    <button class="btn platform-btn" data-platform="kick" onclick="setPlatform('kick')" style="display:flex;align-items:center;gap:6px;">
+                        <svg viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px;"><path d="M1.333 0v24h5.338v-7.997l2.666 2.666L14.67 24h8V0h-5.338v8L14.67 5.338 12.003 8V0z"/></svg>
+                        Kick <span style="font-size:10px;opacity:0.6;margin-left:2px;">(Experimental)</span>
+                    </button>
+                </div>
+                <div id="platformMessage"></div>
+            </div>
+
             <div class="card" id="refreshCard" data-permission="refresh_clips">
                 <h3>Refresh Clips</h3>
-                <p style="color: #adadb8; margin-bottom: 12px;">Fetch new clips from Twitch.</p>
+                <p style="color: #adadb8; margin-bottom: 12px;" id="refreshDesc">Fetch new clips from Twitch.</p>
                 <p style="color: #666; font-size: 13px; margin-bottom: 12px;">Last refresh: <span id="lastRefresh">Never</span></p>
                 <button class="btn btn-primary" id="refreshClipsBtn" onclick="refreshClips()">Get New Clips</button>
             </div>
@@ -2049,6 +2071,9 @@ if ($currentUser) {
                 setPositionPicker('discordHudPositionPicker', settings.discord_hud_position || 'tr');
                 setPositionPicker('obsHudPositionPicker', settings.obs_hud_position || 'tr');
                 setPositionPicker('topPositionPicker', settings.top_position || 'br');
+
+                // Platform
+                setPlatformUI(settings.platform || 'twitch');
 
                 // Voting
                 document.getElementById('votingEnabled').checked = settings.voting_enabled;
@@ -2733,9 +2758,39 @@ if ($currentUser) {
             }
         }
 
+        let currentPlatform = 'twitch';
+
+        function setPlatformUI(platform) {
+            currentPlatform = platform;
+            document.querySelectorAll('.platform-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.platform === platform);
+            });
+            const desc = document.getElementById('refreshDesc');
+            if (desc) {
+                desc.textContent = platform === 'kick'
+                    ? 'Fetch new clips from Kick. (Experimental — uses unofficial API)'
+                    : 'Fetch new clips from Twitch.';
+            }
+        }
+
+        async function setPlatform(platform) {
+            setPlatformUI(platform);
+            try {
+                const res = await fetch(`${API_BASE}/dashboard_api.php?action=save_settings&key=${encodeURIComponent(authKey)}&login=${encodeURIComponent(authLogin)}&field=platform&value=${encodeURIComponent(platform)}`, { credentials: 'same-origin' });
+                const data = await res.json();
+                if (data.success) {
+                    showMessage('platformMessage', `Platform set to ${platform === 'kick' ? 'Kick (Experimental)' : 'Twitch'}`, 'success');
+                } else {
+                    showMessage('platformMessage', data.error || 'Failed to save', 'error');
+                }
+            } catch (e) {
+                showMessage('platformMessage', 'Connection error', 'error');
+            }
+        }
+
         function refreshClips() {
             showToast('info', 'Refreshing Clips', 'Opening refresh page in new tab...');
-            window.open(`/refresh_clips.php?login=${encodeURIComponent(authLogin)}`, '_blank');
+            window.open(`/refresh_clips.php?login=${encodeURIComponent(authLogin)}&platform=${encodeURIComponent(currentPlatform)}`, '_blank');
         }
 
         function copyPlayerUrl() {

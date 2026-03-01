@@ -24,6 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // Get clip slug/id
 $slug = $_GET['slug'] ?? $_GET['id'] ?? '';
 $slug = trim($slug);
+$platform = strtolower($_GET['platform'] ?? 'twitch');
 
 if (!$slug) {
     http_response_code(400);
@@ -31,6 +32,53 @@ if (!$slug) {
     exit;
 }
 
+// === Kick clips: look up stored mp4_url from DB ===
+if ($platform === 'kick') {
+    require_once __DIR__ . '/db_config.php';
+    $pdo = get_db_connection();
+    $mp4Url = null;
+
+    if ($pdo) {
+        try {
+            $stmt = $pdo->prepare("SELECT mp4_url, title, creator_name, duration FROM clips WHERE clip_id = ? AND platform = 'kick' LIMIT 1");
+            $stmt->execute([$slug]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($row && $row['mp4_url']) {
+                $mp4Url = $row['mp4_url'];
+            }
+        } catch (PDOException $e) {
+            // fall through
+        }
+    }
+
+    // If not in DB, try Kick API directly
+    if (!$mp4Url) {
+        require_once __DIR__ . '/includes/kick_api.php';
+        $kickApi = new KickAPI();
+        $clipInfo = $kickApi->getClipInfo($slug);
+        if ($clipInfo && $clipInfo['mp4_url']) {
+            $mp4Url = $clipInfo['mp4_url'];
+        }
+    }
+
+    if ($mp4Url) {
+        echo json_encode([
+            'slug' => $slug,
+            'platform' => 'kick',
+            'title' => $row['title'] ?? '',
+            'broadcaster' => '',
+            'duration' => (int)($row['duration'] ?? 0),
+            'qualities' => [['quality' => 'source', 'frameRate' => 30, 'url' => $mp4Url]],
+            'mp4_url' => $mp4Url
+        ], JSON_UNESCAPED_SLASHES);
+    } else {
+        http_response_code(404);
+        echo json_encode(["error" => "Kick clip not found"]);
+    }
+    exit;
+}
+
+// === Twitch clips: use GQL ===
 // Twitch's internal client ID (used by their web player)
 $clientId = "kimne78kx3ncx6brgo4mv6wki5h1ko";
 

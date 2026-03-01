@@ -2050,6 +2050,13 @@
 
   // GQL: Get MP4 URL (adapts quality for slow connections)
   async function getMp4Url(clipId, forceHighQuality = false) {
+    // Kick clips have direct mp4_url stored — no GQL needed
+    const clipData = clips.find(c => c.id === clipId);
+    if (clipData && clipData.mp4_url) {
+      debugLog(`Using stored mp4_url for ${clipData.platform || 'kick'} clip`);
+      return clipData.mp4_url;
+    }
+
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), isSlowConnection ? 12000 : 8000);
@@ -3398,7 +3405,10 @@
     const clipId = currentClipData?.id || currentClipId;
     if (!clipId) return;
 
-    const clipUrl = `https://clips.twitch.tv/${clipId}`;
+    const clipMeta = clips.find(c => c.id === clipId);
+    const clipUrl = (clipMeta && clipMeta.platform === 'kick')
+      ? `https://kick.com/${login}?clip=${clipId}`
+      : `https://clips.twitch.tv/${clipId}`;
     const labelSpan = btn.querySelector('span');
 
     try {

@@ -169,6 +169,12 @@ try {
     $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS banner_config TEXT DEFAULT '{}'");
     $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS discord_hud_position VARCHAR(10) DEFAULT 'tr'");
     $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS obs_hud_position VARCHAR(10) DEFAULT 'tr'");
+    $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS platform VARCHAR(16) DEFAULT 'twitch'");
+
+    // Ensure clips table has platform and mp4_url columns
+    $pdo->exec("ALTER TABLE clips ADD COLUMN IF NOT EXISTS platform VARCHAR(16) DEFAULT 'twitch'");
+    $pdo->exec("ALTER TABLE clips ADD COLUMN IF NOT EXISTS mp4_url TEXT");
+    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_clips_platform ON clips(login, platform)");
 
     // Ensure channel_mods table exists
     $pdo->exec("
@@ -193,7 +199,7 @@ switch ($action) {
 
         try {
             $stmt = $pdo->prepare("
-                SELECT hud_position, discord_hud_position, obs_hud_position, top_position, blocked_words, blocked_clippers, voting_enabled, vote_feedback, silent_prefix, last_refresh, command_settings, banner_config
+                SELECT hud_position, discord_hud_position, obs_hud_position, top_position, blocked_words, blocked_clippers, voting_enabled, vote_feedback, silent_prefix, last_refresh, command_settings, banner_config, platform
                 FROM channel_settings WHERE login = ?
             ");
             $stmt->execute([$login]);
@@ -212,7 +218,8 @@ switch ($action) {
                     'silent_prefix' => false,
                     'last_refresh' => null,
                     'command_settings' => '{}',
-                    'banner_config' => '{}'
+                    'banner_config' => '{}',
+                    'platform' => 'twitch'
                 ];
             }
 
@@ -268,7 +275,8 @@ switch ($action) {
             'blocked_words' => 'add_blocked_words',
             'blocked_clippers' => 'add_blocked_clippers',
             'command_settings' => 'toggle_commands',
-            'banner_config' => 'change_hud'
+            'banner_config' => 'change_hud',
+            'platform' => 'change_hud'
         ];
 
         if (!isset($allowedFields[$field])) {
@@ -307,6 +315,9 @@ switch ($action) {
                     $obj = json_decode($value, true);
                     if (!is_array($obj)) $obj = [];
                     $value = json_encode($obj);
+                    break;
+                case 'platform':
+                    if (!in_array($value, ['twitch', 'kick'])) $value = 'twitch';
                     break;
                 case 'banner_config':
                     error_log("Banner save - raw value length: " . strlen($value));

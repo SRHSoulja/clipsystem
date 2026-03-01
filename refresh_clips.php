@@ -46,6 +46,9 @@ if (!$login) {
     die("Missing login parameter");
 }
 
+// Determine platform (from query param or channel_settings)
+$platform = strtolower(trim($_GET['platform'] ?? ''));
+
 echo "<pre style='background:#1a1a2e;color:#0f0;padding:20px;font-family:monospace;'>\n";
 echo "=== Refresh Clips for {$login} ===\n\n";
 
@@ -54,6 +57,19 @@ $pdo = get_db_connection();
 if (!$pdo) {
     die("Database connection failed");
 }
+
+// Get platform from channel_settings if not provided in URL
+if (!$platform || !in_array($platform, ['twitch', 'kick'])) {
+    try {
+        $stmt = $pdo->prepare("SELECT platform FROM channel_settings WHERE login = ?");
+        $stmt->execute([$login]);
+        $plat = $stmt->fetchColumn();
+        $platform = ($plat && in_array($plat, ['twitch', 'kick'])) ? $plat : 'twitch';
+    } catch (PDOException $e) {
+        $platform = 'twitch';
+    }
+}
+echo "Platform: " . strtoupper($platform) . ($platform === 'kick' ? ' (Experimental)' : '') . "\n\n";
 
 // Get current max seq and most recent clip date
 $stmt = $pdo->prepare("SELECT MAX(seq) as max_seq, MAX(created_at) as latest_date, COUNT(*) as total FROM clips WHERE login = ?");
@@ -91,6 +107,63 @@ $existingIds = $stmt->fetchAll(PDO::FETCH_COLUMN);
 $existingSet = array_flip($existingIds);
 echo "Loaded " . count($existingIds) . " existing clip IDs\n\n";
 
+// === Platform-specific clip fetching ===
+$newClips = [];
+
+if ($platform === 'kick') {
+    // === KICK CLIP FETCH ===
+    require_once __DIR__ . '/includes/kick_api.php';
+    $kickApi = new KickAPI();
+
+    echo "Fetching clips from Kick for {$login}...\n";
+
+    $channelInfo = $kickApi->getChannelInfo($login);
+    if (!$channelInfo) {
+        die("Could not find Kick channel: {$login}");
+    }
+    echo "Kick channel: {$channelInfo['display_name']} (ID: {$channelInfo['id']})\n\n";
+
+    // Fetch all clips (sorted by most recent)
+    $page = 1;
+    $totalFetched = 0;
+    $maxPages = 50;
+
+    while ($page <= $maxPages) {
+        echo "Page {$page}...\n";
+        $result = $kickApi->getClips($login, 'recent', $page);
+
+        if (empty($result['clips'])) {
+            echo "  No more clips\n";
+            break;
+        }
+
+        $pageNew = 0;
+        foreach ($result['clips'] as $clip) {
+            $clipId = $clip['clip_id'];
+            if (isset($existingSet[$clipId])) {
+                continue;
+            }
+            $newClips[] = $clip;
+            $pageNew++;
+        }
+
+        $totalFetched += count($result['clips']);
+        if ($pageNew > 0) {
+            echo "  Found {$pageNew} new clips (total new: " . count($newClips) . ")\n";
+        }
+
+        if (!$result['has_more']) break;
+        $page++;
+        usleep(200000); // 200ms delay
+    }
+
+    echo "\nFetched {$totalFetched} total clips from Kick, " . count($newClips) . " are new\n\n";
+
+    // Skip the Twitch section
+    goto insert_clips;
+}
+
+// === TWITCH CLIP FETCH ===
 // Get Twitch access token
 $clientId = getenv('TWITCH_CLIENT_ID');
 $clientSecret = getenv('TWITCH_CLIENT_SECRET');
@@ -215,6 +288,8 @@ for ($w = 0; $w < $totalWindows; $w++) {
 
 echo "\n";
 
+insert_clips:
+
 if (empty($newClips)) {
     echo "No new clips found!\n";
     echo "</pre>";
@@ -235,8 +310,8 @@ $errors = 0;
 $nextSeq = $maxSeq + 1;
 
 $insertStmt = $pdo->prepare("
-    INSERT INTO clips (login, clip_id, seq, title, duration, created_at, view_count, game_id, video_id, vod_offset, creator_name, thumbnail_url, blocked)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, false)
+    INSERT INTO clips (login, clip_id, seq, title, duration, created_at, view_count, game_id, video_id, vod_offset, creator_name, thumbnail_url, blocked, platform, mp4_url)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, false, ?, ?)
     ON CONFLICT (login, clip_id) DO NOTHING
 ");
 
@@ -244,9 +319,12 @@ $skipped = 0;
 
 foreach ($newClips as $clip) {
     try {
+        $clipId = $clip['clip_id'] ?? $clip['id'] ?? '';
+        $clipPlatform = $clip['platform'] ?? $platform;
+        $clipMp4 = $clip['mp4_url'] ?? null;
         $insertStmt->execute([
             $login,
-            $clip['id'],
+            $clipId,
             $nextSeq,
             $clip['title'] ?? '',
             (int)round($clip['duration'] ?? 0),
@@ -256,7 +334,9 @@ foreach ($newClips as $clip) {
             $clip['video_id'] ?? null,
             $clip['vod_offset'] ?? null,
             $clip['creator_name'] ?? '',
-            $clip['thumbnail_url'] ?? ''
+            $clip['thumbnail_url'] ?? '',
+            $clipPlatform,
+            $clipMp4
         ]);
 
         if ($insertStmt->rowCount() > 0) {
@@ -304,6 +384,28 @@ $missingGameIds = $stmt->fetchAll(PDO::FETCH_COLUMN);
 
 if (empty($missingGameIds)) {
     echo "All game names are already cached!\n";
+} elseif ($platform === 'kick') {
+    // For Kick, game names are already in the clip data (game_name field)
+    // Insert them directly from the clips we just fetched
+    echo "Found " . count($missingGameIds) . " games without names, using Kick clip data...\n";
+    $insertGameStmt = $pdo->prepare("
+        INSERT INTO games_cache (game_id, name, box_art_url)
+        VALUES (?, ?, '')
+        ON CONFLICT (game_id) DO UPDATE SET name = EXCLUDED.name
+    ");
+    $resolved = 0;
+    foreach ($newClips as $clip) {
+        $gid = $clip['game_id'] ?? '';
+        $gname = $clip['game_name'] ?? '';
+        if ($gid && $gname && in_array($gid, $missingGameIds)) {
+            try {
+                $insertGameStmt->execute([$gid, $gname]);
+                echo "  Cached: {$gname} ({$gid})\n";
+                $resolved++;
+            } catch (PDOException $e) { /* ignore */ }
+        }
+    }
+    echo "Resolved {$resolved} game names from Kick clip data\n";
 } else {
     echo "Found " . count($missingGameIds) . " games without names, fetching from Twitch...\n";
 

@@ -2221,6 +2221,13 @@ if (window.__discordResolve) window.__discordResolve();
 
   // GQL: Get MP4 URL (adapts quality for slow connections)
   async function getMp4Url(clipId, forceHighQuality = false) {
+    // Kick clips have direct mp4_url stored — no GQL needed
+    const clipData = clips.find(c => c.id === clipId);
+    if (clipData && clipData.mp4_url) {
+      debugLog(`Using stored mp4_url for ${clipData.platform || 'kick'} clip`);
+      return clipData.mp4_url;
+    }
+
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), isSlowConnection ? 12000 : 8000);

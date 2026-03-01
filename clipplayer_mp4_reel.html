@@ -823,6 +823,12 @@ window.addEventListener('beforeunload', e => { e.preventDefault(); });
 
   // GQL: Get MP4 URL with timeout
   async function getMp4Url(clipId) {
+    // Kick clips have direct mp4_url stored — no GQL needed
+    const clipData = clips.find(c => c.id === clipId);
+    if (clipData && clipData.mp4_url) {
+      return clipData.mp4_url;
+    }
+
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 8000); // 8 second timeout

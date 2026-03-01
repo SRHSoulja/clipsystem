@@ -90,7 +90,7 @@ if ($pdo) {
       // Get playlist clips in order with game names
       $stmt = $pdo->prepare("
         SELECT c.clip_id as id, c.seq, c.title, c.duration, c.created_at, c.view_count, c.game_id,
-               c.creator_name, g.name as game_name
+               c.creator_name, c.mp4_url, c.platform, g.name as game_name
         FROM playlist_clips pc
         JOIN clips c ON c.login = ? AND c.seq = pc.clip_seq
         LEFT JOIN games_cache g ON c.game_id = g.game_id
@@ -188,7 +188,7 @@ if ($pdo) {
       // If mp4_only, filter to clips with valid thumbnail_url (not NULL, not empty, not NOT_FOUND)
       $sql = "
         SELECT c.clip_id as id, c.seq, c.title, c.duration, c.created_at, c.view_count, c.game_id, c.video_id, c.vod_offset,
-               c.creator_name, c.thumbnail_url, g.name as game_name
+               c.creator_name, c.thumbnail_url, c.mp4_url, c.platform, g.name as game_name
         FROM clips c
         LEFT JOIN games_cache g ON c.game_id = g.game_id
         WHERE c.login = ? AND c.blocked = FALSE

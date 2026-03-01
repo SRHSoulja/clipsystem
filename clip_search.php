@@ -362,7 +362,7 @@ if ($hasArchivedClips && $pdo) {
 
     $paginatedParams = array_merge($params, [$perPage, $offset]);
     $stmt = $pdo->prepare("
-      SELECT seq, clip_id, title, view_count, created_at, duration, game_id, thumbnail_url, creator_name, blocked
+      SELECT seq, clip_id, title, view_count, created_at, duration, game_id, thumbnail_url, creator_name, blocked, platform
       FROM clips
       WHERE {$whereSQL}
       ORDER BY {$orderBy}
@@ -1422,10 +1422,13 @@ if ($hasArchivedClips && $pdo) {
     <div class="results-grid">
       <?php foreach ($matches as $clip):
         $clipId = $clip['clip_id'];
+        $clipPlatform = $clip['platform'] ?? 'twitch';
         $thumbUrl = !empty($clip['thumbnail_url']) && $clip['thumbnail_url'] !== 'NOT_FOUND'
           ? $clip['thumbnail_url']
-          : "https://clips-media-assets2.twitch.tv/{$clipId}-preview-480x272.jpg";
-        $twitchUrl = "https://clips.twitch.tv/" . rawurlencode($clipId);
+          : ($clipPlatform === 'kick' ? '' : "https://clips-media-assets2.twitch.tv/{$clipId}-preview-480x272.jpg");
+        $twitchUrl = $clipPlatform === 'kick'
+          ? "https://kick.com/" . rawurlencode($login) . "?clip=" . rawurlencode($clipId)
+          : "https://clips.twitch.tv/" . rawurlencode($clipId);
         $duration = isset($clip['duration']) ? gmdate("i:s", (int)$clip['duration']) : '';
         $title = $clip['title'] ?? '(no title)';
         $seq = (int)$clip['seq'];
