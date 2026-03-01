@@ -1467,8 +1467,8 @@ if (window.__discordResolve) window.__discordResolve();
     })
     .catch(() => {});
 
-  // Twitch GQL for MP4 URLs
-  const GQL_URL = "/gql/gql";
+  // Twitch GQL for MP4 URLs (proxied through our server to avoid Discord proxy header issues)
+  const GQL_URL = "/discord/gql_proxy.php";
   const CLIENT_ID = "kimne78kx3ncx6brgo4mv6wki5h1ko";
   const QUERY_HASH = "36b89d2507fce29e5ca551df756d27c1cfe079e2609642b4390aa4c35796eb11";
 
