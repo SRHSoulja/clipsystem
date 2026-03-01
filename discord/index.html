@@ -1392,7 +1392,15 @@ if (window.__discordResolve) window.__discordResolve();
   const badge = document.getElementById('discordBadge');
   if (badge && discordUser) {
     badge.style.display = 'block';
-    badge.textContent = twitchUsername ? `Voting as ${twitchUsername}` : `${discordUser.global_name}`;
+    if (twitchUsername) {
+      badge.textContent = `Voting as ${twitchUsername}`;
+    } else {
+      // Debug: show what connections were found
+      const conns = tokenData?._debug_connections;
+      const connTypes = conns && conns.length ? conns.map(c => c.type).join(', ') : 'none';
+      badge.textContent = `${discordUser.global_name} | Connections found: ${connTypes}`;
+      badge.style.color = '#ff6b6b';
+    }
   }
 
   // Show channel picker
