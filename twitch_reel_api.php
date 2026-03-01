@@ -70,6 +70,13 @@ $rotate = isset($_GET['rotate']) && $_GET['rotate'] === '1';
 // ---- Check for active playlist first ----
 $pdo = get_db_connection();
 if ($pdo) {
+  // Ensure platform/mp4_url columns exist (added for Kick support)
+  try {
+    $pdo->exec("ALTER TABLE clips ADD COLUMN IF NOT EXISTS platform VARCHAR(16) DEFAULT 'twitch'");
+    $pdo->exec("ALTER TABLE clips ADD COLUMN IF NOT EXISTS mp4_url TEXT");
+  } catch (PDOException $e) {
+    // columns may already exist
+  }
   try {
     // Check if there's an active playlist for this login
     $stmt = $pdo->prepare("SELECT playlist_id, current_index FROM playlist_active WHERE login = ?");
