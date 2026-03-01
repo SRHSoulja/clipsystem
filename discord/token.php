@@ -71,13 +71,16 @@ $twitchUsername = null;
 $twitchId = null;
 
 if (is_array($connections)) {
+    error_log('Discord connections for user ' . $discordUser['id'] . ': ' . json_encode($connections));
     foreach ($connections as $conn) {
-        if (($conn['type'] ?? '') === 'twitch' && ($conn['verified'] ?? false)) {
+        if (($conn['type'] ?? '') === 'twitch') {
             $twitchUsername = strtolower($conn['name'] ?? '');
             $twitchId = $conn['id'] ?? null;
             break;
         }
     }
+} else {
+    error_log('Discord connections returned non-array: ' . json_encode($connections));
 }
 
 // Step 4: Generate signed vote token (if Twitch is linked)
