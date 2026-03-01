@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Clip Reel</title>
+  <title>ClipTV OBS Source</title>
   <style>
     html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
 
@@ -344,7 +344,7 @@ window.addEventListener('beforeunload', e => { e.preventDefault(); });
   const qs = new URLSearchParams(location.search);
 
   const login  = (qs.get("login") || "floppyjimmie").toLowerCase();
-  document.title = login + " Clip Reel";
+  document.title = login + " ClipTV";
   const days   = parseInt(qs.get("days") || "0", 10);  // 0 = all time
   const pool   = parseInt(qs.get("pool") || "300", 10);  // ~2 hours of clips, refreshed every 10 min
   const forceMuted = qs.get("muted") === "1";

@@ -59,9 +59,9 @@ header("Content-Type: text/html; charset=utf-8");
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-  <title>ClipArchive - Your stream's greatest hits, on demand</title>
+  <title>ClipTV - Your stream's greatest hits, on demand</title>
   <meta name="description" content="Give your viewers a way to browse, share, and relive your best Twitch clips. BRB overlay, ClipTV, chat bot, and more.">
-  <meta property="og:title" content="ClipArchive">
+  <meta property="og:title" content="ClipTV">
   <meta property="og:description" content="Your stream's greatest hits, on demand. Browse, share, vote, and replay Twitch clips.">
   <meta property="og:image" content="https://clips.gmgnrepeat.com/favicon.svg">
   <meta name="theme-color" content="#9147ff">
@@ -444,36 +444,59 @@ header("Content-Type: text/html; charset=utf-8");
     </div>
   </div>
 
+  <!-- How it works -->
+  <div class="features-section" style="padding-bottom: 40px;">
+    <h2>Archive a channel in 30 seconds</h2>
+    <p style="text-align:center;color:#adadb8;font-size:15px;max-width:600px;margin:0 auto 12px;line-height:1.6;">
+      Login with Twitch. Enter a channel name. Click Archive. That's it.<br>
+      You instantly get everything below for that community.
+    </p>
+  </div>
+
   <!-- Features -->
-  <div class="features-section">
+  <div class="features-section" style="padding-top: 0;">
     <h2>What you get</h2>
     <div class="features-grid">
       <div class="feature-card">
         <div class="feature-icon">🔍</div>
         <div>
-          <h3>Browse &amp; Search</h3>
-          <p>Your full clip library, searchable by game, title, date, or clipper. Viewers share their favorites.</p>
+          <h3>Clip Browser</h3>
+          <p>Every clip a streamer has, organized and searchable. Filter by game, date, clipper, or title. Download clips, share them, find that one moment you remember. All through our custom browser.</p>
         </div>
       </div>
       <div class="feature-card">
         <div class="feature-icon">📺</div>
         <div>
-          <h3>ClipTV &amp; BRB Overlay</h3>
-          <p>Turn dead air into a highlight reel. Auto-play clips as a BRB screen or let viewers binge on their own.</p>
+          <h3>ClipTV</h3>
+          <p>A synchronized clip channel for your community. Everyone watches together in real-time, votes on favorites, and chats. Works on the web, in Discord as an Activity, and on mobile.</p>
+        </div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🎬</div>
+        <div>
+          <h3>OBS Clip Source</h3>
+          <p>Give your stream a custom OBS browser source that auto-plays your clips. Perfect for BRB screens, pre-stream, or anytime you want your best moments on display.</p>
+        </div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📋</div>
+        <div>
+          <h3>Playlists</h3>
+          <p>Curate your best moments into playlists. Organize clips however you want and give your mods tools to manage them. Control what plays and when.</p>
         </div>
       </div>
       <div class="feature-card">
         <div class="feature-icon">🤖</div>
         <div>
           <h3>Chat Bot</h3>
-          <p>Viewers type <code style="background:rgba(145,71,255,0.2);padding:2px 6px;border-radius:4px;font-size:13px;">!clip</code> and the community decides what plays next. Requests, voting, playlists.</p>
+          <p>Viewers type <code style="background:rgba(145,71,255,0.2);padding:2px 6px;border-radius:4px;font-size:13px;">!cclip</code> in your Twitch chat to request clips. The community decides what plays next. Engagement on autopilot.</p>
         </div>
       </div>
       <div class="feature-card">
         <div class="feature-icon">📊</div>
         <div>
           <h3>Community Voting</h3>
-          <p>Your viewers pick the best clips. Favorites rise to the top. Engagement that runs itself.</p>
+          <p>Your viewers pick the best clips. Top-voted moments rise to the top and show up more often. The longer your community uses it, the better the playback gets.</p>
         </div>
       </div>
     </div>
@@ -482,7 +505,7 @@ header("Content-Type: text/html; charset=utf-8");
   <!-- Streamers -->
   <?php if (!empty($archivedStreamers)): ?>
   <div class="streamers-section">
-    <h2>Communities using ClipArchive</h2>
+    <h2>Communities using ClipTV</h2>
     <div class="streamer-grid">
       <?php foreach ($archivedStreamers as $s): ?>
       <a href="/search/<?= htmlspecialchars(urlencode($s['login'])) ?>" class="streamer-chip">
@@ -503,7 +526,7 @@ header("Content-Type: text/html; charset=utf-8");
     <a href="/chelp.php">Bot Commands</a>
     <a href="/about.php">About</a>
     <a href="/archive">Archive a Channel</a>
-    <a href="mailto:contact@gmgnrepeat.com?subject=Bug%20Report%20-%20ClipArchive">Report a Bug</a>
+    <a href="mailto:contact@gmgnrepeat.com?subject=Bug%20Report%20-%20ClipTV">Report a Bug</a>
   </div>
 
   <footer>

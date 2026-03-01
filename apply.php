@@ -125,7 +125,7 @@ if ($currentUser && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['actio
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-    <title>Apply for Archiving - ClipArchive</title>
+    <title>Apply for Archiving - ClipTV</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -333,7 +333,7 @@ if ($currentUser && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['actio
 
     <div class="container" style="padding-top: 20px;">
         <h1>Apply for Clip Archiving</h1>
-        <p class="subtitle">Request to have your Twitch clips archived in ClipArchive</p>
+        <p class="subtitle">Request to have your Twitch clips archived in ClipTV</p>
 
         <?php if (!$currentUser): ?>
         <div class="login-prompt">
@@ -348,7 +348,7 @@ if ($currentUser && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['actio
         <?php elseif ($alreadyArchived): ?>
         <div class="card already-archived">
             <h2>You're Already Archived!</h2>
-            <p>Your channel already has clips in ClipArchive.</p>
+            <p>Your channel already has clips in ClipTV.</p>
             <p style="margin-top: 16px;">
                 <a href="/search/<?= urlencode($currentUser['login']) ?>">Browse your clips</a> |
                 <a href="/dashboard/<?= urlencode($currentUser['login']) ?>">Streamer Dashboard</a>
@@ -400,7 +400,7 @@ if ($currentUser && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['actio
 
                 <div class="form-group">
                     <label>Why would you like your clips archived?</label>
-                    <textarea name="reason" required placeholder="Tell us about your channel and why you'd like to use ClipArchive..."></textarea>
+                    <textarea name="reason" required placeholder="Tell us about your channel and why you'd like to use ClipTV..."></textarea>
                     <div class="hint">Help us understand your use case (BRB screen, highlight reel, etc.)</div>
                 </div>
 

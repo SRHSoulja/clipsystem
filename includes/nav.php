@@ -92,7 +92,7 @@ $navCurrentPath = $_SERVER['REQUEST_URI'] ?? '/';
         <div class="nav-left">
             <a href="/" class="nav-brand">
                 <span class="nav-logo">📺</span>
-                <span class="nav-title">ClipArchive</span>
+                <span class="nav-title">ClipTV</span>
             </a>
             <div class="nav-links">
                 <a href="/" class="nav-link <?= $navCurrentPage === 'index' ? 'active' : '' ?>">Home</a>

@@ -60,7 +60,7 @@ if ($login && $isArchived) {
 }
 
 // OG meta
-$ogTitle = $login ? "ClipArchive - " . htmlspecialchars($login) : "ClipArchive - Twitch Clip Archive";
+$ogTitle = $login ? "ClipTV - " . htmlspecialchars($login) : "ClipTV - Twitch Clip Archive";
 $ogDesc = $login && $isArchived
   ? number_format($clipCount) . " clips archived for " . htmlspecialchars($login) . ". Search, play, and manage your clips."
   : "Give your viewers a way to browse, share, and relive your best clips. BRB overlay, ClipTV, chat bot, and more.";
@@ -304,26 +304,26 @@ header("Content-Type: text/html; charset=utf-8");
     <!-- Features -->
     <div class="features">
       <div class="feature-card">
-        <div class="feature-emoji">🗄️</div>
+        <div class="feature-emoji">🔍</div>
         <div class="feature-text">
-          <h3>Browse &amp; Share</h3>
-          <p>Your clips are already out there. Now they're findable. Search by title, game, clipper, or date, and share the best moments with your community.</p>
+          <h3>Clip Browser</h3>
+          <p>Every clip, organized and searchable through our custom browser. Filter by game, date, clipper, or title. Download clips, share them, find the moment you're looking for.<?php if ($isArchived): ?> <a href="/search/<?= htmlspecialchars($login) ?>">Browse clips</a><?php endif; ?></p>
         </div>
       </div>
 
       <div class="feature-card">
         <div class="feature-emoji">📺</div>
         <div class="feature-text">
-          <h3>ClipTV &amp; BRB Overlay</h3>
-          <p>Turn dead air into a highlight reel. Auto-play your clips as a BRB screen or let viewers binge your best moments.<?php if ($isArchived): ?> <a href="/tv/<?= htmlspecialchars($login) ?>">Watch now</a><?php endif; ?></p>
+          <h3>ClipTV</h3>
+          <p>A synchronized clip channel for the community. Watch together in real-time, vote on favorites, and chat. Works on the web, in Discord, and on mobile.<?php if ($isArchived): ?> <a href="/tv/<?= htmlspecialchars($login) ?>">Watch now</a><?php endif; ?></p>
         </div>
       </div>
 
       <div class="feature-card">
-        <div class="feature-emoji">🤖</div>
+        <div class="feature-emoji">🎬</div>
         <div class="feature-text">
-          <h3>Chat Bot</h3>
-          <p>Your viewers pick the clips. <code style="background:rgba(145,71,255,0.2);padding:2px 6px;border-radius:4px;">!clip</code> in chat and the community decides what plays next. Voting, playlists, and requests on autopilot.</p>
+          <h3>OBS Source &amp; Playlists</h3>
+          <p>A custom OBS browser source to display clips on stream. Curate playlists, let your mods manage them, and use <code style="background:rgba(145,71,255,0.2);padding:2px 6px;border-radius:4px;">!cclip</code> for chat-driven requests and voting.</p>
         </div>
       </div>
     </div>

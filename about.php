@@ -18,7 +18,7 @@ $currentUser = getCurrentUser();
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-  <title>About - Clip Reel System</title>
+  <title>About - ClipTV</title>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -92,9 +92,9 @@ $currentUser = getCurrentUser();
   <?php require_once __DIR__ . '/includes/nav.php'; ?>
 
   <div class="container" style="padding-top: 20px;">
-    <h1>Clip Reel System</h1>
+    <h1>ClipTV</h1>
 
-    <p>An automated clip playback system for Twitch streamers. Perfect for BRB screens, pre-stream entertainment, or showcasing your best moments.</p>
+    <p>ClipTV collects and organizes every clip from a Twitch channel, making them searchable, shareable, and playable. From a custom clip browser to synchronized community viewing, OBS overlays, playlists, and chat bot integration, it's everything a streamer needs to put their best moments to work.</p>
 
     <h2>Features</h2>
 
@@ -140,12 +140,12 @@ $currentUser = getCurrentUser();
 
     <div class="feature-box">
       <h3>Clip Browser</h3>
-      <p>A searchable web interface to browse all clips. Filter by title, clipper, game category, or clip number. See vote counts and click any clip to watch on Twitch.</p>
+      <p>A full-featured web interface for exploring any channel's clip library. Search by title, clipper, game, or clip number. Filter, sort, and preview clips instantly. Download clips directly, share them with a link, and see community vote counts. Available at <code>/search/username</code> for any archived channel.</p>
     </div>
 
     <div class="feature-box">
       <h3>Streamer Dashboard</h3>
-      <p>A full-featured dashboard for streamers to manage their clip reel:</p>
+      <p>A full-featured dashboard for streamers to manage their clips:</p>
       <ul style="color: #adadb8; margin-top: 10px;">
         <li><strong>Weighting controls:</strong> Customize how clips are selected</li>
         <li><strong>HUD positioning:</strong> Move overlays to any corner</li>
@@ -186,15 +186,15 @@ $currentUser = getCurrentUser();
 
     <h2>How It Works</h2>
 
-    <p>Add the clip player as a Browser Source in OBS. The player automatically fetches clips from your Twitch channel, converts them to MP4 for smooth playback, and cycles through them using the weighted selection algorithm.</p>
+    <p>Login with your Twitch account, enter a channel name, and click Archive. ClipTV pulls in every clip from that channel and organizes them automatically. From there, your community instantly gets access to a searchable clip browser, synchronized viewing, and all the tools listed above.</p>
 
-    <p>The bot joins your Twitch chat to handle commands. Clip data is stored in a database with permanent clip numbers (seq) that never change, even if clips are added or removed. This means clip #42 will always be the same clip.</p>
+    <p>Add the OBS clip source as a Browser Source in OBS for on-stream playback. The bot joins your Twitch chat so viewers can request clips, vote, and interact. Every clip gets a permanent number that never changes, so clip #42 is always the same clip.</p>
 
-    <p>New clips can be fetched at any time through the admin panel without affecting existing clip numbers or disrupting playback.</p>
+    <p>New clips can be fetched at any time from the dashboard without affecting existing clip numbers or disrupting playback.</p>
 
     <h2>Getting Started</h2>
 
-    <p>Want to use this for your channel? The system supports multiple streamers.</p>
+    <p>Want to use this for your channel? It takes about 30 seconds to set up.</p>
 
     <div class="feature-box" style="text-align: center; border-color: #00b894;">
       <h3 style="color: #00b894;">Apply for Archiving</h3>

@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
   <link id="favicon" rel="icon" type="image/png" href="">
-  <title>Clip TV</title>
+  <title>ClipTV</title>
   <style>
     * {
       box-sizing: border-box;
@@ -1321,7 +1321,7 @@
     <div class="content">
       <img src="/tapefacectv.png" alt="ClipTV" style="width:120px;height:120px;border-radius:16px;margin-bottom:16px;">
       <div class="spinner"></div>
-      <div class="text">Connecting to Clip TV...</div>
+      <div class="text">Connecting to ClipTV...</div>
     </div>
   </div>
 
@@ -1341,7 +1341,7 @@
   // Extract login from /tv/username path or ?login= query param
   const pathMatch = location.pathname.match(/^\/tv\/([a-zA-Z0-9_]+)/);
   const login = (qs.get("login") || (pathMatch && pathMatch[1]) || "floppyjimmie").toLowerCase();
-  document.title = login + " Clip TV";
+  document.title = login + " ClipTV";
   const API_BASE = "https://clips.gmgnrepeat.com";
 
   // Set streamer's Twitch profile image as favicon

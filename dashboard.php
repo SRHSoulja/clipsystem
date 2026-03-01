@@ -74,7 +74,7 @@ if ($currentUser) {
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Inter&family=Montserrat&family=Oswald&family=Permanent+Marker&family=Poppins&family=Press+Start+2P&family=Roboto&display=swap" rel="stylesheet">
-    <title>Streamer Dashboard - Clip Reel System</title>
+    <title>Streamer Dashboard - ClipTV</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -1124,7 +1124,7 @@ if ($currentUser) {
             </div>
 
             <div class="card" data-permission="edit_hud">
-                <h3>Clip TV HUD Positioning</h3>
+                <h3>ClipTV HUD Positioning</h3>
                 <p style="color: #adadb8; margin-bottom: 12px; font-size: 13px;">Position of the clip info overlay on each player.</p>
                 <div style="display:flex;gap:24px;flex-wrap:wrap;">
                     <div style="flex:1;min-width:200px;">

@@ -59,7 +59,7 @@ if ($login && $syncMode) {
         } catch (PDOException $e) { /* ignore */ }
     }
 
-    $ogTitle = htmlspecialchars($displayName) . " - Clip TV";
+    $ogTitle = htmlspecialchars($displayName) . " - ClipTV";
     $ogDesc = $clipCount > 0
         ? number_format($clipCount) . " clips. Watch " . htmlspecialchars($displayName) . "'s best Twitch moments live with chat."
         : "Watch " . htmlspecialchars($displayName) . "'s best Twitch moments live with chat.";
