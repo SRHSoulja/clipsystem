@@ -197,9 +197,15 @@ $currentUser = getCurrentUser();
     <p>Want to use this for your channel? It takes about 30 seconds to set up.</p>
 
     <div class="feature-box" style="text-align: center; border-color: #00b894;">
-      <h3 style="color: #00b894;">Apply for Archiving</h3>
-      <p>Login with your Twitch account to request clip archiving for your channel.</p>
-      <a href="/apply.php" style="display: inline-block; background: #00b894; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 500; margin-top: 10px;">Apply Now</a>
+      <h3 style="color: #00b894;">Get Started</h3>
+      <p>Login with your Twitch account, enter a channel name, click Archive. That's it.</p>
+      <a href="/archive" style="display: inline-block; background: #00b894; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 500; margin-top: 10px;">Archive a Channel</a>
+    </div>
+
+    <div class="feature-box" style="text-align: center; border-color: #5865F2;">
+      <h3 style="color: #5865F2;">Discord Activity</h3>
+      <p>Add ClipTV to your Discord server and watch clips together in voice channels.</p>
+      <a href="https://discord.com/oauth2/authorize?client_id=1477451341776421046" target="_blank" style="display: inline-block; background: #5865F2; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 500; margin-top: 10px;">Add to Discord</a>
     </div>
 
     <div class="credits">

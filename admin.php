@@ -3,7 +3,7 @@
  * admin.php - Admin Panel for Clip System
  *
  * Super admin page for managing the clip system.
- * Access via Twitch OAuth - only super admins (thearsondragon, cliparchive) allowed.
+ * Access via Twitch OAuth - only super admins (thearsondragon, cliptvbot) allowed.
  */
 
 require_once __DIR__ . '/db_config.php';
@@ -364,7 +364,7 @@ if ($authenticated) {
     <div class="login-form">
       <h1>Admin Login</h1>
       <?php if ($currentUser): ?>
-        <div class="error">Access denied. Only super admins (thearsondragon, cliparchive) can access this page.</div>
+        <div class="error">Access denied. Only super admins (thearsondragon, cliptvbot) can access this page.</div>
         <p style="color: #adadb8; text-align: center; margin-top: 15px;">
           Logged in as: <?= htmlspecialchars($currentUser['display_name'] ?? $currentUser['login']) ?>
         </p>

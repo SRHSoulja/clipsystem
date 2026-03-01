@@ -1,8 +1,8 @@
-# ClipArchive - Standard Operating Procedures
+# ClipTV - Standard Operating Procedures
 
 ## Overview
 
-ClipArchive manages Twitch clips for reel playback. The system:
+ClipTV manages Twitch clips for reel playback. The system:
 1. Fetches clips from Twitch API (backfill)
 2. Stores them in PostgreSQL database
 3. Serves clips to the OBS player via API
@@ -97,7 +97,7 @@ migrate_clips_to_db.php?login=CHANNEL_NAME
 ```
 
 Login with Twitch OAuth. Access granted to:
-- Super admins (thearsondragon, cliparchive)
+- Super admins (thearsondragon, cliptvbot)
 - The channel owner (streamer)
 
 Features:
@@ -361,7 +361,7 @@ Final MP4 URL: `{sourceURL}?sig={signature}&token={token}`
 
 - All management APIs require OAuth authentication
 - Bot commands require ADMIN_KEY for protected operations
-- Super admin list is hardcoded (thearsondragon, cliparchive)
+- Super admin list is hardcoded (thearsondragon, cliptvbot)
 - Streamers can only access their own channel data
 - Moderators have granular permissions set by streamer
 - Vote deduplication prevents spam voting

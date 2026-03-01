@@ -8,7 +8,7 @@
 
 class KickAPI {
   private $baseUrl = 'https://kick.com/api/v2';
-  private $userAgent = 'ClipArchive/1.0';
+  private $userAgent = 'ClipTV/1.0';
 
   /**
    * Check if API is available (always true - no credentials needed)

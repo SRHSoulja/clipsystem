@@ -315,7 +315,7 @@ header("Content-Type: text/html; charset=utf-8");
         <div class="feature-emoji">📺</div>
         <div class="feature-text">
           <h3>ClipTV</h3>
-          <p>A synchronized clip channel for the community. Watch together in real-time, vote on favorites, and chat. Works on the web, in Discord, and on mobile.<?php if ($isArchived): ?> <a href="/tv/<?= htmlspecialchars($login) ?>">Watch now</a><?php endif; ?></p>
+          <p>A synchronized clip channel for the community. Watch together in real-time, vote on favorites, and chat. Works on the web, on mobile, and in <a href="https://discord.com/oauth2/authorize?client_id=1477451341776421046" target="_blank" style="color:#5865F2;font-weight:600;">Discord as an Activity</a>.<?php if ($isArchived): ?> <a href="/tv/<?= htmlspecialchars($login) ?>">Watch now</a><?php endif; ?></p>
         </div>
       </div>
 

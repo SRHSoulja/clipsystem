@@ -1,4 +1,4 @@
-# ClipArchive - Twitch Clip Management System
+# ClipTV - Twitch Clip Management System
 
 A comprehensive clip archive and playback system for Twitch streamers. Features include clip archival from Twitch API, weighted random playback, community voting, moderator controls, and a full-featured dashboard.
 

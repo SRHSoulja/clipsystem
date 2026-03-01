@@ -368,14 +368,14 @@ function isSuperAdmin(): bool {
   $user = getCurrentUser();
   if (!$user) return false;
 
-  $superAdmins = ['thearsondragon', 'cliparchive'];
+  $superAdmins = ['thearsondragon', 'cliptvbot'];
   return in_array(strtolower($user['login']), $superAdmins);
 }
 
 /**
  * Check if the current user is authorized to access a specific channel
  * Returns true if:
- * - User is a super admin (thearsondragon, cliparchive)
+ * - User is a super admin (thearsondragon, cliptvbot)
  * - User is accessing their own channel
  */
 function isAuthorizedForChannel(string $targetChannel): bool {

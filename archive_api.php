@@ -62,7 +62,7 @@ function trigger_github_archive($login) {
     CURLOPT_HTTPHEADER => [
       'Authorization: token ' . $pat,
       'Accept: application/vnd.github.v3+json',
-      'User-Agent: ClipArchive',
+      'User-Agent: ClipTV',
       'Content-Type: application/json',
     ],
     CURLOPT_POSTFIELDS => json_encode([

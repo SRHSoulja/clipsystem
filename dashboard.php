@@ -4,7 +4,7 @@
  *
  * Self-service dashboard for streamers to manage their clip reel.
  * Access: Twitch OAuth required. dashboard.php?login=username
- * Super admins (thearsondragon, cliparchive) can access any channel.
+ * Super admins (thearsondragon, cliptvbot) can access any channel.
  */
 
 require_once __DIR__ . '/db_config.php';
@@ -1150,14 +1150,14 @@ if ($currentUser) {
         <div class="tab-content" id="tab-bot">
             <div id="botSetupPrompt" style="display:none; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border: 1px solid #9147ff40; border-radius: 12px; padding: 24px; margin-bottom: 20px; text-align: center;">
                 <p style="color: #efeff1; font-size: 16px; font-weight: 600; margin-bottom: 8px;">Get started by inviting the bot to your channel</p>
-                <p style="color: #adadb8; font-size: 13px; margin-bottom: 16px;">The ClipArchive bot powers all chat commands below. Invite it first, then customize your settings.</p>
+                <p style="color: #adadb8; font-size: 13px; margin-bottom: 16px;">The ClipTV bot powers all chat commands below. Invite it first, then customize your settings.</p>
                 <button onclick="inviteBot()" class="btn btn-primary" style="font-size: 15px; padding: 10px 28px;">Invite Bot to Channel</button>
             </div>
 
             <div class="card" data-permission="edit_bot_settings">
                 <h3>Chat Bot</h3>
                 <p style="color: #adadb8; margin-bottom: 12px; font-size: 13px;">
-                    The ClipArchive bot enables chat commands like !cclip, !like, !dislike, !cfind and more.
+                    The ClipTV bot enables chat commands like !cclip, !like, !dislike, !cfind and more.
                 </p>
                 <div id="botStatusContainer" style="display: flex; align-items: center; gap: 16px; margin-bottom: 16px;">
                     <span id="botStatusIndicator" style="width: 12px; height: 12px; border-radius: 50%; background: #666;"></span>

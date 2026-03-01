@@ -3,7 +3,7 @@
  * dashboard_auth.php - Authentication helper for streamer dashboard
  *
  * Two-tier access via Twitch OAuth:
- * 1. Super Admin - thearsondragon, cliparchive - full access to all channels
+ * 1. Super Admin - thearsondragon, cliptvbot - full access to all channels
  * 2. Streamer/Mod - access via OAuth (own channel or channel_mods table)
  *
  * Note: ADMIN_KEY and streamer_key authentication have been removed.

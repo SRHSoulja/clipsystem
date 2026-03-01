@@ -468,7 +468,7 @@ header("Content-Type: text/html; charset=utf-8");
         <div class="feature-icon">📺</div>
         <div>
           <h3>ClipTV</h3>
-          <p>A synchronized clip channel for your community. Everyone watches together in real-time, votes on favorites, and chats. Works on the web, in Discord as an Activity, and on mobile.</p>
+          <p>A synchronized clip channel for your community. Everyone watches together in real-time, votes on favorites, and chats. Works on the web, on mobile, and in <a href="https://discord.com/oauth2/authorize?client_id=1477451341776421046" target="_blank" style="color:#5865F2;font-weight:600;">Discord as an Activity</a>.</p>
         </div>
       </div>
       <div class="feature-card">
