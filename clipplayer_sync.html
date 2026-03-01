@@ -1114,13 +1114,13 @@
       #chatPanel { width: 280px; height: 340px; left: 12px; bottom: 70px; }
     }
 
-    /* Portrait mobile: stack bottom controls with breathing room */
+    /* Portrait mobile: stack bottom controls above phone's browser/gesture bar */
     @media (max-width: 768px) and (orientation: portrait) {
       #viewerControls {
-        bottom: max(28px, env(safe-area-inset-bottom));
+        bottom: max(64px, calc(env(safe-area-inset-bottom) + 48px));
       }
       #clipActions {
-        bottom: calc(max(28px, env(safe-area-inset-bottom)) + 52px);
+        bottom: calc(max(64px, calc(env(safe-area-inset-bottom) + 48px)) + 52px);
       }
     }
 
@@ -1139,10 +1139,10 @@
     /* Override 480px bottom for portrait specifically (must come after 480px block) */
     @media (max-width: 480px) and (orientation: portrait) {
       #viewerControls {
-        bottom: max(28px, env(safe-area-inset-bottom));
+        bottom: max(64px, calc(env(safe-area-inset-bottom) + 48px));
       }
       #clipActions {
-        bottom: calc(max(28px, env(safe-area-inset-bottom)) + 52px);
+        bottom: calc(max(64px, calc(env(safe-area-inset-bottom) + 48px)) + 52px);
       }
     }
 
