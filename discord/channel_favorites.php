@@ -51,7 +51,7 @@ if (!$pdo) {
     exit;
 }
 
-// Auto-migrate table
+// Auto-migrate tables
 try {
     $pdo->exec("CREATE TABLE IF NOT EXISTS discord_favorites (
         id SERIAL PRIMARY KEY,
@@ -61,8 +61,9 @@ try {
         UNIQUE(discord_user_id, channel_login)
     )");
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_discord_favorites_user ON discord_favorites(discord_user_id)");
+    $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS display_name VARCHAR(255)");
 } catch (PDOException $e) {
-    // Table likely already exists
+    // Tables likely already exist
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {

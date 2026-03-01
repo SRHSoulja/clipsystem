@@ -25,6 +25,9 @@ if (!$pdo) {
     exit;
 }
 
+// Ensure display_name column exists
+try { $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS display_name VARCHAR(255)"); } catch (PDOException $e) {}
+
 try {
     $stmt = $pdo->prepare("
         SELECT c.login,
