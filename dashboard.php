@@ -950,6 +950,17 @@ if ($currentUser) {
             </div>
 
             <div class="card" data-permission="edit_hud">
+                <h3>OBS HUD Position</h3>
+                <p style="color: #adadb8; margin-bottom: 12px;">Position of the clip info overlay on the OBS source player.</p>
+                <div class="position-picker" id="obsHudPositionPicker">
+                    <button class="position-btn" data-pos="tl">Top Left</button>
+                    <button class="position-btn" data-pos="tr">Top Right</button>
+                    <button class="position-btn" data-pos="bl">Bottom Left</button>
+                    <button class="position-btn" data-pos="br">Bottom Right</button>
+                </div>
+            </div>
+
+            <div class="card" data-permission="edit_hud">
                 <h3>Top Clips Overlay Position</h3>
                 <p style="color: #adadb8; margin-bottom: 12px;">Position of the !ctop overlay.</p>
                 <div class="position-picker" id="topPositionPicker">
@@ -1845,10 +1856,10 @@ if ($currentUser) {
                 btn.addEventListener('click', async () => {
                     picker.querySelectorAll('.position-btn').forEach(b => b.classList.remove('active'));
                     btn.classList.add('active');
-                    const fieldMap = { hudPositionPicker: 'hud_position', discordHudPositionPicker: 'discord_hud_position', topPositionPicker: 'top_position' };
+                    const fieldMap = { hudPositionPicker: 'hud_position', discordHudPositionPicker: 'discord_hud_position', obsHudPositionPicker: 'obs_hud_position', topPositionPicker: 'top_position' };
                     const field = fieldMap[picker.id] || 'hud_position';
                     const posLabels = { tl: 'Top Left', tc: 'Top Center', tr: 'Top Right', bl: 'Bottom Left', br: 'Bottom Right' };
-                    const labelMap = { hud_position: 'Desktop HUD', discord_hud_position: 'Discord HUD', top_position: 'Top Clips' };
+                    const labelMap = { hud_position: 'Desktop HUD', discord_hud_position: 'Discord HUD', obs_hud_position: 'OBS HUD', top_position: 'Top Clips' };
                     const fieldLabel = labelMap[field] || 'HUD';
                     const success = await saveSetting(field, btn.dataset.pos, false);
                     if (success) {
@@ -2036,6 +2047,7 @@ if ($currentUser) {
                 // HUD positions
                 setPositionPicker('hudPositionPicker', settings.hud_position || 'tr');
                 setPositionPicker('discordHudPositionPicker', settings.discord_hud_position || 'tr');
+                setPositionPicker('obsHudPositionPicker', settings.obs_hud_position || 'tr');
                 setPositionPicker('topPositionPicker', settings.top_position || 'br');
 
                 // Voting

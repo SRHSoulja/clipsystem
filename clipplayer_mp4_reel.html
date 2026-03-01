@@ -612,8 +612,8 @@ window.addEventListener('beforeunload', e => { e.preventDefault(); });
       const res = await fetch(`${API_BASE}/hud_position.php?login=${encodeURIComponent(login)}`, { cache: "no-store" });
       const data = await res.json();
       if (data) {
-        if (data.hud_position || data.position) {
-          setHudPosition(data.hud_position || data.position, currentHudPosition === null);
+        if (data.obs_hud_position || data.hud_position || data.position) {
+          setHudPosition(data.obs_hud_position || data.hud_position || data.position, currentHudPosition === null);
         }
         if (data.top_position) {
           setTopPosition(data.top_position, currentTopPosition === null);

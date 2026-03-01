@@ -79,6 +79,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['set'])) {
         $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS last_refresh TIMESTAMP");
         $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS banner_config TEXT DEFAULT '{}'");
         $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS discord_hud_position VARCHAR(10) DEFAULT 'tr'");
+        $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS obs_hud_position VARCHAR(10) DEFAULT 'tr'");
       } catch (PDOException $e) {
         // Columns might already exist, ignore
       }
@@ -112,12 +113,13 @@ $debug = isset($_GET['debug']);
 
 if ($pdo) {
   try {
-    $stmt = $pdo->prepare("SELECT hud_position, discord_hud_position, top_position, banner_config FROM channel_settings WHERE login = ?");
+    $stmt = $pdo->prepare("SELECT hud_position, discord_hud_position, obs_hud_position, top_position, banner_config FROM channel_settings WHERE login = ?");
     $stmt->execute([$login]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
     $hudPosition = $row && isset($row['hud_position']) ? $row['hud_position'] : 'tr';
     $discordHudPosition = $row && isset($row['discord_hud_position']) ? $row['discord_hud_position'] : 'tr';
+    $obsHudPosition = $row && isset($row['obs_hud_position']) ? $row['obs_hud_position'] : 'tr';
     $topPosition = $row && isset($row['top_position']) ? $row['top_position'] : 'br';
 
     // Parse banner_config - handle empty/default cases
@@ -135,6 +137,7 @@ if ($pdo) {
       "position" => $type === 'top' ? $topPosition : $hudPosition,
       "hud_position" => $hudPosition,
       "discord_hud_position" => $discordHudPosition,
+      "obs_hud_position" => $obsHudPosition,
       "top_position" => $topPosition,
       "banner_config" => $bannerConfig
     ];
@@ -156,6 +159,7 @@ if ($pdo) {
       "position" => $defaultPos,
       "hud_position" => "tr",
       "discord_hud_position" => "tr",
+      "obs_hud_position" => "tr",
       "top_position" => "br",
       "banner_config" => new stdClass()
     ];
@@ -170,6 +174,7 @@ if ($pdo) {
     "position" => $defaultPos,
     "hud_position" => "tr",
     "discord_hud_position" => "tr",
+    "obs_hud_position" => "tr",
     "top_position" => "br",
     "banner_config" => new stdClass()
   ]);
