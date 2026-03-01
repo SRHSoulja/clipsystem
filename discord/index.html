@@ -2346,19 +2346,36 @@ if (window.__discordResolve) window.__discordResolve();
 
   // Weighted clip selection (for controller)
   const QUEUE_SIZE = 10;
+  const RECENT_HISTORY_SIZE = 50; // prevent repeats within last 50 clips
   let upNextQueue = [];
+  let recentlyPlayedIds = []; // ring buffer of recently played clip IDs
   let activeCategoryFilter = ''; // game_id filter for playback
+
+  function addToRecentlyPlayed(clipId) {
+    if (!clipId) return;
+    recentlyPlayedIds.push(clipId);
+    if (recentlyPlayedIds.length > RECENT_HISTORY_SIZE) {
+      recentlyPlayedIds.shift();
+    }
+  }
 
   function pickRandomClip(exclude = []) {
     if (!clips.length) return null;
     const excludeIds = new Set(exclude.map(c => c.id));
+    // Also exclude recently played clips
+    recentlyPlayedIds.forEach(id => excludeIds.add(id));
     let pool = clips.filter(c => !excludeIds.has(c.id));
     // Apply category filter if active
     if (activeCategoryFilter) {
       const filtered = pool.filter(c => c.game_id === activeCategoryFilter);
       if (filtered.length) pool = filtered;
     }
-    if (!pool.length) return clips[Math.floor(Math.random() * clips.length)];
+    if (!pool.length) {
+      // All clips excluded — clear history and pick from full pool
+      recentlyPlayedIds = [];
+      pool = clips.filter(c => !new Set(exclude.map(e => e.id)).has(c.id));
+      if (!pool.length) pool = clips;
+    }
     return pool[Math.floor(Math.random() * pool.length)];
   }
 
@@ -2377,12 +2394,15 @@ if (window.__discordResolve) window.__discordResolve();
   function pickNextClip() {
     if (upNextQueue.length > 0) {
       const next = upNextQueue.shift();
+      addToRecentlyPlayed(next.id);
       fillQueue(); // Refill after consuming
       return next;
     }
     // Fallback if queue is empty
     if (!clips.length) return null;
-    return clips[Math.floor(Math.random() * clips.length)];
+    const pick = pickRandomClip([]);
+    if (pick) addToRecentlyPlayed(pick.id);
+    return pick;
   }
 
   // Update server with new clip (controller only)

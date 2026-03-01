@@ -3227,5 +3227,8 @@ if ($currentUser) {
         // Load weighting when tab is clicked
         document.querySelector('.tab[data-tab="weighting"]')?.addEventListener('click', loadWeighting);
     </script>
+    <div style="text-align:center; padding:16px 0 24px; opacity:0.5;">
+        <a href="mailto:contact@gmgnrepeat.com?subject=Bug%20Report%20-%20Dashboard" style="color:#adadb8; font-size:12px; text-decoration:none;">Report a Bug</a>
+    </div>
 </body>
 </html>

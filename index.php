@@ -503,6 +503,7 @@ header("Content-Type: text/html; charset=utf-8");
     <a href="/chelp.php">Bot Commands</a>
     <a href="/about.php">About</a>
     <a href="/archive">Archive a Channel</a>
+    <a href="mailto:contact@gmgnrepeat.com?subject=Bug%20Report%20-%20ClipArchive">Report a Bug</a>
   </div>
 
   <footer>
