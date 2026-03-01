@@ -1,0 +1,3930 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+  <link id="favicon" rel="icon" type="image/png" href="">
+  <title>Clip TV</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-touch-callout: none;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100vh;
+      height: calc(var(--vh, 1vh) * 100);
+      background: #000;
+      overflow: hidden;
+      touch-action: none;
+      overscroll-behavior: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    video {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      background: #000;
+      margin: 0;
+      padding: 0;
+      display: block;
+      touch-action: manipulation;
+    }
+
+    #loadingOverlay {
+      position: absolute;
+      inset: 0;
+      z-index: 99999;
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 1;
+      transition: opacity 400ms ease-out;
+    }
+    #loadingOverlay.hide { opacity: 0; pointer-events: none; }
+    #loadingOverlay .content { text-align: center; color: #fff; font: 600 24px/1.4 system-ui, sans-serif; }
+    #loadingOverlay .spinner {
+      width: 48px; height: 48px; border-radius: 50%;
+      border: 4px solid rgba(255,255,255,0.2); border-top-color: #fff;
+      margin: 0 auto 20px; animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    #voteHud {
+      position: absolute;
+      right: max(24px, env(safe-area-inset-right));
+      top: max(24px, env(safe-area-inset-top));
+      bottom: auto;
+      left: auto;
+      z-index: 11000;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      align-items: center;
+      padding: 18px 24px;
+      border-radius: 16px;
+      background: rgba(0,0,0,0.25);
+      border: 2px solid rgba(255,255,255,0.15);
+      color: #fff;
+      font: 18px/1.3 system-ui, sans-serif;
+      backdrop-filter: blur(12px);
+      opacity: 0;
+      transform: translateX(6px);
+      transition: opacity 180ms, transform 180ms, top 300ms ease, bottom 300ms ease, left 300ms ease, right 300ms ease;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.6);
+      max-width: 550px;
+      text-align: center;
+      pointer-events: none;
+    }
+    #voteHud.show { opacity: 1; transform: translateX(0); }
+    /* HUD positions with safe area support */
+    #voteHud.pos-tr { top: max(24px, env(safe-area-inset-top)) !important; right: max(24px, env(safe-area-inset-right)) !important; bottom: auto !important; left: auto !important; transform: translateX(6px); }
+    #voteHud.pos-tr.show { transform: translateX(0); }
+    #voteHud.pos-tl { top: max(24px, env(safe-area-inset-top)) !important; left: max(24px, env(safe-area-inset-left)) !important; bottom: auto !important; right: auto !important; transform: translateX(-6px); }
+    #voteHud.pos-tl.show { transform: translateX(0); }
+    #voteHud.pos-br { bottom: max(24px, env(safe-area-inset-bottom)) !important; right: max(24px, env(safe-area-inset-right)) !important; top: auto !important; left: auto !important; transform: translateX(6px); }
+    #voteHud.pos-br.show { transform: translateX(0); }
+    #voteHud.pos-bl { bottom: max(24px, env(safe-area-inset-bottom)) !important; left: max(24px, env(safe-area-inset-left)) !important; top: auto !important; right: auto !important; transform: translateX(-6px); }
+    #voteHud.pos-bl.show { transform: translateX(0); }
+    #voteHud .clip-info { display: flex; flex-direction: column; gap: 6px; width: 100%; align-items: center; }
+    #voteHud .seq { font-weight: 800; font-size: 24px; color: #fff; text-shadow: 0 2px 4px rgba(0,0,0,0.7); }
+    #voteHud .clip-date-hud { font-weight: 600; font-size: 18px; color: #a0a0ff; margin-left: 10px; }
+    #voteHud .clip-title { font-weight: 600; font-size: 18px; color: #f0f0f0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #voteHud .clip-meta { font-size: 17px; font-weight: 600; color: #e8e8e8; display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+    #voteHud .meta-duration { color: #fbbf24; }
+    #voteHud .meta-category { color: #22d3ee; }
+    #voteHud .meta-clipper-label { color: #a0a0a0; }
+    #voteHud .meta-clipper-name { color: #c084fc; }
+    #voteHud .vote-section { display: flex; gap: 14px; align-items: center; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.2); width: 100%; justify-content: center; }
+    #voteHud .pill { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 999px; font-weight: 700; font-size: 18px; cursor: pointer; pointer-events: auto; border: 2px solid; background: none; font-family: inherit; outline: none; -webkit-tap-highlight-color: transparent; transition: all 200ms; }
+    #voteHud .pill:hover { transform: scale(1.08); }
+    #voteHud .pill:active { transform: scale(0.95); }
+    #voteHud .pill:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    #voteHud .pill.up { background: rgba(34,197,94,0.2); border-color: rgba(34,197,94,0.6); color: #4ade80; }
+    #voteHud .pill.up.voted { background: rgba(34,197,94,0.5); border-color: #4ade80; color: #fff; box-shadow: 0 0 12px rgba(34,197,94,0.4); }
+    #voteHud .pill.down { background: rgba(239,68,68,0.2); border-color: rgba(239,68,68,0.6); color: #f87171; }
+    #voteHud .pill.down.voted { background: rgba(239,68,68,0.5); border-color: #f87171; color: #fff; box-shadow: 0 0 12px rgba(239,68,68,0.4); }
+    #voteHud .login-prompt { font-size: 12px; padding-top: 4px; pointer-events: auto; }
+    #voteHud .login-prompt a { color: #a78bfa; text-decoration: none; pointer-events: auto; }
+    #voteHud .login-prompt a:hover { color: #c4b5fd; text-decoration: underline; }
+    #voteHud .hints { display: flex; flex-direction: column; gap: 3px; font-size: 16px; font-weight: 700; }
+    #voteHud .hint-like { color: #4ade80; }
+    #voteHud .hint-dislike { color: #f87171; }
+    #voteHud .live-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(239, 68, 68, 0.2);
+      border: 1px solid rgba(239, 68, 68, 0.6);
+      color: #f87171;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    #voteHud .live-dot {
+      width: 8px;
+      height: 8px;
+      background: #ef4444;
+      border-radius: 50%;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    /* Volume control */
+    #volumeControl {
+      position: absolute;
+      right: max(24px, env(safe-area-inset-right));
+      bottom: max(24px, env(safe-area-inset-bottom));
+      z-index: 11000;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      min-height: 44px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.7);
+      border: 2px solid rgba(255,255,255,0.2);
+      backdrop-filter: blur(12px);
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 300ms, transform 300ms;
+      touch-action: auto;
+      pointer-events: none;
+    }
+    #volumeControl.show { opacity: 1; transform: translateY(0); pointer-events: auto; }
+    #volumeControl:hover { opacity: 1 !important; }
+    #volumeBtn {
+      background: none;
+      border: none;
+      color: #fff;
+      font-size: 24px;
+      cursor: pointer;
+      padding: 0;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #volumeSlider {
+      width: 100px;
+      height: 6px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: rgba(255,255,255,0.3);
+      border-radius: 3px;
+      cursor: pointer;
+    }
+    #volumeSlider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      background: #fff;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+    #volumeSlider::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      background: #fff;
+      border-radius: 50%;
+      cursor: pointer;
+      border: none;
+    }
+
+    #debugOverlay {
+      position: absolute;
+      right: 10px;
+      top: 10px;
+      z-index: 999999;
+      background: rgba(0,0,0,0.95);
+      color: #0f0;
+      font: 12px/1.4 monospace;
+      padding: 10px 12px;
+      border-radius: 6px;
+      border: 2px solid #0f0;
+      max-width: 450px;
+      max-height: 250px;
+      overflow: hidden;
+      display: none;
+      pointer-events: none;
+    }
+    #debugOverlay.show { display: block; }
+    #debugOverlay .ok { color: #4ade80; }
+    #debugOverlay .err { color: #f87171; }
+    #debugOverlay .warn { color: #fbbf24; }
+
+    /* Sync status indicator */
+    #syncStatus {
+      position: absolute;
+      left: max(24px, env(safe-area-inset-left));
+      top: max(24px, env(safe-area-inset-top));
+      z-index: 11000;
+      padding: 8px 14px;
+      border-radius: 8px;
+      background: rgba(0,0,0,0.7);
+      border: 2px solid rgba(34, 197, 94, 0.6);
+      color: #4ade80;
+      font: 600 14px system-ui, sans-serif;
+      backdrop-filter: blur(12px);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      opacity: 0;
+      transition: opacity 300ms;
+    }
+    #syncStatus.show { opacity: 1; }
+    #syncStatus.syncing { border-color: rgba(251, 191, 36, 0.6); color: #fbbf24; }
+    #syncStatus.error { border-color: rgba(239, 68, 68, 0.6); color: #f87171; }
+    #syncStatus .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    /* Buffering indicator */
+    #bufferingIndicator {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 40000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      background: rgba(0,0,0,0.75);
+      padding: 20px 30px;
+      border-radius: 12px;
+      color: #fff;
+      font: 600 16px system-ui, sans-serif;
+      pointer-events: none;
+      backdrop-filter: blur(8px);
+    }
+    #bufferingIndicator.show { display: flex; }
+    #bufferingIndicator .spinner {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: 3px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      margin-bottom: 12px;
+      animation: spin 0.6s linear infinite;
+    }
+    #bufferingIndicator .text {
+      font-size: 14px;
+      color: #fbbf24;
+    }
+
+    /* Click to unmute overlay */
+    #unmuteOverlay {
+      position: absolute;
+      inset: 0;
+      z-index: 50000;
+      background: rgba(0,0,0,0.6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      opacity: 1;
+      transition: opacity 300ms;
+    }
+    #unmuteOverlay.hide { opacity: 0; pointer-events: none; }
+    #unmuteOverlay .content {
+      text-align: center;
+      color: #fff;
+      font: 600 24px/1.4 system-ui, sans-serif;
+      padding: 30px 50px;
+      background: rgba(0,0,0,0.8);
+      border-radius: 16px;
+      border: 2px solid rgba(255,255,255,0.3);
+    }
+    #unmuteOverlay .icon { font-size: 48px; margin-bottom: 16px; }
+
+    /* Mobile responsive styles */
+    @media (max-width: 768px) {
+      #voteHud {
+        right: 12px;
+        top: 12px;
+        padding: 12px 16px;
+        gap: 8px;
+        max-width: calc(100vw - 24px);
+        border-radius: 12px;
+      }
+      #voteHud.pos-tr { top: max(12px, env(safe-area-inset-top)) !important; right: max(12px, env(safe-area-inset-right)) !important; }
+      #voteHud.pos-tl { top: max(12px, env(safe-area-inset-top)) !important; left: max(12px, env(safe-area-inset-left)) !important; }
+      #voteHud.pos-br { bottom: max(70px, env(safe-area-inset-bottom)) !important; right: max(12px, env(safe-area-inset-right)) !important; }
+      #voteHud.pos-bl { bottom: max(70px, env(safe-area-inset-bottom)) !important; left: max(12px, env(safe-area-inset-left)) !important; }
+      #voteHud .seq { font-size: 20px; }
+      #voteHud .clip-date-hud { font-size: 14px; margin-left: 6px; }
+      #voteHud .clip-title { font-size: 15px; }
+      #voteHud .clip-meta { font-size: 13px; gap: 8px; }
+      #voteHud .vote-section { gap: 8px; padding-top: 6px; flex-wrap: wrap; }
+      #voteHud .pill { padding: 6px 10px; font-size: 14px; }
+      #voteHud .hints { font-size: 12px; gap: 2px; }
+      #voteHud .live-badge { font-size: 10px; padding: 3px 8px; }
+
+      #volumeControl {
+        right: max(12px, env(safe-area-inset-right));
+        bottom: max(12px, env(safe-area-inset-bottom));
+        padding: 10px 14px;
+        gap: 8px;
+      }
+      #volumeBtn { font-size: 20px; width: 36px; height: 36px; min-width: 44px; min-height: 44px; }
+      #volumeSlider { width: 100px; }
+
+      #syncStatus {
+        left: max(12px, env(safe-area-inset-left));
+        top: max(12px, env(safe-area-inset-top));
+        padding: 6px 10px;
+        font-size: 12px;
+        gap: 6px;
+      }
+      #syncStatus .dot { width: 6px; height: 6px; }
+
+      #unmuteOverlay .content {
+        padding: 24px 36px;
+        font-size: 20px;
+      }
+      #unmuteOverlay .icon { font-size: 40px; margin-bottom: 12px; }
+
+      #loadingOverlay .content { font-size: 20px; }
+      #loadingOverlay .spinner { width: 40px; height: 40px; margin-bottom: 16px; }
+    }
+
+    @media (max-width: 480px) {
+      #voteHud {
+        right: 8px;
+        top: 8px;
+        padding: 10px 12px;
+        gap: 6px;
+      }
+      #voteHud.pos-tr { top: max(10px, env(safe-area-inset-top)) !important; right: max(10px, env(safe-area-inset-right)) !important; }
+      #voteHud.pos-tl { top: max(10px, env(safe-area-inset-top)) !important; left: max(10px, env(safe-area-inset-left)) !important; }
+      #voteHud.pos-br { bottom: max(60px, env(safe-area-inset-bottom)) !important; right: max(10px, env(safe-area-inset-right)) !important; }
+      #voteHud.pos-bl { bottom: max(60px, env(safe-area-inset-bottom)) !important; left: max(10px, env(safe-area-inset-left)) !important; }
+      #voteHud .seq { font-size: 16px; }
+      #voteHud .clip-date-hud { font-size: 12px; }
+      #voteHud .clip-title { font-size: 13px; }
+      #voteHud .clip-meta { font-size: 11px; gap: 6px; }
+      #voteHud .vote-section { gap: 6px; }
+      #voteHud .pill { padding: 5px 8px; font-size: 12px; }
+      #voteHud .hints { font-size: 10px; }
+      #voteHud .live-badge { font-size: 9px; padding: 2px 6px; }
+
+      #volumeControl {
+        right: max(10px, env(safe-area-inset-right));
+        bottom: max(10px, env(safe-area-inset-bottom));
+        padding: 10px 14px;
+      }
+      #volumeBtn { font-size: 20px; width: 44px; height: 44px; min-width: 44px; min-height: 44px; }
+      #volumeSlider { width: 80px; height: 10px; }
+      #volumeSlider::-webkit-slider-thumb { width: 24px; height: 24px; }
+      #volumeSlider::-moz-range-thumb { width: 24px; height: 24px; }
+
+      #syncStatus {
+        left: max(10px, env(safe-area-inset-left));
+        top: max(10px, env(safe-area-inset-top));
+        padding: 5px 8px;
+        font-size: 11px;
+      }
+
+      #unmuteOverlay .content {
+        padding: 20px 28px;
+        font-size: 18px;
+        margin: 16px;
+      }
+      #unmuteOverlay .icon { font-size: 36px; }
+
+      #loadingOverlay .content { font-size: 18px; }
+      #loadingOverlay .spinner { width: 36px; height: 36px; }
+    }
+
+    /* Touch-friendly: larger tap targets */
+    @media (hover: none) and (pointer: coarse) {
+      #volumeControl {
+        pointer-events: auto;
+        padding: 14px 20px;
+        gap: 12px;
+      }
+      #volumeSlider {
+        height: 12px;
+        width: 120px;
+      }
+      #volumeSlider::-webkit-slider-thumb {
+        width: 28px;
+        height: 28px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      }
+      #volumeSlider::-moz-range-thumb {
+        width: 28px;
+        height: 28px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      }
+      #volumeSlider:active::-webkit-slider-thumb {
+        width: 32px;
+        height: 32px;
+      }
+      #volumeSlider:active::-moz-range-thumb {
+        width: 32px;
+        height: 32px;
+      }
+      #volumeBtn {
+        width: 44px;
+        height: 44px;
+        min-width: 44px;
+        min-height: 44px;
+        font-size: 26px;
+      }
+      #volumeBtn:active {
+        transform: scale(0.95);
+        opacity: 0.8;
+      }
+      #voteHud .pill {
+        min-height: 36px;
+        padding: 8px 12px;
+      }
+    }
+
+    /* Landscape mobile - keep HUD smaller */
+    @media (max-height: 500px) and (orientation: landscape) {
+      #voteHud {
+        padding: 8px 12px;
+        gap: 4px;
+        max-width: 45vw;
+      }
+      #voteHud .seq { font-size: 16px; }
+      #voteHud .clip-title { font-size: 12px; }
+      #voteHud .clip-meta { font-size: 10px; }
+      #voteHud .vote-section { padding-top: 4px; gap: 6px; }
+      #voteHud .pill { padding: 4px 8px; font-size: 11px; }
+      #voteHud .hints { font-size: 9px; }
+      #voteHud .live-badge { display: none; }
+
+      #volumeControl { padding: 6px 10px; }
+      #syncStatus { padding: 4px 8px; font-size: 10px; }
+    }
+
+    /* Viewer count and skip controls */
+    #viewerControls {
+      position: absolute;
+      left: max(24px, env(safe-area-inset-left));
+      bottom: max(24px, env(safe-area-inset-bottom));
+      z-index: 11000;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 300ms, transform 300ms;
+      /* No pointer-events:none - allow clicks even when faded out */
+    }
+    #viewerControls.show { opacity: 1; transform: translateY(0); }
+
+    #viewerCount {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.7);
+      border: 2px solid rgba(139, 92, 246, 0.6);
+      color: #a78bfa;
+      font: 600 14px system-ui, sans-serif;
+      backdrop-filter: blur(12px);
+    }
+    #viewerCount .eye { font-size: 16px; }
+
+    #skipBtn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.7);
+      border: 2px solid rgba(251, 191, 36, 0.6);
+      color: #fbbf24;
+      font: 600 14px system-ui, sans-serif;
+      backdrop-filter: blur(12px);
+      cursor: pointer;
+      transition: all 200ms;
+    }
+    #skipBtn:hover { background: rgba(251, 191, 36, 0.2); border-color: #fbbf24; }
+    #skipBtn:active { transform: scale(0.95); }
+    #skipBtn.voted { background: rgba(251, 191, 36, 0.3); border-color: #fbbf24; color: #fff; }
+    #skipBtn.skipping { animation: skipPulse 0.5s ease-in-out; }
+    @keyframes skipPulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+
+    #skipStatus {
+      font-size: 12px;
+      color: #9ca3af;
+      margin-left: 2px;
+    }
+    #skipBtn.voted #skipStatus { color: #fbbf24; }
+
+    /* Remote control button */
+    #remoteBtn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.7);
+      border: 2px solid rgba(139, 92, 246, 0.6);
+      color: #a78bfa;
+      font: 600 14px system-ui, sans-serif;
+      backdrop-filter: blur(12px);
+      cursor: pointer;
+      transition: all 200ms;
+    }
+    #remoteBtn:hover { background: rgba(139, 92, 246, 0.2); border-color: #a78bfa; }
+    #remoteBtn:active { transform: scale(0.95); }
+    #remoteBtn.active { background: rgba(139, 92, 246, 0.3); border-color: #a78bfa; color: #fff; }
+
+    /* Back button */
+    #backBtn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.7);
+      border: 2px solid rgba(96, 165, 250, 0.6);
+      color: #60a5fa;
+      font: 600 16px system-ui, sans-serif;
+      backdrop-filter: blur(12px);
+      cursor: pointer;
+      transition: all 200ms;
+    }
+    #backBtn:hover { background: rgba(96, 165, 250, 0.2); border-color: #60a5fa; }
+    #backBtn:active { transform: scale(0.95); }
+
+    /* Clip action buttons (bottom center) */
+    #clipActions {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%) translateY(10px);
+      bottom: max(24px, env(safe-area-inset-bottom));
+      z-index: 11000;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      opacity: 0;
+      transition: opacity 300ms, transform 300ms;
+    }
+    #clipActions.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    #clipActions .action-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.7);
+      border: 2px solid rgba(255,255,255,0.2);
+      color: #d1d5db;
+      font: 600 13px system-ui, sans-serif;
+      backdrop-filter: blur(12px);
+      cursor: pointer;
+      transition: all 200ms;
+      white-space: nowrap;
+    }
+    #clipActions .action-btn:hover { background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.5); color: #fff; }
+    #clipActions .action-btn:active { transform: scale(0.95); }
+    #clipActions .action-btn svg { width: 16px; height: 16px; flex-shrink: 0; }
+    #clipActions .action-btn.downloading { border-color: rgba(34, 197, 94, 0.6); color: #4ade80; }
+    #clipActions .action-btn.copied { border-color: rgba(34, 197, 94, 0.6); color: #4ade80; }
+    @keyframes clipActionCopied {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+      100% { transform: scale(1); }
+    }
+    #clipActions .action-btn.copied { animation: clipActionCopied 300ms ease; }
+
+    /* Chat button */
+    #chatBtn {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.7);
+      border: 2px solid rgba(34, 197, 94, 0.6);
+      color: #4ade80;
+      font: 600 16px system-ui, sans-serif;
+      backdrop-filter: blur(12px);
+      cursor: pointer;
+      transition: all 200ms;
+    }
+    #chatBtn:hover { background: rgba(34, 197, 94, 0.2); border-color: #4ade80; }
+    #chatBtn:active { transform: scale(0.95); }
+    #chatBtn.active { background: rgba(34, 197, 94, 0.3); border-color: #4ade80; color: #fff; }
+    .chat-badge {
+      position: absolute;
+      top: -4px;
+      right: -4px;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 5px;
+      border-radius: 999px;
+      background: #ef4444;
+      color: #fff;
+      font: 700 10px system-ui, sans-serif;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+    }
+    .chat-badge.show { display: flex; }
+
+    /* Chat Panel */
+    #chatPanel {
+      position: fixed;
+      bottom: 90px;
+      left: 24px;
+      width: 320px;
+      height: 380px;
+      background: rgba(15, 15, 25, 0.95);
+      backdrop-filter: blur(20px);
+      border: 2px solid rgba(34, 197, 94, 0.4);
+      border-radius: 16px;
+      display: none;
+      flex-direction: column;
+      font: 14px/1.4 system-ui, sans-serif;
+      color: #e0e0e0;
+      z-index: 11000;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      overflow: hidden;
+      pointer-events: auto;
+      resize: none;
+    }
+    #chatPanel.open { display: flex; }
+    .chat-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      background: rgba(0,0,0,0.3);
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      cursor: grab;
+      user-select: none;
+      flex-shrink: 0;
+    }
+    .chat-header:active { cursor: grabbing; }
+    .chat-header-title { font-weight: 700; font-size: 14px; }
+    .chat-online { font-size: 12px; color: #4ade80; margin-left: auto; }
+    .chat-close {
+      padding: 4px 8px; border-radius: 6px; background: none;
+      border: 1px solid rgba(255,255,255,0.15); color: #9ca3af;
+      font: 600 12px system-ui, sans-serif; cursor: pointer; transition: all 200ms;
+    }
+    .chat-close:hover { background: rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.4); color: #f87171; }
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-height: 0;
+    }
+    .chat-messages::-webkit-scrollbar { width: 5px; }
+    .chat-messages::-webkit-scrollbar-thumb { background: rgba(34, 197, 94, 0.3); border-radius: 3px; }
+    .chat-msg {
+      font-size: 13px;
+      line-height: 1.35;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+    }
+    .chat-msg .chat-name { font-weight: 700; margin-right: 6px; }
+    .chat-msg .chat-text { color: #d1d5db; }
+    .chat-msg.system { color: #6b7280; font-style: italic; font-size: 12px; }
+    .chat-input-area {
+      display: flex;
+      gap: 6px;
+      padding: 10px 14px;
+      border-top: 1px solid rgba(255,255,255,0.1);
+      flex-shrink: 0;
+    }
+    .chat-input-area input {
+      flex: 1;
+      padding: 8px 12px;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.15);
+      color: #fff;
+      font: 13px system-ui, sans-serif;
+      outline: none;
+    }
+    .chat-input-area input:focus { border-color: rgba(34, 197, 94, 0.6); }
+    .chat-input-area input::placeholder { color: #6b7280; }
+    .chat-input-area button {
+      padding: 8px 14px;
+      border-radius: 10px;
+      background: rgba(34, 197, 94, 0.3);
+      border: 1px solid rgba(34, 197, 94, 0.6);
+      color: #4ade80;
+      font: 700 14px system-ui, sans-serif;
+      cursor: pointer;
+      transition: all 200ms;
+    }
+    .chat-input-area button:hover { background: rgba(34, 197, 94, 0.5); color: #fff; }
+    .chat-input-area button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .chat-login-prompt {
+      padding: 14px;
+      text-align: center;
+      border-top: 1px solid rgba(255,255,255,0.1);
+      flex-shrink: 0;
+    }
+    .chat-login-prompt a {
+      color: #a78bfa;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 13px;
+    }
+    .chat-login-prompt a:hover { color: #c4b5fd; text-decoration: underline; }
+    .chat-empty { color: #6b7280; text-align: center; padding: 20px; font-size: 13px; }
+
+    /* Remote control bottom sheet */
+    #remoteSheet {
+      position: fixed;
+      inset: 0;
+      z-index: 12000;
+      display: none;
+      pointer-events: none;
+    }
+    #remoteSheet.open {
+      display: block;
+      pointer-events: auto;
+    }
+    .sheet-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      opacity: 0;
+      transition: opacity 300ms;
+    }
+    #remoteSheet.open .sheet-backdrop { opacity: 1; }
+    .sheet-panel {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      max-height: 60vh;
+      background: rgba(15, 15, 25, 0.95);
+      backdrop-filter: blur(20px);
+      border-top: 2px solid rgba(139, 92, 246, 0.4);
+      border-radius: 20px 20px 0 0;
+      display: flex;
+      flex-direction: column;
+      transform: translateY(100%);
+      transition: transform 300ms cubic-bezier(0.4, 0, 0.2, 1);
+      font: 14px/1.4 system-ui, sans-serif;
+      color: #e0e0e0;
+    }
+    #remoteSheet.open .sheet-panel { transform: translateY(0); }
+    .sheet-handle {
+      text-align: center;
+      padding: 10px;
+      color: rgba(255,255,255,0.3);
+      font-size: 20px;
+      cursor: grab;
+      user-select: none;
+    }
+    .sheet-tabs {
+      display: flex;
+      gap: 4px;
+      padding: 0 16px 12px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    .sheet-tab {
+      flex: 1;
+      padding: 8px 12px;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: #9ca3af;
+      font: 600 13px system-ui, sans-serif;
+      cursor: pointer;
+      text-align: center;
+      transition: all 200ms;
+    }
+    .sheet-tab:hover { background: rgba(255,255,255,0.1); color: #e0e0e0; }
+    .sheet-tab.active { background: rgba(139, 92, 246, 0.2); border-color: rgba(139, 92, 246, 0.6); color: #a78bfa; }
+    .sheet-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      min-height: 0;
+    }
+    .sheet-content::-webkit-scrollbar { width: 6px; }
+    .sheet-content::-webkit-scrollbar-thumb { background: rgba(139, 92, 246, 0.3); border-radius: 3px; }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* Go To tab */
+    .goto-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .goto-row input {
+      flex: 1;
+      padding: 10px 14px;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.15);
+      color: #fff;
+      font: 600 16px system-ui, sans-serif;
+      outline: none;
+    }
+    .goto-row input:focus { border-color: rgba(139, 92, 246, 0.6); }
+    .goto-row input::placeholder { color: #6b7280; }
+    .goto-btn {
+      padding: 10px 20px;
+      border-radius: 10px;
+      background: rgba(139, 92, 246, 0.3);
+      border: 1px solid rgba(139, 92, 246, 0.6);
+      color: #a78bfa;
+      font: 700 14px system-ui, sans-serif;
+      cursor: pointer;
+      transition: all 200ms;
+    }
+    .goto-btn:hover { background: rgba(139, 92, 246, 0.5); color: #fff; }
+    .goto-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* Clip preview card */
+    .clip-preview {
+      padding: 14px;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .clip-preview.empty { color: #6b7280; text-align: center; padding: 24px; }
+    .clip-preview .preview-title { font-weight: 700; font-size: 15px; color: #fff; margin-bottom: 6px; }
+    .clip-preview .preview-meta { font-size: 13px; color: #9ca3af; margin-bottom: 10px; }
+    .clip-preview .preview-meta span { margin-right: 12px; }
+    .clip-preview .preview-meta .pm-dur { color: #fbbf24; }
+    .clip-preview .preview-meta .pm-game { color: #22d3ee; }
+    .clip-preview .preview-meta .pm-clip { color: #c084fc; }
+    .play-btn {
+      padding: 8px 20px;
+      border-radius: 8px;
+      background: rgba(34, 197, 94, 0.3);
+      border: 1px solid rgba(34, 197, 94, 0.6);
+      color: #4ade80;
+      font: 700 13px system-ui, sans-serif;
+      cursor: pointer;
+      transition: all 200ms;
+    }
+    .play-btn:hover { background: rgba(34, 197, 94, 0.5); color: #fff; }
+    .play-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* Browse tab */
+    .browse-search {
+      margin-bottom: 12px;
+    }
+    .browse-search input {
+      width: 100%;
+      padding: 10px 14px;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.15);
+      color: #fff;
+      font: 14px system-ui, sans-serif;
+      outline: none;
+      box-sizing: border-box;
+    }
+    .browse-search input:focus { border-color: rgba(139, 92, 246, 0.6); }
+    .browse-search input::placeholder { color: #6b7280; }
+    .clip-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 35vh;
+      overflow-y: auto;
+    }
+    .clip-list::-webkit-scrollbar { width: 5px; }
+    .clip-list::-webkit-scrollbar-thumb { background: rgba(139, 92, 246, 0.3); border-radius: 3px; }
+    .clip-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.06);
+      cursor: pointer;
+      transition: all 150ms;
+    }
+    .clip-row:hover { background: rgba(139, 92, 246, 0.1); border-color: rgba(139, 92, 246, 0.3); }
+    .clip-row .cr-seq { font-weight: 800; font-size: 13px; color: #a78bfa; min-width: 50px; }
+    .clip-row .cr-info { flex: 1; min-width: 0; }
+    .clip-row .cr-title { font-weight: 600; font-size: 13px; color: #e0e0e0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .clip-row .cr-meta { font-size: 11px; color: #6b7280; margin-top: 2px; }
+    .clip-row .cr-meta .cm-dur { color: #fbbf24; }
+    .clip-row .cr-meta .cm-game { color: #22d3ee; }
+    .clip-row .cr-play {
+      padding: 6px 14px;
+      border-radius: 8px;
+      background: rgba(34, 197, 94, 0.2);
+      border: 1px solid rgba(34, 197, 94, 0.4);
+      color: #4ade80;
+      font: 700 12px system-ui, sans-serif;
+      cursor: pointer;
+      transition: all 200ms;
+      white-space: nowrap;
+    }
+    .clip-row .cr-play:hover { background: rgba(34, 197, 94, 0.4); color: #fff; }
+    .clip-row .cr-play:disabled { opacity: 0.4; cursor: not-allowed; }
+    .clip-list-status { text-align: center; color: #6b7280; padding: 16px; font-size: 13px; }
+
+    /* Controls tab */
+    .controls-grid {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    .ctrl-btn {
+      flex: 1;
+      min-width: 80px;
+      padding: 12px 16px;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.12);
+      color: #e0e0e0;
+      font: 600 13px system-ui, sans-serif;
+      cursor: pointer;
+      text-align: center;
+      transition: all 200ms;
+    }
+    .ctrl-btn:hover { background: rgba(255,255,255,0.12); }
+    .ctrl-btn:active { transform: scale(0.95); }
+    .ctrl-btn.ctrl-skip { border-color: rgba(251, 191, 36, 0.4); color: #fbbf24; }
+    .ctrl-btn.ctrl-skip:hover { background: rgba(251, 191, 36, 0.15); }
+    .ctrl-btn.ctrl-prev { border-color: rgba(96, 165, 250, 0.4); color: #60a5fa; }
+    .ctrl-btn.ctrl-prev:hover { background: rgba(96, 165, 250, 0.15); }
+    .ctrl-btn.ctrl-shuffle { border-color: rgba(52, 211, 153, 0.4); color: #34d399; }
+    .ctrl-btn.ctrl-shuffle:hover { background: rgba(52, 211, 153, 0.15); }
+    .category-section { margin-top: 8px; }
+    .category-section label { display: block; font-size: 12px; color: #9ca3af; margin-bottom: 6px; font-weight: 600; }
+
+    /* Queue / Up Next */
+    .queue-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .queue-label { font-weight: 700; font-size: 14px; color: #a78bfa; }
+    .queue-reshuffle {
+      padding: 6px 14px; border-radius: 8px; background: rgba(52, 211, 153, 0.15);
+      border: 1px solid rgba(52, 211, 153, 0.4); color: #34d399; font: 600 12px system-ui, sans-serif;
+      cursor: pointer; transition: all 200ms;
+    }
+    .queue-reshuffle:hover { background: rgba(52, 211, 153, 0.3); color: #fff; }
+    .clip-row .cr-pos { font-weight: 800; font-size: 12px; color: #6b7280; min-width: 24px; text-align: center; }
+    .clip-row.cr-playing { background: rgba(139, 92, 246, 0.15); border-color: rgba(139, 92, 246, 0.4); }
+    .clip-row .cr-remove {
+      padding: 4px 10px; border-radius: 6px; background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; font: 600 12px system-ui, sans-serif;
+      cursor: pointer; transition: all 200ms;
+    }
+    .clip-row .cr-remove:hover { background: rgba(239, 68, 68, 0.3); color: #fff; }
+    .category-section select {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.15);
+      color: #fff;
+      font: 14px system-ui, sans-serif;
+      outline: none;
+      cursor: pointer;
+    }
+    .category-section select:focus { border-color: rgba(139, 92, 246, 0.6); }
+
+    /* Clip Request Banner */
+    #clipRequestBanner {
+      position: fixed;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%) translateY(-110%);
+      z-index: 11500;
+      background: rgba(15, 15, 25, 0.95);
+      backdrop-filter: blur(20px);
+      border: 2px solid rgba(139, 92, 246, 0.6);
+      border-top: none;
+      border-radius: 0 0 16px 16px;
+      padding: 14px 20px;
+      color: #fff;
+      font: 14px/1.4 system-ui, sans-serif;
+      transition: transform 400ms cubic-bezier(0.4, 0, 0.2, 1);
+      max-width: 500px;
+      width: 90vw;
+      pointer-events: auto;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      overflow: hidden;
+    }
+    #clipRequestBanner.show { transform: translateX(-50%) translateY(0); }
+    .req-title { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
+    .req-meta { font-size: 12px; color: #9ca3af; margin-bottom: 10px; }
+    .req-meta .rm-game { color: #22d3ee; }
+    .req-meta .rm-dur { color: #fbbf24; }
+    .req-actions { display: flex; gap: 8px; align-items: center; }
+    .req-play-now {
+      padding: 8px 16px; border-radius: 8px;
+      background: rgba(34, 197, 94, 0.3); border: 1px solid rgba(34, 197, 94, 0.6);
+      color: #4ade80; font: 700 13px system-ui, sans-serif;
+      cursor: pointer; transition: all 200ms;
+    }
+    .req-play-now:hover { background: rgba(34, 197, 94, 0.5); color: #fff; }
+    .req-cancel {
+      padding: 8px 12px; border-radius: 8px;
+      background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.4);
+      color: #f87171; font: 700 13px system-ui, sans-serif;
+      cursor: pointer; transition: all 200ms;
+    }
+    .req-cancel:hover { background: rgba(239, 68, 68, 0.4); color: #fff; }
+    .req-countdown { font: 700 14px system-ui, sans-serif; color: #a78bfa; margin-left: auto; }
+    .req-progress {
+      position: absolute; bottom: 0; left: 0; height: 3px;
+      background: linear-gradient(90deg, #8b5cf6, #a78bfa);
+      border-radius: 0 0 16px 16px;
+      transition: width 1s linear;
+    }
+    .category-section select option { background: #1a1a2e; }
+
+    /* Mobile responsive for viewer controls */
+    @media (max-width: 768px) {
+      #viewerControls {
+        left: max(12px, env(safe-area-inset-left));
+        bottom: max(12px, env(safe-area-inset-bottom));
+        gap: 8px;
+      }
+      #viewerCount { padding: 6px 10px; font-size: 12px; }
+      #viewerCount .eye { font-size: 14px; }
+      #skipBtn, #remoteBtn, #backBtn, #chatBtn { padding: 8px 14px; font-size: 12px; gap: 6px; }
+      #clipActions { bottom: max(12px, env(safe-area-inset-bottom)); }
+      #clipActions .action-btn { padding: 6px 12px; font-size: 11px; }
+      #clipActions .action-btn svg { width: 14px; height: 14px; }
+      #chatPanel { width: 280px; height: 340px; left: 12px; bottom: 70px; }
+    }
+
+    @media (max-width: 480px) {
+      #viewerControls {
+        left: max(10px, env(safe-area-inset-left));
+        bottom: max(10px, env(safe-area-inset-bottom));
+        gap: 6px;
+      }
+      #viewerCount { padding: 5px 8px; font-size: 11px; }
+      #skipBtn, #remoteBtn, #backBtn, #chatBtn { padding: 8px 12px; font-size: 11px; min-height: 44px; }
+      #clipActions { bottom: max(10px, env(safe-area-inset-bottom)); }
+      #clipActions .action-btn { padding: 6px 10px; font-size: 11px; }
+      #clipActions .action-btn span { display: none; }
+      #chatPanel { width: calc(100vw - 24px); left: 12px; bottom: 65px; }
+    }
+
+    /* Touch-friendly buttons */
+    @media (hover: none) and (pointer: coarse) {
+      #skipBtn, #remoteBtn, #backBtn, #chatBtn {
+        min-height: 44px;
+        min-width: 44px;
+        padding: 10px 20px;
+      }
+      #clipActions .action-btn { min-height: 44px; min-width: 44px; padding: 10px 16px; }
+    }
+
+    /* Landscape mobile */
+    @media (max-height: 500px) and (orientation: landscape) {
+      #viewerControls { gap: 6px; }
+      #viewerCount { padding: 4px 8px; font-size: 10px; }
+      #skipBtn, #remoteBtn, #backBtn, #chatBtn { padding: 6px 10px; font-size: 10px; }
+      #clipActions .action-btn { padding: 5px 8px; font-size: 10px; }
+      #clipActions .action-btn svg { width: 12px; height: 12px; }
+      #clipActions .action-btn span { display: none; }
+    }
+
+  </style>
+</head>
+<body>
+  <video id="player" playsinline webkit-playsinline muted preload="metadata" x-webkit-airplay="allow"></video>
+
+  <div id="bufferingIndicator">
+    <div class="spinner"></div>
+    <div class="text">Buffering...</div>
+  </div>
+
+  <div id="voteHud">
+    <span class="live-badge"><span class="live-dot"></span> LIVE</span>
+    <div class="clip-info">
+      <div style="display:flex;align-items:baseline;justify-content:center;gap:0;">
+        <span class="seq" id="voteSeq">Clip</span>
+        <span class="clip-date-hud" id="clipDateHud"></span>
+      </div>
+      <span class="clip-title" id="clipTitle"></span>
+      <span class="clip-meta" id="clipMeta"></span>
+    </div>
+    <div class="vote-section">
+      <button class="pill up" id="voteUp" type="button">👍 0</button>
+      <button class="pill down" id="voteDown" type="button">👎 0</button>
+      <div class="hints">
+        <span class="hint-like" id="hintLike">!like #</span>
+        <span class="hint-dislike" id="hintDislike">!dislike #</span>
+      </div>
+    </div>
+    <div class="login-prompt" id="loginPrompt" style="display:none;">
+      <span id="loginLink" style="color:#adadb8;font-size:13px;">Link your Twitch in Discord Settings to vote</span>
+    </div>
+    <div id="discordBadge" style="display:none;margin-top:8px;font-size:11px;color:#5865F2;text-align:center;"></div>
+  </div>
+
+  <div id="volumeControl">
+    <button id="volumeBtn">🔊</button>
+    <input type="range" id="volumeSlider" min="0" max="100" value="100">
+  </div>
+
+  <div id="viewerControls">
+    <div id="viewerCount"><span class="eye">👁</span><span id="viewerNum">1</span></div>
+    <button id="backBtn">⏮</button>
+    <button id="remoteBtn">🎛️ Remote</button>
+    <button id="skipBtn">⏭ Skip<span id="skipStatus"></span></button>
+    <button id="chatBtn">💬<span id="chatBadge" class="chat-badge"></span></button>
+  </div>
+
+  <div id="clipActions">
+    <button class="action-btn" id="dlBtn" title="Download this clip">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+      <span>Download</span>
+    </button>
+    <button class="action-btn" id="shareClipTVBtn" title="Share this ClipTV channel">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>
+      <span>Share ClipTV</span>
+    </button>
+    <button class="action-btn" id="copyLinkBtn" title="Copy link to this clip on Twitch">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>
+      <span>Copy Clip Link</span>
+    </button>
+  </div>
+
+  <!-- Chat Panel (draggable on desktop) -->
+  <div id="chatPanel">
+    <div class="chat-header" id="chatHeader">
+      <span class="chat-header-title">💬 Chat</span>
+      <span class="chat-online" id="chatOnline"></span>
+      <button class="chat-close" id="chatClose">✕</button>
+    </div>
+    <div class="chat-messages" id="chatMessages">
+      <div class="chat-empty">No messages yet - say something!</div>
+    </div>
+    <div class="chat-input-area" id="chatInputArea" style="display:none">
+      <input type="text" id="chatInput" placeholder="Say something..." maxlength="200" autocomplete="off" />
+      <button id="chatSend">➤</button>
+    </div>
+    <div class="chat-login-prompt" id="chatLoginPrompt">
+      <a id="chatLoginLink" href="#">Log in with Twitch to chat</a>
+    </div>
+  </div>
+
+  <!-- Remote Control Bottom Sheet -->
+  <div id="remoteSheet">
+    <div class="sheet-backdrop" id="sheetBackdrop"></div>
+    <div class="sheet-panel">
+      <div class="sheet-handle">━━</div>
+      <div class="sheet-tabs">
+        <button class="sheet-tab active" data-tab="goto">Go To</button>
+        <button class="sheet-tab" data-tab="history">Previously on..</button>
+        <button class="sheet-tab" data-tab="upNext">Up Next</button>
+        <button class="sheet-tab" data-tab="browse">Browse</button>
+        <button class="sheet-tab" data-tab="controls">Controls</button>
+      </div>
+      <div class="sheet-content">
+        <!-- Go To Clip tab -->
+        <div class="tab-panel active" id="tabGoto">
+          <div class="goto-row">
+            <input type="number" id="gotoInput" placeholder="Clip #" min="1" />
+            <button class="goto-btn" id="gotoBtn">Go</button>
+          </div>
+          <div class="clip-preview empty" id="clipPreview">
+            Type a clip number and press Go
+          </div>
+        </div>
+        <!-- Previous / History tab -->
+        <div class="tab-panel" id="tabHistory">
+          <div class="queue-header">
+            <span class="queue-label">Previously on..</span>
+          </div>
+          <div class="clip-list" id="historyList">
+            <div class="clip-list-status">No clips played yet</div>
+          </div>
+        </div>
+        <!-- Up Next tab -->
+        <div class="tab-panel" id="tabUpNext">
+          <div class="queue-header">
+            <span class="queue-label">Coming up next</span>
+            <button class="queue-reshuffle" id="queueReshuffle">🔀 Reshuffle</button>
+          </div>
+          <div class="clip-list" id="queueList">
+            <div class="clip-list-status">Loading queue...</div>
+          </div>
+        </div>
+        <!-- Browse/Search tab -->
+        <div class="tab-panel" id="tabBrowse">
+          <div class="browse-search">
+            <input type="text" id="browseSearch" placeholder="Search by title, game, or clipper..." />
+          </div>
+          <div class="clip-list" id="clipList">
+            <div class="clip-list-status">Open the remote to browse clips</div>
+          </div>
+        </div>
+        <!-- Controls tab -->
+        <div class="tab-panel" id="tabControls">
+          <div class="controls-grid">
+            <button class="ctrl-btn ctrl-prev" id="ctrlPrev">⏮ Prev</button>
+            <button class="ctrl-btn ctrl-skip" id="ctrlSkip">⏭ Skip</button>
+            <button class="ctrl-btn ctrl-shuffle" id="ctrlShuffle">🔀 Shuffle</button>
+          </div>
+          <div class="category-section">
+            <label>Only play clips from:</label>
+            <select id="categorySelect">
+              <option value="">All Categories</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Clip Request Banner -->
+  <div id="clipRequestBanner">
+    <div class="req-title" id="reqTitle"></div>
+    <div class="req-meta" id="reqMeta"></div>
+    <div class="req-actions">
+      <button class="req-play-now" id="reqPlayNow">▶ Play Now</button>
+      <button class="req-cancel" id="reqCancel" style="display:none">✕ Cancel</button>
+      <span class="req-countdown" id="reqCountdown"></span>
+    </div>
+    <div class="req-progress" id="reqProgress"></div>
+  </div>
+
+  <div id="loadingOverlay">
+    <div class="content">
+      <div class="spinner"></div>
+      <div class="text">Connecting to Clip TV...</div>
+    </div>
+  </div>
+
+  <div id="debugOverlay"></div>
+  <div id="syncStatus"><span class="dot"></span><span id="syncText">Synced</span></div>
+
+  <div id="unmuteOverlay">
+    <div class="content">
+      <div class="icon">🔊</div>
+      <div>Click to Unmute</div>
+    </div>
+  </div>
+
+<div id="channelPickerOverlay" style="display:none; position:fixed; inset:0; z-index:999999; background:rgba(0,0,0,0.95); align-items:center; justify-content:center; flex-direction:column;">
+  <div style="width:100%;max-width:480px;padding:24px;">
+    <div style="text-align:center;margin-bottom:32px;">
+      <h1 style="color:#efeff1;font-size:28px;font-weight:700;margin:0 0 8px;">Clip TV</h1>
+      <p style="color:#adadb8;font-size:14px;margin:0;">Search for a streamer to start watching clips</p>
+    </div>
+    <input type="text" id="channelSearchInput" placeholder="Search streamers..." autofocus
+      style="width:100%;padding:14px 18px;background:#1a1a1d;border:1px solid #3a3a3d;border-radius:10px;color:#efeff1;font-size:16px;outline:none;">
+    <div id="channelSearchResults" style="margin-top:8px;max-height:320px;overflow-y:auto;border-radius:10px;background:#18181b;"></div>
+  </div>
+</div>
+
+<script src="/discord/config.php"></script>
+<script type="module" id="discord-init">
+import { DiscordSDK } from 'https://unpkg.com/@discord/embedded-app-sdk/dist/index.mjs';
+window.DiscordSDK = DiscordSDK;
+window.__discordReady = new Promise(resolve => { window.__discordResolve = resolve; });
+</script>
+<script>
+(async () => {
+  // ===== DISCORD ACTIVITY INIT =====
+  const DISCORD_CLIENT_ID = window.DISCORD_CLIENT_ID || '';
+
+  let discordSdk, discordUser, twitchUsername, voteToken;
+  let discordAuthComplete = false;
+
+  // Show channel picker overlay
+  const pickerOverlay = document.getElementById('channelPickerOverlay');
+
+  try {
+    discordSdk = new window.DiscordSDK(DISCORD_CLIENT_ID);
+    await discordSdk.ready();
+
+    // Authorize with Discord
+    const { code } = await discordSdk.commands.authorize({
+      client_id: DISCORD_CLIENT_ID,
+      response_type: 'code',
+      state: '',
+      prompt: 'none',
+      scope: ['identify', 'connections']
+    });
+
+    // Exchange code for token on our server
+    const tokenRes = await fetch('/discord/token.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code })
+    });
+    const tokenData = await tokenRes.json();
+
+    if (tokenData.access_token) {
+      await discordSdk.commands.authenticate({ access_token: tokenData.access_token });
+      discordUser = tokenData.discord_user;
+      twitchUsername = tokenData.twitch_username;
+      voteToken = tokenData.vote_token;
+      discordAuthComplete = true;
+    }
+  } catch (e) {
+    console.error('[Discord] Auth error:', e);
+  }
+
+  // Show Discord identity badge
+  const badge = document.getElementById('discordBadge');
+  if (badge && discordUser) {
+    badge.style.display = 'block';
+    badge.textContent = twitchUsername ? `Voting as ${twitchUsername}` : `${discordUser.global_name}`;
+  }
+
+  // Show channel picker
+  if (pickerOverlay) pickerOverlay.style.display = 'flex';
+
+  // Wait for channel selection
+  const login = await new Promise(resolve => {
+    const qs = new URLSearchParams(location.search);
+    const preselected = qs.get("login");
+    if (preselected) {
+      if (pickerOverlay) pickerOverlay.style.display = 'none';
+      resolve(preselected.toLowerCase());
+      return;
+    }
+
+    const searchInput = document.getElementById('channelSearchInput');
+    const resultsDiv = document.getElementById('channelSearchResults');
+    let searchTimeout;
+
+    searchInput?.addEventListener('input', () => {
+      clearTimeout(searchTimeout);
+      const q = searchInput.value.trim();
+      if (q.length < 2) { resultsDiv.innerHTML = ''; return; }
+      searchTimeout = setTimeout(async () => {
+        try {
+          const res = await fetch(`/channel_search.php?q=${encodeURIComponent(q)}`);
+          const channels = await res.json();
+          resultsDiv.innerHTML = channels.map(ch => `
+            <div class="channel-result" data-login="${ch.login}" style="display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer;border-radius:8px;transition:background 0.15s;">
+              <img src="${ch.profile_image_url || ''}" style="width:40px;height:40px;border-radius:50%;background:#333;" onerror="this.style.display='none'">
+              <div>
+                <div style="color:#efeff1;font-weight:600;">${ch.display_name || ch.login}</div>
+                <div style="color:#adadb8;font-size:12px;">${ch.clip_count ? ch.clip_count + ' clips' : ''}</div>
+              </div>
+            </div>
+          `).join('');
+          resultsDiv.querySelectorAll('.channel-result').forEach(el => {
+            el.addEventListener('mouseenter', () => el.style.background = '#2a2a2d');
+            el.addEventListener('mouseleave', () => el.style.background = 'transparent');
+            el.addEventListener('click', () => {
+              if (pickerOverlay) pickerOverlay.style.display = 'none';
+              resolve(el.dataset.login.toLowerCase());
+            });
+          });
+        } catch (e) {
+          resultsDiv.innerHTML = '<div style="color:#666;padding:12px;">Search failed</div>';
+        }
+      }, 300);
+    });
+
+    // Also allow pressing Enter with exact name
+    searchInput?.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' && searchInput.value.trim()) {
+        if (pickerOverlay) pickerOverlay.style.display = 'none';
+        resolve(searchInput.value.trim().toLowerCase());
+      }
+    });
+  });
+
+  document.title = login + " Clip TV";
+  const API_BASE = "";
+
+  // Set streamer's Twitch profile image as favicon
+  fetch(`${API_BASE}/channel_info.php?login=${encodeURIComponent(login)}`)
+    .then(r => r.json())
+    .then(data => {
+      if (data.profile_image_url) {
+        document.getElementById('favicon').href = data.profile_image_url;
+      }
+    })
+    .catch(() => {});
+
+  // Twitch GQL for MP4 URLs
+  const GQL_URL = "/.proxy/gql/gql";
+  const CLIENT_ID = "kimne78kx3ncx6brgo4mv6wki5h1ko";
+  const QUERY_HASH = "36b89d2507fce29e5ca551df756d27c1cfe079e2609642b4390aa4c35796eb11";
+
+  const player = document.getElementById("player");
+  const loadingOverlay = document.getElementById("loadingOverlay");
+  const voteHud = document.getElementById("voteHud");
+  const voteSeq = document.getElementById("voteSeq");
+  const clipDateHud = document.getElementById("clipDateHud");
+  const clipTitle = document.getElementById("clipTitle");
+  const clipMeta = document.getElementById("clipMeta");
+  const voteUp = document.getElementById("voteUp");
+  const voteDown = document.getElementById("voteDown");
+  const hintLike = document.getElementById("hintLike");
+  const hintDislike = document.getElementById("hintDislike");
+  const volumeControl = document.getElementById("volumeControl");
+  const volumeBtn = document.getElementById("volumeBtn");
+  const volumeSlider = document.getElementById("volumeSlider");
+  const syncStatus = document.getElementById("syncStatus");
+  const syncText = document.getElementById("syncText");
+  const unmuteOverlay = document.getElementById("unmuteOverlay");
+  const bufferingIndicator = document.getElementById("bufferingIndicator");
+  const viewerControls = document.getElementById("viewerControls");
+  const viewerNum = document.getElementById("viewerNum");
+  const skipBtn = document.getElementById("skipBtn");
+  const skipStatus = document.getElementById("skipStatus");
+
+  // Viewer ID - persistent per browser
+  const viewerIdKey = `clip_tv_viewer_id_${login}`;
+  let viewerId = localStorage.getItem(viewerIdKey);
+  if (!viewerId) {
+    viewerId = 'v_' + Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
+    localStorage.setItem(viewerIdKey, viewerId);
+  }
+
+  // Viewer state
+  let viewerCount = 1;
+  let skipVotes = 0;
+  let skipNeeded = 1;
+  let mySkipVote = false;
+  let heartbeatInterval = null;
+  let controllerHeartbeatInterval = null;
+
+  // Clip history (for Prev button)
+  let clipHistory = []; // Stack of previously played clips
+  let currentClipData = null; // Full data of currently playing clip
+  const MAX_HISTORY = 20;
+
+  // Clip request system
+  let pendingRequest = null; // { clip, timer, startTime } - set when I'm the requester
+  let requestBannerClip = null; // Clip data for current request banner (for Play Now)
+  let activeRequestId = null; // clip_id of currently displayed request
+  const REQUEST_TIMEOUT = 6; // seconds before clip plays
+
+  // Hide unmute overlay initially
+  unmuteOverlay.classList.add("hide");
+
+  // Mobile viewport height fix (handles address bar)
+  function updateViewportHeight() {
+    const vh = window.innerHeight * 0.01;
+    document.documentElement.style.setProperty('--vh', `${vh}px`);
+  }
+  updateViewportHeight();
+  window.addEventListener('resize', updateViewportHeight);
+
+  // iOS-specific scroll handling for address bar
+  if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
+    let ticking = false;
+    window.addEventListener('scroll', () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          updateViewportHeight();
+          ticking = false;
+        });
+        ticking = true;
+      }
+    });
+  }
+
+  // Touch text for mobile
+  if ('ontouchstart' in window) {
+    const unmuteText = document.querySelector('#unmuteOverlay .content div:last-child');
+    if (unmuteText) unmuteText.textContent = 'Tap to Unmute';
+  }
+
+  // Prevent pull-to-refresh and overscroll
+  document.addEventListener('touchmove', (e) => {
+    if (e.target === document.body || e.target.tagName === 'VIDEO') {
+      e.preventDefault();
+    }
+  }, { passive: false });
+
+  // Click to unmute handler
+  unmuteOverlay.addEventListener("click", () => {
+    doUnmute();
+    debugLog("Unmuted by overlay click", "ok");
+  });
+
+  // Debug
+  const debugEnabled = qs.get("debug") === "1";
+  const debugOverlay = document.getElementById("debugOverlay");
+  const debugLines = [];
+
+  function debugLog(msg, type = "info") {
+    if (!debugEnabled) return;
+    const time = new Date().toLocaleTimeString("en-US", { hour12: false });
+    debugLines.push({ time, msg, type });
+    if (debugLines.length > 25) debugLines.shift();
+    debugOverlay.classList.add("show");
+    debugOverlay.innerHTML = debugLines.map(l => `<div class="${l.type}">${l.time} ${l.msg}</div>`).join("");
+  }
+
+  // State
+  let currentClipId = null;
+  let currentSeq = null;
+  let isLoggedIn = !!twitchUsername;
+  let currentUserVote = null; // 'like', 'dislike', or null
+  let voteInProgress = false;
+  let isController = false; // First viewer becomes the controller
+  let clips = [];
+  let isSwitching = false;
+  let syncInterval = null;
+  let lastPlaybackTime = 0;
+  let lastPlaybackCheck = Date.now();
+  let stallRecoveryAttempts = 0;
+  const MAX_STALL_RECOVERY = 5; // More attempts before skipping
+
+  // Connection quality detection
+  let isSlowConnection = false;
+  let prefersLowQuality = false;
+  let preloadedUrl = null;
+  let preloadedClipId = null;
+  let preloadVideo = null; // Hidden video element for actual preloading
+
+  // Adaptive quality - drops quality when buffering issues detected
+  let currentQualityLevel = 3; // 0=160p, 1=360p, 2=480p, 3=720p, 4=1080p
+  const QUALITY_LEVELS = [160, 360, 480, 720, 1080];
+  let bufferingCount = 0; // Count buffering events per clip
+  let lastQualityDropTime = 0;
+  const QUALITY_DROP_COOLDOWN = 15000; // Don't drop quality more than once per 15s
+  const QUALITY_RECOVER_TIME = 30000; // Try higher quality after 30s of smooth playback
+  let smoothPlaybackStart = 0;
+
+  function getTargetQuality() {
+    return QUALITY_LEVELS[currentQualityLevel] || 480;
+  }
+
+  function dropQuality() {
+    const now = Date.now();
+    if (now - lastQualityDropTime < QUALITY_DROP_COOLDOWN) return false;
+    if (currentQualityLevel <= 0) return false; // Already at lowest
+
+    currentQualityLevel--;
+    lastQualityDropTime = now;
+    smoothPlaybackStart = 0; // Reset smooth playback timer
+    debugLog(`Quality dropped to ${getTargetQuality()}p due to buffering`, "warn");
+    return true;
+  }
+
+  function tryRecoverQuality() {
+    if (currentQualityLevel >= QUALITY_LEVELS.length - 1) return; // Already at max
+    // Cap quality based on device/connection
+    const maxLevel = isSlowConnection ? 1 : (isMobile ? 3 : 4); // 360p slow, 720p mobile, 1080p desktop
+    if (currentQualityLevel >= maxLevel) return;
+
+    const now = Date.now();
+    if (smoothPlaybackStart > 0 && (now - smoothPlaybackStart) > QUALITY_RECOVER_TIME) {
+      currentQualityLevel++;
+      smoothPlaybackStart = now;
+      debugLog(`Quality recovered to ${getTargetQuality()}p`, "ok");
+    }
+  }
+
+  // Detect mobile device
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+  function detectConnectionQuality() {
+    const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    if (conn) {
+      // Slow if: saveData enabled, slow effectiveType, or low downlink
+      // More aggressive threshold: 2.5 Mbps for mobile, 1.5 for desktop
+      const downlinkThreshold = isMobile ? 2.5 : 1.5;
+      isSlowConnection = conn.saveData ||
+        ['slow-2g', '2g', '3g'].includes(conn.effectiveType) ||
+        (conn.downlink && conn.downlink < downlinkThreshold);
+      prefersLowQuality = isSlowConnection || isMobile; // Always prefer low quality on mobile
+
+      // Set initial quality level based on connection
+      if (conn.saveData || ['slow-2g', '2g'].includes(conn.effectiveType)) {
+        currentQualityLevel = 1; // 360p for very slow
+      } else if (isSlowConnection || conn.effectiveType === '3g') {
+        currentQualityLevel = 1; // 360p for slow - upgrade if smooth
+      } else if (isMobile) {
+        currentQualityLevel = 2; // 480p for mobile
+      } else {
+        currentQualityLevel = 3; // 720p for fast desktop
+      }
+
+      debugLog(`Connection: ${conn.effectiveType || 'unknown'}, ${conn.downlink || '?'}Mbps, mobile=${isMobile}, quality=${getTargetQuality()}p`);
+
+      // Listen for connection changes
+      conn.addEventListener('change', () => {
+        const wasSlow = isSlowConnection;
+        isSlowConnection = conn.saveData ||
+          ['slow-2g', '2g', '3g'].includes(conn.effectiveType) ||
+          (conn.downlink && conn.downlink < downlinkThreshold);
+        prefersLowQuality = isSlowConnection || isMobile;
+        if (wasSlow !== isSlowConnection) {
+          debugLog(`Connection changed: slow=${isSlowConnection}`, "warn");
+          // Adjust quality on connection change
+          if (isSlowConnection && currentQualityLevel > 1) {
+            currentQualityLevel = 1;
+            debugLog(`Quality adjusted to ${getTargetQuality()}p`, "warn");
+          }
+        }
+      });
+    } else {
+      // No Network Information API - assume decent connection
+      isSlowConnection = false;
+      prefersLowQuality = isMobile;
+      currentQualityLevel = isMobile ? 2 : 3; // 480p mobile, 720p desktop
+      debugLog(`No connection API, mobile=${isMobile}, quality=${getTargetQuality()}p`);
+    }
+  }
+  detectConnectionQuality();
+
+  // Volume control
+  const volumeKey = `clip_tv_volume_${login}`;
+  const muteKey = `clip_tv_unmuted_${login}`;
+  let savedVolume = parseFloat(localStorage.getItem(volumeKey) || "1");
+  let isMuted = true; // Video starts muted (HTML attribute) - must match reality
+  let userHasUnmuted = localStorage.getItem(muteKey) === 'true';
+
+  player.volume = savedVolume;
+  volumeSlider.value = savedVolume * 100;
+  updateVolumeIcon();
+
+  function saveUnmutedPref(unmuted) {
+    localStorage.setItem(muteKey, unmuted ? 'true' : 'false');
+    userHasUnmuted = unmuted;
+  }
+
+  function doUnmute() {
+    player.muted = false;
+    isMuted = false;
+    updateVolumeIcon();
+    unmuteOverlay.classList.add("hide");
+    saveUnmutedPref(true);
+  }
+
+  // Auto-unmute on first interaction if user previously had sound
+  if (userHasUnmuted) {
+    let autoUnmuteAttached = true;
+    function autoUnmuteHandler(e) {
+      // Skip if clicking the volume button itself (let its own handler deal with it)
+      if (e.target.closest('#volumeBtn')) return;
+      doUnmute();
+      debugLog("Auto-unmuted on user interaction", "ok");
+      removeAutoUnmute();
+    }
+    function removeAutoUnmute() {
+      if (!autoUnmuteAttached) return;
+      autoUnmuteAttached = false;
+      document.removeEventListener('click', autoUnmuteHandler, true);
+      document.removeEventListener('touchend', autoUnmuteHandler, true);
+    }
+    document.addEventListener('click', autoUnmuteHandler, true);
+    document.addEventListener('touchend', autoUnmuteHandler, true);
+
+    // Also show the unmute overlay so user knows to click
+    unmuteOverlay.classList.remove("hide");
+  }
+
+  function updateVolumeIcon() {
+    if (isMuted || player.volume === 0) {
+      volumeBtn.textContent = "🔇";
+    } else if (player.volume < 0.5) {
+      volumeBtn.textContent = "🔉";
+    } else {
+      volumeBtn.textContent = "🔊";
+    }
+  }
+
+  volumeBtn.addEventListener("click", () => {
+    isMuted = !isMuted;
+    player.muted = isMuted;
+    if (!isMuted) saveUnmutedPref(true);
+    updateVolumeIcon();
+  });
+
+  volumeSlider.addEventListener("input", (e) => {
+    const vol = e.target.value / 100;
+    player.volume = vol;
+    savedVolume = vol;
+    localStorage.setItem(volumeKey, vol.toString());
+    isMuted = false;
+    player.muted = false;
+    saveUnmutedPref(true);
+    updateVolumeIcon();
+  });
+
+  // Show controls on mouse move
+  let hideTimeout = null;
+  let controlsVisible = false;
+
+  const clipActions = document.getElementById('clipActions');
+
+  function hideControls() {
+    voteHud.classList.remove("show");
+    volumeControl.classList.remove("show");
+    syncStatus.classList.remove("show");
+    viewerControls.classList.remove("show");
+    clipActions.classList.remove("show");
+    controlsVisible = false;
+    if (hideTimeout) clearTimeout(hideTimeout);
+  }
+
+  function showControls() {
+    voteHud.classList.add("show");
+    volumeControl.classList.add("show");
+    syncStatus.classList.add("show");
+    viewerControls.classList.add("show");
+    clipActions.classList.add("show");
+    controlsVisible = true;
+    if (hideTimeout) clearTimeout(hideTimeout);
+    hideTimeout = setTimeout(hideControls, 4000);
+  }
+
+  // Handle tap to show controls on mobile (single tap shows, auto-hides after 4s)
+  function handleTap(e) {
+    // Ignore taps on interactive elements - let them handle their own events
+    if (e.target.closest('#volumeControl, #volumeBtn, #volumeSlider, #unmuteOverlay, #skipBtn, #remoteBtn, #remoteSheet, #viewerControls, #voteUp, #voteDown, #loginPrompt, #clipRequestBanner, #chatPanel, #chatBtn, #backBtn, #clipActions, #dlBtn, #copyLinkBtn, #shareClipTVBtn')) {
+      // But still reset the hide timeout so controls stay visible while interacting
+      if (controlsVisible && hideTimeout) {
+        clearTimeout(hideTimeout);
+        hideTimeout = setTimeout(hideControls, 4000);
+      }
+      return;
+    }
+    // Show controls on tap (they auto-hide after 4 seconds)
+    showControls();
+  }
+
+  // Use different handlers for touch vs mouse devices
+  if ('ontouchstart' in window) {
+    // On touch devices: show controls on tap, auto-hide after 4s
+    document.addEventListener("touchend", handleTap, { passive: true });
+  } else {
+    document.addEventListener("mousemove", showControls);
+    document.addEventListener("click", showControls);
+  }
+
+  // Double-tap to play/pause on video
+  let lastVideoTap = 0;
+  player.addEventListener('touchend', (e) => {
+    const now = Date.now();
+    const timeSinceLastTap = now - lastVideoTap;
+    if (timeSinceLastTap < 300 && timeSinceLastTap > 0) {
+      e.preventDefault();
+      if (player.paused) {
+        player.play();
+      } else {
+        player.pause();
+      }
+    }
+    lastVideoTap = now;
+  });
+
+  // Grace period - prevent skipping immediately after a clip starts
+  let clipStartTime = 0;
+  const MIN_PLAY_TIME = 3000; // Must play at least 3 seconds before allowing skip
+
+  function canSkipClip() {
+    const elapsed = Date.now() - clipStartTime;
+    if (elapsed < MIN_PLAY_TIME) {
+      debugLog(`Skip blocked - only ${elapsed}ms elapsed (need ${MIN_PLAY_TIME}ms)`, "warn");
+      return false;
+    }
+    return true;
+  }
+
+  // Freeze detection and recovery
+  function tryRecoverPlayback() {
+    if (isSwitching || player.paused) return;
+    if (!canSkipClip()) return; // Don't skip during grace period
+
+    stallRecoveryAttempts++;
+    debugLog(`Stall recovery attempt ${stallRecoveryAttempts}/${MAX_STALL_RECOVERY}`, "warn");
+    setSyncStatus("syncing", "Recovering...");
+
+    if (stallRecoveryAttempts > MAX_STALL_RECOVERY) {
+      // Too many attempts - skip to next clip
+      debugLog("Too many stall recoveries - skipping clip", "err");
+      stallRecoveryAttempts = 0;
+      if (isController) {
+        controllerAdvance();
+      }
+      return;
+    }
+
+    // Try to recover: seek slightly forward and replay
+    const currentTime = player.currentTime;
+    player.currentTime = currentTime + 0.1;
+    player.play().then(() => {
+      debugLog("Playback recovered", "ok");
+      setSyncStatus("synced", "Synced");
+    }).catch(e => {
+      debugLog("Recovery play failed: " + e.message, "err");
+    });
+  }
+
+  // Stalled event - network/buffer issue (don't auto-recover, just show status)
+  // Buffering indicator timeout
+  let bufferingTimeout = null;
+
+  function showBufferingIndicator() {
+    if (bufferingTimeout) clearTimeout(bufferingTimeout);
+    bufferingTimeout = setTimeout(() => {
+      bufferingIndicator.classList.add("show");
+    }, 500);
+  }
+
+  function hideBufferingIndicator() {
+    if (bufferingTimeout) clearTimeout(bufferingTimeout);
+    bufferingIndicator.classList.remove("show");
+    const bufferText = bufferingIndicator.querySelector('.text');
+    if (bufferText) bufferText.textContent = 'Buffering...';
+  }
+
+  player.addEventListener("stalled", () => {
+    debugLog("Video stalled - buffering", "warn");
+    setSyncStatus("syncing", "Buffering...");
+    showBufferingIndicator();
+    bufferingCount++;
+    smoothPlaybackStart = 0; // Reset smooth playback timer
+
+    // Drop quality after 2 buffering events
+    if (bufferingCount >= 2) {
+      if (dropQuality()) {
+        bufferingCount = 0;
+        const bufferText = bufferingIndicator.querySelector('.text');
+        if (bufferText) bufferText.textContent = `Buffering... (${getTargetQuality()}p)`;
+      }
+    }
+  });
+
+  // Waiting event - waiting for data
+  player.addEventListener("waiting", () => {
+    debugLog("Video waiting for data", "warn");
+    setSyncStatus("syncing", "Buffering...");
+    showBufferingIndicator();
+    bufferingCount++;
+    smoothPlaybackStart = 0;
+
+    // Drop quality after 2 buffering events
+    if (bufferingCount >= 2) {
+      if (dropQuality()) {
+        bufferingCount = 0;
+        const bufferText = bufferingIndicator.querySelector('.text');
+        if (bufferText) bufferText.textContent = `Buffering... (${getTargetQuality()}p)`;
+      }
+    }
+  });
+
+  // Playing event - recovered from waiting/stalled
+  player.addEventListener("playing", () => {
+    stallRecoveryAttempts = 0; // Reset on successful play
+    lastPlaybackTime = player.currentTime;
+    lastPlaybackCheck = Date.now();
+    hideBufferingIndicator();
+
+    // Start tracking smooth playback for quality recovery
+    if (smoothPlaybackStart === 0) {
+      smoothPlaybackStart = Date.now();
+    }
+  });
+
+  // Periodic playback health check - catch silent freezes (balanced)
+  let consecutiveFreezeChecks = 0;
+  setInterval(() => {
+    if (isSwitching || player.paused || player.ended || player.seeking) return;
+    // Don't check if video is still loading
+    if (player.readyState < 3) return;
+
+    const now = Date.now();
+    const timeSinceCheck = (now - lastPlaybackCheck) / 1000;
+    const actualProgress = player.currentTime - lastPlaybackTime;
+
+    // Consider frozen if fully loaded (readyState 4) and no progress for 5+ seconds
+    if (timeSinceCheck > 5 && actualProgress < 0.3 && player.readyState >= 4) {
+      consecutiveFreezeChecks++;
+      debugLog(`Freeze check ${consecutiveFreezeChecks}/2: no progress for ${timeSinceCheck.toFixed(1)}s`, "warn");
+
+      // Recover after 2 consecutive freeze detections (10+ seconds frozen)
+      if (consecutiveFreezeChecks >= 2) {
+        debugLog("Confirmed frozen - attempting recovery", "err");
+        consecutiveFreezeChecks = 0;
+        // Drop quality before trying to recover
+        dropQuality();
+        tryRecoverPlayback();
+      }
+    } else {
+      consecutiveFreezeChecks = 0;
+      // Try to recover quality if playing smoothly
+      tryRecoverQuality();
+    }
+
+    lastPlaybackTime = player.currentTime;
+    lastPlaybackCheck = now;
+  }, 5000);
+
+  // HUD Position polling
+  let currentHudPosition = null;
+
+  function setHudPosition(pos, force = false) {
+    const validPositions = ['tr', 'tl', 'br', 'bl'];
+    if (!validPositions.includes(pos)) pos = 'tr';
+    if (!force && pos === currentHudPosition) return;
+
+    currentHudPosition = pos;
+    voteHud.classList.remove('pos-tr', 'pos-tl', 'pos-br', 'pos-bl');
+    voteHud.classList.add(`pos-${pos}`);
+    debugLog(`HUD position: ${pos}`);
+  }
+
+  async function pollHudPosition() {
+    try {
+      const res = await fetch(`${API_BASE}/hud_position.php?login=${encodeURIComponent(login)}`, { cache: "no-store" });
+      const data = await res.json();
+      if (data && (data.hud_position || data.position)) {
+        setHudPosition(data.hud_position || data.position, currentHudPosition === null);
+      }
+    } catch (e) {
+      if (currentHudPosition === null) setHudPosition('tr', true);
+    }
+  }
+
+  // Poll position immediately and every 5 seconds
+  pollHudPosition();
+  setInterval(pollHudPosition, 5000);
+
+  function formatDuration(s) {
+    if (!s || s <= 0) return "";
+    s = Math.round(s);
+    return s < 60 ? `${s}s` : `${Math.floor(s/60)}:${(s%60).toString().padStart(2,'0')}`;
+  }
+
+  function formatDate(d) {
+    if (!d) return "";
+    try {
+      return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    } catch { return ""; }
+  }
+
+  // Fetch and display votes for current clip (with auth-aware user_vote)
+  async function fetchVotes(seq) {
+    if (!seq) return;
+    currentSeq = seq;
+    try {
+      let votesUrl = `${API_BASE}/api/votes.php?streamer=${encodeURIComponent(login)}&seq=${seq}`;
+      if (twitchUsername) votesUrl += `&username=${encodeURIComponent(twitchUsername)}`;
+      const res = await fetch(votesUrl, { cache: "no-store" });
+      const data = await res.json();
+      // isLoggedIn already set from Discord auth
+
+      if (data.votes && data.votes[seq]) {
+        const v = data.votes[seq];
+        voteUp.textContent = `👍 ${v.likes || 0}`;
+        voteDown.textContent = `👎 ${v.dislikes || 0}`;
+        currentUserVote = v.user_vote || null;
+      } else {
+        voteUp.textContent = `👍 0`;
+        voteDown.textContent = `👎 0`;
+        currentUserVote = null;
+      }
+      updateVoteButtonStates();
+      // Hide login prompt on clip change
+      const prompt = document.getElementById('loginPrompt');
+      if (prompt) prompt.style.display = 'none';
+    } catch (e) {
+      // Silently fail - votes aren't critical
+    }
+  }
+
+  function updateVoteButtonStates() {
+    voteUp.classList.toggle('voted', currentUserVote === 'like');
+    voteDown.classList.toggle('voted', currentUserVote === 'dislike');
+  }
+
+  async function submitVote(voteType) {
+    if (voteInProgress || !currentSeq) return;
+
+    if (!isLoggedIn) {
+      const prompt = document.getElementById('loginPrompt');
+      if (prompt) prompt.style.display = 'block';
+      return;
+    }
+
+    // Toggle: clicking active vote clears it
+    const isActive = currentUserVote === voteType;
+    const newVote = isActive ? 'clear' : voteType;
+
+    voteInProgress = true;
+    voteUp.disabled = true;
+    voteDown.disabled = true;
+
+    // Optimistic update
+    const prevVote = currentUserVote;
+    const prevUpText = voteUp.textContent;
+    const prevDownText = voteDown.textContent;
+
+    let upCount = parseInt(voteUp.textContent.replace(/[^0-9]/g, '')) || 0;
+    let downCount = parseInt(voteDown.textContent.replace(/[^0-9]/g, '')) || 0;
+    if (prevVote === 'like') upCount--;
+    if (prevVote === 'dislike') downCount--;
+    if (newVote === 'like') upCount++;
+    if (newVote === 'dislike') downCount++;
+    currentUserVote = newVote === 'clear' ? null : newVote;
+    voteUp.textContent = `👍 ${Math.max(0, upCount)}`;
+    voteDown.textContent = `👎 ${Math.max(0, downCount)}`;
+    updateVoteButtonStates();
+
+    try {
+      const res = await fetch(`${API_BASE}/discord/discord_vote.php`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ streamer: login, seq: parseInt(currentSeq), vote: newVote, twitch_username: twitchUsername, discord_user_id: discordUser?.id, vote_token: voteToken })
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        voteUp.textContent = `👍 ${data.likes || 0}`;
+        voteDown.textContent = `👎 ${data.dislikes || 0}`;
+        currentUserVote = data.user_vote || null;
+        updateVoteButtonStates();
+      } else {
+        // Revert optimistic update
+        currentUserVote = prevVote;
+        voteUp.textContent = prevUpText;
+        voteDown.textContent = prevDownText;
+        updateVoteButtonStates();
+        if (res.status === 401) {
+          isLoggedIn = false;
+        }
+      }
+    } catch (e) {
+      currentUserVote = prevVote;
+      voteUp.textContent = prevUpText;
+      voteDown.textContent = prevDownText;
+      updateVoteButtonStates();
+    } finally {
+      voteInProgress = false;
+      voteUp.disabled = false;
+      voteDown.disabled = false;
+    }
+  }
+
+  function updateHud(clip) {
+    if (!clip) return;
+    const seq = clip.seq || clip.clip_seq || 0;
+
+    // Update sequence number and hints
+    voteSeq.textContent = `Clip #${seq}`;
+    hintLike.textContent = `!like ${seq}`;
+    hintDislike.textContent = `!dislike ${seq}`;
+
+    // Show clip date
+    clipDateHud.textContent = formatDate(clip.created_at) ? `• ${formatDate(clip.created_at)}` : "";
+
+    // Update title
+    clipTitle.textContent = clip.clip_title || clip.title || "";
+
+    // Build meta line
+    const meta = [];
+    const dur = formatDuration(clip.clip_duration || clip.duration);
+    if (dur) meta.push(`<span class="meta-duration">${dur}</span>`);
+    if (clip.game_name) meta.push(`<span class="meta-category">${clip.game_name}</span>`);
+    if (clip.clip_curator || clip.creator_name) {
+      meta.push(`<span class="meta-clipper-label">Clipped by</span> <span class="meta-clipper-name">${clip.clip_curator || clip.creator_name}</span>`);
+    }
+    clipMeta.innerHTML = meta.join(" • ");
+
+    // Fetch votes for this clip (using seq for auth-aware endpoint)
+    if (seq) fetchVotes(seq);
+  }
+
+  function setSyncStatus(status, text) {
+    syncStatus.className = "show";
+    if (status === "synced") {
+      syncStatus.classList.remove("syncing", "error");
+    } else if (status === "syncing") {
+      syncStatus.classList.add("syncing");
+      syncStatus.classList.remove("error");
+    } else if (status === "error") {
+      syncStatus.classList.add("error");
+      syncStatus.classList.remove("syncing");
+    }
+    syncText.textContent = text;
+  }
+
+  // GQL: Get MP4 URL (adapts quality for slow connections)
+  async function getMp4Url(clipId, forceHighQuality = false) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), isSlowConnection ? 12000 : 8000);
+
+      const res = await fetch(GQL_URL, {
+        method: "POST",
+        headers: { "Client-ID": CLIENT_ID, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          operationName: "VideoAccessToken_Clip",
+          variables: { slug: clipId },
+          extensions: { persistedQuery: { version: 1, sha256Hash: QUERY_HASH } }
+        }),
+        signal: controller.signal
+      });
+      clearTimeout(timeout);
+
+      if (!res.ok) return null;
+      const data = await res.json();
+      const clip = data?.data?.clip;
+      if (!clip) return null;
+
+      const token = clip.playbackAccessToken?.value;
+      const sig = clip.playbackAccessToken?.signature;
+      const qualities = clip.videoQualities || [];
+      if (!token || !sig || !qualities.length) return null;
+
+      // Sort by quality (highest first)
+      const sorted = qualities.sort((a,b) => (parseInt(b.quality)||0) - (parseInt(a.quality)||0));
+
+      // Choose quality based on adaptive quality level
+      let chosen;
+      if (!forceHighQuality && sorted.length > 1) {
+        // Use adaptive quality level (dynamically adjusted based on buffering)
+        const targetQuality = getTargetQuality();
+        // Find best match at or below target quality
+        chosen = sorted.find(q => parseInt(q.quality) <= targetQuality);
+        // If no match found (all qualities higher than target), use lowest available
+        if (!chosen) {
+          chosen = sorted[sorted.length - 1];
+        }
+        debugLog(`Using ${chosen.quality}p (target: ${targetQuality}p, level: ${currentQualityLevel})`);
+      } else {
+        chosen = sorted[0];
+      }
+
+      const sep = chosen.sourceURL.includes("?") ? "&" : "?";
+      return `${chosen.sourceURL}${sep}sig=${encodeURIComponent(sig)}&token=${encodeURIComponent(token)}`;
+    } catch (e) {
+      debugLog("GQL err: " + e.message, "err");
+      return null;
+    }
+  }
+
+  // Preload next clip in background (for smoother transitions)
+  async function preloadNextClip() {
+    if (!clips.length || !isController) return;
+
+    const next = pickNextClip();
+    if (!next || next.id === currentClipId || next.id === preloadedClipId) return;
+
+    try {
+      const url = await getMp4Url(next.id, true); // Force high quality for preload
+      if (url) {
+        preloadedClipId = next.id;
+        preloadedUrl = url;
+
+        // Cleanup previous preload element
+        if (preloadVideo) {
+          preloadVideo.oncanplaythrough = null;
+          preloadVideo.onerror = null;
+          preloadVideo.src = '';
+          preloadVideo.load();
+          preloadVideo.remove();
+          preloadVideo = null;
+        }
+
+        // Preload video data using a hidden video element
+        preloadVideo = document.createElement('video');
+        preloadVideo.preload = 'auto';
+        preloadVideo.muted = true;
+        preloadVideo.playsInline = true;
+        preloadVideo.style.cssText = 'position:absolute;width:0;height:0;opacity:0;pointer-events:none';
+        document.body.appendChild(preloadVideo);
+        preloadVideo.src = url;
+        preloadVideo.load();
+
+        debugLog(`Preloading video: ${next.id.substring(0,15)}`, "ok");
+
+        preloadVideo.oncanplaythrough = () => {
+          debugLog(`Preload ready: ${next.id.substring(0,15)}`, "ok");
+        };
+      }
+    } catch (e) {
+      // Silently fail - preloading is optional
+    }
+  }
+
+  // Weighted clip selection (for controller)
+  const QUEUE_SIZE = 10;
+  let upNextQueue = [];
+  let activeCategoryFilter = ''; // game_id filter for playback
+
+  function pickRandomClip(exclude = []) {
+    if (!clips.length) return null;
+    const excludeIds = new Set(exclude.map(c => c.id));
+    let pool = clips.filter(c => !excludeIds.has(c.id));
+    // Apply category filter if active
+    if (activeCategoryFilter) {
+      const filtered = pool.filter(c => c.game_id === activeCategoryFilter);
+      if (filtered.length) pool = filtered;
+    }
+    if (!pool.length) return clips[Math.floor(Math.random() * clips.length)];
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+
+  function fillQueue() {
+    const existing = [...upNextQueue];
+    if (currentClipId) existing.push({ id: currentClipId });
+    while (upNextQueue.length < QUEUE_SIZE && clips.length > 0) {
+      const pick = pickRandomClip(existing);
+      if (!pick) break;
+      upNextQueue.push(pick);
+      existing.push(pick);
+    }
+    renderQueue();
+  }
+
+  function pickNextClip() {
+    if (upNextQueue.length > 0) {
+      const next = upNextQueue.shift();
+      fillQueue(); // Refill after consuming
+      return next;
+    }
+    // Fallback if queue is empty
+    if (!clips.length) return null;
+    return clips[Math.floor(Math.random() * clips.length)];
+  }
+
+  // Update server with new clip (controller only)
+  async function setServerState(clip, mp4Url) {
+    try {
+      const formData = new FormData();
+      formData.append("login", login);
+      formData.append("clip_id", clip.id);
+      formData.append("clip_url", mp4Url);
+      formData.append("clip_title", clip.title || "");
+      formData.append("clip_curator", clip.creator_name || "");
+      formData.append("clip_duration", clip.duration || 30);
+      formData.append("clip_seq", clip.seq || 0);
+      if (clip.created_at) formData.append("clip_created_at", clip.created_at);
+
+      await fetch(`${API_BASE}/sync_state.php`, {
+        method: "POST",
+        body: formData
+      });
+      debugLog("Server state updated", "ok");
+    } catch (e) {
+      debugLog("Failed to update server: " + e.message, "err");
+    }
+  }
+
+  // Play a clip and seek to position - FAST START with robust loading
+  async function playClipAtPosition(clipId, mp4Url, position, duration, clipData) {
+    if (isSwitching && clipId === currentClipId) return;
+    isSwitching = true;
+
+    debugLog(`Loading: ${clipId?.substring(0,20) || 'unknown'}...`);
+    setSyncStatus("syncing", isSlowConnection ? "Buffering..." : "Loading...");
+
+    // Check if we have this preloaded
+    if (!mp4Url && clipId === preloadedClipId && preloadedUrl) {
+      mp4Url = preloadedUrl;
+      debugLog("Using preloaded URL", "ok");
+    }
+    // Always cleanup preload element on clip switch
+    preloadedClipId = null;
+    preloadedUrl = null;
+    if (preloadVideo) {
+      preloadVideo.oncanplaythrough = null;
+      preloadVideo.onerror = null;
+      preloadVideo.src = '';
+      preloadVideo.load();
+      preloadVideo.remove();
+      preloadVideo = null;
+    }
+
+    // If we don't have URL, fetch it
+    if (!mp4Url) {
+      mp4Url = await getMp4Url(clipId);
+      if (!mp4Url) {
+        debugLog("Failed to get MP4 URL", "err");
+        isSwitching = false;
+        // Try next clip
+        if (isController) setTimeout(controllerAdvance, 500);
+        return;
+      }
+    }
+
+    // Track history for Prev button (save outgoing clip before switching)
+    if (currentClipId && currentClipData) {
+      if (!clipHistory.length || clipHistory[clipHistory.length - 1].id !== currentClipId) {
+        clipHistory.push(currentClipData);
+        if (clipHistory.length > MAX_HISTORY) clipHistory.shift();
+      }
+    }
+
+    currentClipId = clipId;
+
+    // Store current clip data for history tracking
+    currentClipData = {
+      id: clipId,
+      clip_id: clipId,
+      seq: clipData?.seq || clipData?.clip_seq,
+      title: clipData?.clip_title || clipData?.title || '',
+      creator_name: clipData?.clip_curator || clipData?.creator_name || '',
+      game_name: clipData?.game_name || '',
+      duration: clipData?.clip_duration || clipData?.duration || duration || 30,
+      created_at: clipData?.created_at || ''
+    };
+
+    // Reset recovery state for new clip
+    stallRecoveryAttempts = 0;
+    lastPlaybackTime = 0;
+    lastPlaybackCheck = Date.now();
+    bufferingCount = 0; // Reset buffering count for new clip
+
+    // Clear old handlers
+    player.oncanplay = null;
+    player.oncanplaythrough = null;
+    player.onerror = null;
+    player.onloadedmetadata = null;
+    player.onloadeddata = null;
+
+    // Track if we've started playing
+    let hasStarted = false;
+
+    function startPlayback() {
+      if (hasStarted) return;
+      hasStarted = true;
+
+      // Clear all load handlers
+      player.onloadedmetadata = null;
+      player.oncanplay = null;
+      player.onloadeddata = null;
+      player.oncanplaythrough = null;
+
+      // Seek to current position if joining mid-clip
+      const seekTo = Math.min(position || 0, (duration || 30) - 0.5);
+      if (seekTo > 1) {
+        player.currentTime = seekTo;
+        debugLog(`Seek to ${seekTo.toFixed(1)}s`);
+      }
+
+      // Play immediately - don't wait for buffering
+      player.play().then(() => {
+        loadingOverlay.classList.add("hide");
+        updateHud(clipData);
+        showControls();
+        setSyncStatus("synced", "Synced");
+        isSwitching = false;
+        clipStartTime = Date.now(); // Start grace period
+        debugLog(`Playing!`, "ok");
+
+        // Reset skip votes and trigger flag for new clip
+        skipTriggered = false;
+        if (isController) resetSkipVotes();
+
+        // Start preloading next clip after a delay
+        if (isController) setTimeout(preloadNextClip, 3000);
+      }).catch(err => {
+        // Autoplay blocked - try muted and show unmute overlay
+        debugLog(`Autoplay blocked, trying muted`, "warn");
+        player.muted = true;
+        isMuted = true;
+        updateVolumeIcon();
+        player.play().then(() => {
+          loadingOverlay.classList.add("hide");
+          updateHud(clipData);
+          showControls();
+          setSyncStatus("synced", "Synced");
+          isSwitching = false;
+          clipStartTime = Date.now(); // Start grace period
+          // Show unmute overlay
+          unmuteOverlay.classList.remove("hide");
+          // Reset skip votes and trigger flag for new clip
+          skipTriggered = false;
+          if (isController) resetSkipVotes();
+          // Start preloading next clip after a delay
+          if (isController) setTimeout(preloadNextClip, 3000);
+        }).catch(e => {
+          debugLog(`Play failed: ${e.message}`, "err");
+          isSwitching = false;
+        });
+      });
+    }
+
+    // Multi-tier loading: try to start as soon as any readiness event fires
+    player.onloadedmetadata = () => {
+      if (!hasStarted && player.readyState >= 1) {
+        debugLog("Metadata loaded - attempting early start");
+        // Start a short timer: if canplay doesn't fire soon, force start
+        setTimeout(() => {
+          if (!hasStarted && player.readyState >= 2) {
+            debugLog("Early start from metadata + readyState 2");
+            startPlayback();
+          }
+        }, 500);
+      }
+    };
+
+    player.oncanplay = () => {
+      debugLog("Can play - starting");
+      startPlayback();
+    };
+
+    player.oncanplaythrough = () => {
+      if (!hasStarted) {
+        debugLog("Can play through - starting");
+        startPlayback();
+      }
+    };
+
+    player.onloadeddata = () => {
+      if (!hasStarted && player.readyState >= 2) {
+        debugLog("Loaded data - starting");
+        startPlayback();
+      }
+    };
+
+    player.onerror = () => {
+      if (hasStarted) return;
+      hasStarted = true;
+      debugLog("Video error - trying next", "err");
+      setSyncStatus("error", "Error");
+      isSwitching = false;
+      if (isController) setTimeout(controllerAdvance, 500);
+    };
+
+    // Set source and explicitly load
+    player.src = mp4Url;
+    player.load();
+
+    // Timeout: force play or advance if loading stalls
+    const loadTimeout = isSlowConnection ? 8000 : (isMobile ? 6000 : 4000);
+    setTimeout(() => {
+      if (isSwitching && currentClipId === clipId && !hasStarted) {
+        debugLog("Load timeout - forcing recovery", "warn");
+        hasStarted = true;
+        isSwitching = false;
+
+        // Try to force play anyway - sometimes video is ready but events didn't fire
+        if (player.readyState >= 1) {
+          debugLog(`readyState ${player.readyState}, forcing play`, "warn");
+          player.play().then(() => {
+            loadingOverlay.classList.add("hide");
+            updateHud(clipData);
+            showControls();
+            setSyncStatus("synced", "Synced");
+            debugLog("Forced play succeeded", "ok");
+          }).catch(() => {
+            debugLog("Forced play failed, advancing", "err");
+            if (isController) controllerAdvance();
+          });
+        } else {
+          debugLog(`readyState only ${player.readyState}, advancing`, "err");
+          if (isController) controllerAdvance();
+        }
+      }
+    }, loadTimeout);
+  }
+
+  // Controller: pick next clip and broadcast
+  async function controllerAdvance() {
+    if (!isController) return;
+    debugLog("Controller advancing to next clip...");
+
+    const next = pickNextClip();
+    if (!next) {
+      debugLog("No clips available", "err");
+      return;
+    }
+
+    const mp4Url = await getMp4Url(next.id);
+    if (!mp4Url) {
+      debugLog("Failed to get MP4 for next clip", "err");
+      // Try another clip
+      setTimeout(controllerAdvance, 1000);
+      return;
+    }
+
+    // Update server state (this broadcasts to all viewers)
+    await setServerState(next, mp4Url);
+
+    // Play locally
+    await playClipAtPosition(next.id, mp4Url, 0, next.duration || 30, {
+      clip_title: next.title,
+      clip_curator: next.creator_name,
+      clip_duration: next.duration,
+      game_name: next.game_name,
+      seq: next.seq,
+      created_at: next.created_at
+    });
+  }
+
+  // Poll sync state
+  async function pollSyncState() {
+    try {
+      const res = await fetch(`${API_BASE}/sync_state.php?login=${encodeURIComponent(login)}`, { cache: "no-store" });
+      const data = await res.json();
+
+      if (!data.has_state) {
+        // No state - become controller
+        if (!isController) {
+          isController = true;
+          debugLog("Becoming controller", "ok");
+          startControllerHeartbeat();
+          controllerAdvance();
+        }
+        return;
+      }
+
+      // Check if controller is stale (hasn't updated in 15+ seconds)
+      // This means the controller left and we should take over
+      if (data.controller_stale && !isController) {
+        debugLog(`Controller stale (${data.stale_seconds}s) - taking over`, "warn");
+        isController = true;
+        startControllerHeartbeat();
+        // Continue playing current clip if it's still running
+        if (!data.clip_ended && data.clip_id === currentClipId) {
+          debugLog("Continuing current clip as new controller", "ok");
+          // Just start managing from here
+        } else {
+          controllerAdvance();
+        }
+        return;
+      }
+
+      // Check if clip ended (server-side)
+      if (data.clip_ended) {
+        if (pendingRequest) return; // Let pending request handle clip change
+        if (isController && canSkipClip()) {
+          // Controller advances to next clip
+          debugLog("Server says clip ended, advancing");
+          controllerAdvance();
+        }
+        // Non-controller will get new state on next poll
+        return;
+      }
+
+      // Check if we need to switch clips
+      if (data.clip_id !== currentClipId) {
+        debugLog(`New clip from server: ${data.clip_id.substring(0,15)}`, "warn");
+        // Clear request banner if showing
+        hideRequestBanner();
+        // Immediately reset skip state when new clip detected
+        mySkipVote = false;
+        skipVotes = 0;
+        skipTriggered = false;
+        updateViewerUI();
+        await playClipAtPosition(
+          data.clip_id,
+          data.clip_url,
+          data.current_position,
+          data.clip_duration,
+          data
+        );
+        return;
+      }
+
+      // Check if we're out of sync (more than 3 seconds off)
+      const serverPos = data.current_position;
+      const localPos = player.currentTime;
+      const drift = Math.abs(serverPos - localPos);
+
+      if (drift > 3 && !player.paused && !isSwitching) {
+        debugLog(`Sync drift: ${drift.toFixed(1)}s - correcting`, "warn");
+        setSyncStatus("syncing", "Re-syncing...");
+        player.currentTime = serverPos;
+        setTimeout(() => setSyncStatus("synced", "Synced"), 500);
+      }
+
+      // Controller checks for skip commands from other viewers
+      if (isController && canSkipClip()) {
+        checkForSkipCommands();
+      }
+
+    } catch (e) {
+      debugLog("Poll error: " + e.message, "err");
+      setSyncStatus("error", "Connection lost");
+    }
+  }
+
+  // Check for skip commands (controller only)
+  async function checkForSkipCommands() {
+    try {
+      const res = await fetch(`${API_BASE}/cliptv_command.php?login=${encodeURIComponent(login)}`, { cache: "no-store" });
+      const data = await res.json();
+      if (data.has_command && data.command_type === 'skip') {
+        debugLog("Skip command received from viewer", "ok");
+        controllerAdvance();
+      }
+    } catch (e) {
+      // Silently fail - not critical
+    }
+  }
+
+  // Video ended - controller advances
+  player.onended = () => {
+    debugLog("Video ended event fired");
+
+    // Verify the video actually played for a reasonable time
+    if (!canSkipClip()) {
+      debugLog("Ignoring premature ended event", "warn");
+      return;
+    }
+
+    // Also verify we're near the end of the video
+    const duration = player.duration || 30;
+    const currentTime = player.currentTime || 0;
+    if (currentTime < duration - 2 && currentTime < 5) {
+      // Ended too early and haven't played much - likely a glitch
+      debugLog(`Ignoring ended at ${currentTime.toFixed(1)}s of ${duration.toFixed(1)}s`, "warn");
+      return;
+    }
+
+    debugLog("Video legitimately ended");
+    if (pendingRequest) return; // Let pending request handle clip change
+    if (isController) {
+      controllerAdvance();
+    }
+  };
+
+  // Init - FAST parallel loading
+  // Handle orientation changes
+  let currentOrientation = window.orientation || screen.orientation?.angle || 0;
+
+  function handleOrientationChange() {
+    const newOrientation = window.orientation || screen.orientation?.angle || 0;
+    if (newOrientation !== currentOrientation) {
+      debugLog(`Orientation changed: ${currentOrientation} -> ${newOrientation}`, "ok");
+      currentOrientation = newOrientation;
+      showControls();
+      updateViewportHeight();
+    }
+  }
+
+  window.addEventListener('orientationchange', () => setTimeout(handleOrientationChange, 200));
+  if (screen.orientation) {
+    screen.orientation.addEventListener('change', () => setTimeout(handleOrientationChange, 200));
+  }
+
+  // ===== VIEWER TRACKING & SKIP VOTING =====
+
+  function updateViewerUI() {
+    viewerNum.textContent = viewerCount;
+    if (viewerCount === 1) {
+      skipStatus.textContent = '';
+    } else {
+      skipStatus.textContent = ` ${skipVotes}/${skipNeeded}`;
+    }
+    skipBtn.classList.toggle('voted', mySkipVote);
+  }
+
+  async function sendHeartbeat(wantsSkip = null) {
+    try {
+      const formData = new FormData();
+      formData.append('login', login);
+      formData.append('viewer_id', viewerId);
+      if (currentClipId) formData.append('clip_id', currentClipId);
+      if (wantsSkip !== null) formData.append('skip', wantsSkip ? '1' : '0');
+
+      const res = await fetch(`${API_BASE}/cliptv_viewers.php`, {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+
+      if (data.ok) {
+        viewerCount = data.viewer_count || 1;
+        skipVotes = data.skip_votes || 0;
+        skipNeeded = data.skip_needed || 1;
+        // Don't let server override local skip state during reset window
+        // (prevents race condition where heartbeat returns stale my_skip_vote)
+        if (Date.now() - skipResetAt > 5000) {
+          mySkipVote = data.my_skip_vote || false;
+        }
+        updateViewerUI();
+
+        // Check if majority wants to skip - ANY viewer can trigger this
+        if (data.should_skip && canSkipClip()) {
+          debugLog("Majority voted to skip!", "ok");
+          skipBtn.classList.add('skipping');
+          setTimeout(() => skipBtn.classList.remove('skipping'), 500);
+          // Trigger skip by updating sync state - this notifies all viewers
+          triggerSkip();
+        }
+      }
+    } catch (e) {
+      debugLog("Heartbeat error: " + e.message, "err");
+    }
+    // Check for clip requests from other viewers
+    checkClipRequests();
+  }
+
+  function resetSkipVotes() {
+    // Immediately clear local state for instant UI feedback
+    mySkipVote = false;
+    skipVotes = 0;
+    skipTriggered = false;
+    skipResetAt = Date.now();
+    updateViewerUI();
+
+    // Fire-and-forget server reset (don't await)
+    const formData = new FormData();
+    formData.append('login', login);
+    fetch(`${API_BASE}/cliptv_skip_reset.php`, {
+      method: 'POST',
+      body: formData
+    }).catch(() => {}); // Silently ignore errors
+  }
+
+  // Skip triggered by any viewer when majority reached
+  let skipTriggered = false;
+  let skipResetAt = 0; // Timestamp of last skip reset (prevents heartbeat race condition)
+  async function triggerSkip() {
+    // Prevent multiple skip triggers for same clip
+    if (skipTriggered) return;
+    skipTriggered = true;
+
+    // Immediately clear local vote state for instant UI feedback
+    mySkipVote = false;
+    skipVotes = 0;
+    skipResetAt = Date.now();
+    updateViewerUI();
+
+    if (isController) {
+      // Controller handles the skip directly
+      controllerAdvance();
+    } else {
+      // Non-controller: fire-and-forget skip command (no await for instant response)
+      const formData = new FormData();
+      formData.append('login', login);
+      formData.append('command_type', 'skip');
+      formData.append('nonce', Date.now().toString());
+      fetch(`${API_BASE}/cliptv_command.php`, {
+        method: 'POST',
+        body: formData
+      }).then(() => {
+        debugLog("Skip command sent to server", "ok");
+      }).catch(e => {
+        debugLog("Failed to send skip command: " + e.message, "err");
+      });
+    }
+  }
+
+  // Skip button handler - unified for touch and click
+  function handleSkipButton(e) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!canSkipClip()) {
+      debugLog("Skip blocked - clip just started", "warn");
+      return;
+    }
+
+    // Toggle skip vote
+    const newVote = !mySkipVote;
+    mySkipVote = newVote;
+    skipBtn.classList.toggle('voted', newVote);
+
+    // Send to server
+    sendHeartbeat(newVote);
+    debugLog(`Skip vote: ${newVote ? 'yes' : 'cancelled'}`, "ok");
+
+    // Keep controls visible
+    showControls();
+  }
+
+  // Use touchend for faster response on mobile, click for desktop
+  if ('ontouchstart' in window) {
+    skipBtn.addEventListener('touchend', handleSkipButton, { passive: false });
+    skipBtn.addEventListener('click', (e) => e.preventDefault());
+  } else {
+    skipBtn.addEventListener('click', handleSkipButton);
+  }
+
+  // Vote button handlers
+  function handleVoteClick(voteType, e) {
+    e.preventDefault();
+    e.stopPropagation();
+    submitVote(voteType);
+    showControls();
+  }
+  if ('ontouchstart' in window) {
+    voteUp.addEventListener('touchend', (e) => handleVoteClick('like', e), { passive: false });
+    voteDown.addEventListener('touchend', (e) => handleVoteClick('dislike', e), { passive: false });
+    voteUp.addEventListener('click', (e) => e.preventDefault());
+    voteDown.addEventListener('click', (e) => e.preventDefault());
+  } else {
+    voteUp.addEventListener('click', (e) => handleVoteClick('like', e));
+    voteDown.addEventListener('click', (e) => handleVoteClick('dislike', e));
+  }
+
+  // ===== REMOTE CONTROL =====
+  const remoteBtn = document.getElementById('remoteBtn');
+  const remoteSheet = document.getElementById('remoteSheet');
+  const sheetBackdrop = document.getElementById('sheetBackdrop');
+  const gotoInput = document.getElementById('gotoInput');
+  const gotoBtn = document.getElementById('gotoBtn');
+  const clipPreview = document.getElementById('clipPreview');
+  const browseSearch = document.getElementById('browseSearch');
+  const clipList = document.getElementById('clipList');
+  const categorySelect = document.getElementById('categorySelect');
+  let remoteOpen = false;
+  let browseClips = []; // Sorted copy for browsing
+  let browseRendered = false;
+
+  function toggleRemote() {
+    remoteOpen = !remoteOpen;
+    remoteSheet.classList.toggle('open', remoteOpen);
+    remoteBtn.classList.toggle('active', remoteOpen);
+    if (remoteOpen) {
+      populateBrowse();
+      populateCategories();
+      renderQueue();
+    }
+  }
+
+  function closeRemote() {
+    remoteOpen = false;
+    remoteSheet.classList.remove('open');
+    remoteBtn.classList.remove('active');
+  }
+
+  // Remote button click
+  remoteBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleRemote();
+  });
+
+  // Close on backdrop click
+  sheetBackdrop.addEventListener('click', closeRemote);
+
+  // Tab switching
+  document.querySelectorAll('.sheet-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.sheet-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      const target = tab.dataset.tab;
+      document.getElementById('tab' + target.charAt(0).toUpperCase() + target.slice(1)).classList.add('active');
+      // Render history when switching to that tab
+      if (target === 'history') renderHistory();
+    });
+  });
+
+  // === Go To Clip ===
+  async function lookupClip(seq) {
+    gotoBtn.disabled = true;
+    gotoBtn.textContent = '...';
+    clipPreview.className = 'clip-preview empty';
+    clipPreview.textContent = 'Looking up clip...';
+
+    try {
+      const res = await fetch(`${API_BASE}/clip_info.php?login=${encodeURIComponent(login)}&seq=${seq}`, { cache: 'no-store' });
+      if (!res.ok) {
+        clipPreview.textContent = `Clip #${seq} not found`;
+        return;
+      }
+      const clip = await res.json();
+      if (!clip || !clip.clip_id) {
+        clipPreview.textContent = `Clip #${seq} not found`;
+        return;
+      }
+
+      clipPreview.className = 'clip-preview';
+      const dur = clip.duration ? (clip.duration < 60 ? `${Math.round(clip.duration)}s` : `${Math.floor(clip.duration/60)}:${(Math.round(clip.duration)%60).toString().padStart(2,'0')}`) : '';
+      clipPreview.innerHTML = `
+        <div class="preview-title">#${clip.seq} - ${escapeHtml(clip.title || 'Untitled')}</div>
+        <div class="preview-meta">
+          ${dur ? `<span class="pm-dur">${dur}</span>` : ''}
+          ${clip.game_name ? `<span class="pm-game">${escapeHtml(clip.game_name)}</span>` : ''}
+          ${clip.creator_name ? `<span class="pm-clip">by ${escapeHtml(clip.creator_name)}</span>` : ''}
+        </div>
+        <button class="play-btn" id="previewPlayBtn">▶ Play</button>
+      `;
+
+      const playBtn = document.getElementById('previewPlayBtn');
+      if (playBtn) {
+        playBtn.addEventListener('click', () => {
+          requestClip({
+            id: clip.clip_id,
+            seq: clip.seq,
+            title: clip.title,
+            duration: clip.duration,
+            creator_name: clip.creator_name,
+            game_name: clip.game_name,
+            created_at: clip.created_at
+          });
+          closeRemote();
+        });
+      }
+    } catch (e) {
+      clipPreview.textContent = 'Error looking up clip';
+    } finally {
+      gotoBtn.disabled = false;
+      gotoBtn.textContent = 'Go';
+    }
+  }
+
+  gotoBtn.addEventListener('click', () => {
+    const seq = parseInt(gotoInput.value);
+    if (seq > 0) lookupClip(seq);
+  });
+  gotoInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      const seq = parseInt(gotoInput.value);
+      if (seq > 0) lookupClip(seq);
+    }
+  });
+
+  // === Browse/Search ===
+  function populateBrowse() {
+    if (!clips.length) {
+      clipList.innerHTML = '<div class="clip-list-status">No clips loaded yet</div>';
+      return;
+    }
+    // Sort by seq descending (newest first)
+    browseClips = [...clips].sort((a, b) => (b.seq || 0) - (a.seq || 0));
+    renderClipList(browseClips);
+    browseRendered = true;
+  }
+
+  // searchResults = true when clips come from server search (not local pool)
+  let lastRenderedList = [];
+  function renderClipList(list, isSearchResults = false) {
+    lastRenderedList = list;
+    const maxShow = 100;
+    const toShow = list.slice(0, maxShow);
+
+    if (!toShow.length) {
+      clipList.innerHTML = '<div class="clip-list-status">No clips match your search</div>';
+      return;
+    }
+
+    clipList.innerHTML = toShow.map(c => {
+      const dur = c.duration ? (c.duration < 60 ? `${Math.round(c.duration)}s` : `${Math.floor(c.duration/60)}:${(Math.round(c.duration)%60).toString().padStart(2,'0')}`) : '';
+      return `
+        <div class="clip-row" data-clip-id="${c.id}" data-seq="${c.seq || 0}">
+          <span class="cr-seq">#${c.seq || '?'}</span>
+          <div class="cr-info">
+            <div class="cr-title">${escapeHtml(c.title || 'Untitled')}</div>
+            <div class="cr-meta">
+              ${dur ? `<span class="cm-dur">${dur}</span> ` : ''}
+              ${c.game_name ? `<span class="cm-game">${escapeHtml(c.game_name)}</span>` : ''}
+            </div>
+          </div>
+          <button class="cr-play">▶</button>
+        </div>
+      `;
+    }).join('');
+
+    if (list.length > maxShow) {
+      clipList.innerHTML += `<div class="clip-list-status">${list.length - maxShow} more clips - refine your search</div>`;
+    }
+
+    // Attach play handlers
+    clipList.querySelectorAll('.cr-play').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const row = btn.closest('.clip-row');
+        const clipId = row.dataset.clipId;
+        const seq = parseInt(row.dataset.seq) || 0;
+        let clip = clips.find(c => c.id === clipId);
+        if (!clip) {
+          clip = lastRenderedList.find(c => c.id === clipId);
+        }
+        if (clip) {
+          requestClip(clip);
+          closeRemote();
+        }
+      });
+    });
+  }
+
+  // Search with debounce - uses server-side search for full database coverage
+  let searchTimeout = null;
+  browseSearch.addEventListener('input', () => {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(async () => {
+      const q = browseSearch.value.trim();
+      if (!q) {
+        renderClipList(browseClips);
+        return;
+      }
+      clipList.innerHTML = '<div class="clip-list-status">Searching...</div>';
+      try {
+        const res = await fetch(
+          `${API_BASE}/api/clip_search.php?login=${encodeURIComponent(login)}&q=${encodeURIComponent(q)}&limit=50`,
+          { cache: 'no-store' }
+        );
+        const data = await res.json();
+        if (data.clips && data.clips.length > 0) {
+          renderClipList(data.clips, true);
+        } else {
+          clipList.innerHTML = '<div class="clip-list-status">No clips match your search</div>';
+        }
+      } catch (e) {
+        clipList.innerHTML = '<div class="clip-list-status">Search failed</div>';
+      }
+    }, 300);
+  });
+
+  // === Up Next Queue ===
+  const queueList = document.getElementById('queueList');
+
+  function renderQueue() {
+    if (!upNextQueue.length) {
+      queueList.innerHTML = '<div class="clip-list-status">Queue is empty - waiting for clips to load</div>';
+      return;
+    }
+    queueList.innerHTML = upNextQueue.map((c, i) => {
+      const dur = c.duration ? (c.duration < 60 ? `${Math.round(c.duration)}s` : `${Math.floor(c.duration/60)}:${(Math.round(c.duration)%60).toString().padStart(2,'0')}`) : '';
+      return `
+        <div class="clip-row" data-queue-idx="${i}" data-clip-id="${c.id}">
+          <span class="cr-pos">${i + 1}</span>
+          <div class="cr-info">
+            <div class="cr-title">#${c.seq || '?'} - ${escapeHtml(c.title || 'Untitled')}</div>
+            <div class="cr-meta">
+              ${dur ? `<span class="cm-dur">${dur}</span> ` : ''}
+              ${c.game_name ? `<span class="cm-game">${escapeHtml(c.game_name)}</span>` : ''}
+            </div>
+          </div>
+          <button class="cr-play" data-queue-idx="${i}">▶</button>
+          <button class="cr-remove" data-queue-idx="${i}">✕</button>
+        </div>
+      `;
+    }).join('');
+
+    // Attach handlers
+    queueList.querySelectorAll('.cr-play').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const idx = parseInt(btn.dataset.queueIdx);
+        const clip = upNextQueue[idx];
+        if (clip) {
+          // Remove this and all clips before it from queue
+          upNextQueue.splice(0, idx + 1);
+          fillQueue();
+          requestClip(clip);
+          closeRemote();
+        }
+      });
+    });
+    queueList.querySelectorAll('.cr-remove').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const idx = parseInt(btn.dataset.queueIdx);
+        upNextQueue.splice(idx, 1);
+        fillQueue();
+      });
+    });
+  }
+
+  document.getElementById('queueReshuffle').addEventListener('click', () => {
+    upNextQueue = [];
+    fillQueue();
+  });
+
+  // === Previous / History ===
+  const historyList = document.getElementById('historyList');
+
+  function renderHistory() {
+    if (!clipHistory.length) {
+      historyList.innerHTML = '<div class="clip-list-status">No clips played yet</div>';
+      return;
+    }
+    // Show most recent first (reverse), limit to last 20
+    const recent = [...clipHistory].reverse();
+    historyList.innerHTML = recent.map((c, i) => {
+      const dur = c.duration ? (c.duration < 60 ? `${Math.round(c.duration)}s` : `${Math.floor(c.duration/60)}:${(Math.round(c.duration)%60).toString().padStart(2,'0')}`) : '';
+      return `
+        <div class="clip-row" data-history-idx="${i}" data-clip-id="${c.id}">
+          <span class="cr-pos" style="color:#60a5fa">${i === 0 ? '⏮' : i + 1}</span>
+          <div class="cr-info">
+            <div class="cr-title">#${c.seq || '?'} - ${escapeHtml(c.title || 'Untitled')}</div>
+            <div class="cr-meta">
+              ${dur ? `<span class="cm-dur">${dur}</span> ` : ''}
+              ${c.game_name ? `<span class="cm-game">${escapeHtml(c.game_name)}</span>` : ''}
+            </div>
+          </div>
+          <button class="cr-play">▶</button>
+        </div>
+      `;
+    }).join('');
+
+    // Attach play handlers
+    historyList.querySelectorAll('.cr-play').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const row = btn.closest('.clip-row');
+        const idx = parseInt(row.dataset.historyIdx);
+        const clip = [...clipHistory].reverse()[idx];
+        if (clip) {
+          requestClip(clip);
+          closeRemote();
+        }
+      });
+    });
+  }
+
+  // === Controls ===
+  document.getElementById('ctrlSkip').addEventListener('click', () => {
+    if (canSkipClip()) {
+      if (isController) {
+        controllerAdvance();
+      } else {
+        const newVote = !mySkipVote;
+        mySkipVote = newVote;
+        sendHeartbeat(newVote);
+      }
+    }
+  });
+
+  document.getElementById('ctrlPrev').addEventListener('click', () => {
+    if (!clipHistory.length) {
+      debugLog("No previous clip in history", "warn");
+      return;
+    }
+    const prevClip = clipHistory.pop();
+    requestClip(prevClip);
+  });
+
+  document.getElementById('ctrlShuffle').addEventListener('click', () => {
+    // Shuffle the clips array
+    for (let i = clips.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [clips[i], clips[j]] = [clips[j], clips[i]];
+    }
+    debugLog("Clips shuffled", "ok");
+    if (browseRendered) populateBrowse();
+  });
+
+  // Category filter
+  function populateCategories() {
+    const games = new Map();
+    clips.forEach(c => {
+      if (c.game_name && c.game_id) {
+        if (!games.has(c.game_id)) games.set(c.game_id, { name: c.game_name, count: 0 });
+        games.get(c.game_id).count++;
+      }
+    });
+    const sorted = [...games.entries()].sort((a, b) => b[1].count - a[1].count);
+    categorySelect.innerHTML = '<option value="">All Categories</option>';
+    sorted.forEach(([id, g]) => {
+      const opt = document.createElement('option');
+      opt.value = id;
+      opt.textContent = `${g.name} (${g.count})`;
+      categorySelect.appendChild(opt);
+    });
+  }
+
+  categorySelect.addEventListener('change', () => {
+    const gameId = categorySelect.value;
+    activeCategoryFilter = gameId;
+    // Regenerate queue with new filter
+    upNextQueue = [];
+    fillQueue();
+  });
+
+  // === Clip Request System ===
+  // When a viewer requests a clip, all other viewers see a countdown notification.
+  // After REQUEST_TIMEOUT seconds (or if someone clicks Play Now), the clip plays.
+
+  async function requestClip(clip) {
+    // Solo viewer? Play immediately, no countdown needed
+    if (viewerCount <= 1) {
+      await playSpecificClip(clip);
+      return;
+    }
+
+    // Cancel existing request
+    if (pendingRequest) {
+      clearTimeout(pendingRequest.timer);
+      pendingRequest = null;
+    }
+
+    const clipId = clip.id || clip.clip_id;
+    debugLog(`Requesting clip #${clip.seq || '?'}`, "ok");
+
+    // Post request to server so other viewers see it
+    try {
+      const formData = new FormData();
+      formData.append('login', login);
+      formData.append('clip_id', clipId);
+      formData.append('clip_seq', clip.seq || 0);
+      formData.append('clip_title', clip.title || '');
+      formData.append('clip_game', clip.game_name || '');
+      formData.append('clip_creator', clip.creator_name || '');
+      formData.append('clip_duration', clip.duration || 30);
+      formData.append('requester_id', viewerId);
+      fetch(`${API_BASE}/cliptv_request.php`, {
+        method: 'POST',
+        body: formData
+      }).catch(() => {});
+    } catch (e) {
+      debugLog("Failed to post request: " + e.message, "err");
+    }
+
+    // Show local countdown banner
+    showRequestBanner(clip, REQUEST_TIMEOUT, true);
+
+    // Set timer to play after countdown
+    pendingRequest = {
+      clip,
+      startTime: Date.now(),
+      timer: setTimeout(async () => {
+        hideRequestBanner();
+        pendingRequest = null;
+        await playSpecificClip(clip);
+        clearServerRequest();
+      }, REQUEST_TIMEOUT * 1000)
+    };
+  }
+
+  function showRequestBanner(data, remainingSeconds, isRequester = false) {
+    const banner = document.getElementById('clipRequestBanner');
+    const reqTitle = document.getElementById('reqTitle');
+    const reqMeta = document.getElementById('reqMeta');
+    const reqCountdown = document.getElementById('reqCountdown');
+    const reqProgress = document.getElementById('reqProgress');
+    const reqCancel = document.getElementById('reqCancel');
+
+    const seq = data.seq || data.clip_seq || '?';
+    const title = data.title || data.clip_title || 'Untitled';
+    const game = data.game_name || data.clip_game || '';
+    const dur = data.duration || data.clip_duration || 0;
+    const durStr = dur ? (dur < 60 ? `${Math.round(dur)}s` : `${Math.floor(dur/60)}:${(Math.round(dur)%60).toString().padStart(2,'0')}`) : '';
+
+    reqTitle.textContent = '\u{1F4FA} #' + seq + ' \u2014 ' + title;
+    reqMeta.innerHTML = [
+      game ? `<span class="rm-game">${escapeHtml(game)}</span>` : '',
+      durStr ? `<span class="rm-dur">${durStr}</span>` : ''
+    ].filter(Boolean).join(' \u2022 ');
+
+    // Show cancel button only for requester
+    reqCancel.style.display = isRequester ? '' : 'none';
+
+    // Store clip data for Play Now button
+    requestBannerClip = {
+      id: data.id || data.clip_id,
+      clip_id: data.clip_id || data.id,
+      seq: data.seq || data.clip_seq,
+      title: data.title || data.clip_title,
+      game_name: data.game_name || data.clip_game,
+      creator_name: data.creator_name || data.clip_creator,
+      duration: data.duration || data.clip_duration,
+      created_at: data.created_at
+    };
+
+    // Countdown
+    let remaining = Math.ceil(remainingSeconds);
+    reqCountdown.textContent = remaining + 's';
+    reqProgress.style.width = `${(remaining / REQUEST_TIMEOUT) * 100}%`;
+
+    // Update countdown every second
+    if (banner._countdownTimer) clearInterval(banner._countdownTimer);
+    banner._countdownTimer = setInterval(() => {
+      remaining--;
+      if (remaining <= 0) {
+        clearInterval(banner._countdownTimer);
+        reqCountdown.textContent = 'Now!';
+        reqProgress.style.width = '0%';
+      } else {
+        reqCountdown.textContent = remaining + 's';
+        reqProgress.style.width = `${(remaining / REQUEST_TIMEOUT) * 100}%`;
+      }
+    }, 1000);
+
+    activeRequestId = data.id || data.clip_id;
+    banner.classList.add('show');
+  }
+
+  function hideRequestBanner() {
+    const banner = document.getElementById('clipRequestBanner');
+    banner.classList.remove('show');
+    if (banner._countdownTimer) clearInterval(banner._countdownTimer);
+    activeRequestId = null;
+    requestBannerClip = null;
+  }
+
+  function clearServerRequest() {
+    const formData = new FormData();
+    formData.append('login', login);
+    formData.append('action', 'clear');
+    fetch(`${API_BASE}/cliptv_request.php`, {
+      method: 'POST',
+      body: formData
+    }).catch(() => {});
+  }
+
+  // Poll for clip requests from other viewers
+  async function checkClipRequests() {
+    if (pendingRequest) return; // I'm the requester, skip polling
+    try {
+      const res = await fetch(`${API_BASE}/cliptv_request.php?login=${encodeURIComponent(login)}`, { cache: 'no-store' });
+      const data = await res.json();
+      if (data.has_request && data.requester_id !== viewerId) {
+        const remaining = Math.max(0, REQUEST_TIMEOUT - data.age_seconds);
+        if (remaining > 0.5) {
+          // Show notification if not already showing for this clip
+          if (activeRequestId !== data.clip_id) {
+            showRequestBanner(data, remaining, false);
+          }
+        } else {
+          hideRequestBanner();
+        }
+      } else if (!data.has_request && activeRequestId) {
+        hideRequestBanner();
+      }
+    } catch (e) {
+      // Silently fail
+    }
+  }
+
+  // Play Now button - any viewer can click to play immediately
+  document.getElementById('reqPlayNow').addEventListener('click', async () => {
+    if (pendingRequest) {
+      // I'm the requester - play immediately
+      clearTimeout(pendingRequest.timer);
+      const clip = pendingRequest.clip;
+      pendingRequest = null;
+      hideRequestBanner();
+      await playSpecificClip(clip);
+      clearServerRequest();
+    } else if (requestBannerClip) {
+      // I'm another viewer - play the requested clip now
+      const clip = requestBannerClip;
+      hideRequestBanner();
+      await playSpecificClip(clip);
+      clearServerRequest();
+    }
+  });
+
+  // Cancel button - only visible to requester
+  document.getElementById('reqCancel').addEventListener('click', () => {
+    if (pendingRequest) {
+      clearTimeout(pendingRequest.timer);
+      pendingRequest = null;
+      hideRequestBanner();
+      clearServerRequest();
+      debugLog("Request cancelled", "ok");
+    }
+  });
+
+  // === Back Button ===
+  document.getElementById('backBtn').addEventListener('click', () => {
+    if (!clipHistory.length) {
+      debugLog("No previous clip in history", "warn");
+      return;
+    }
+    const prevClip = clipHistory.pop();
+    requestClip(prevClip);
+  });
+
+  // === Download Button ===
+  document.getElementById('dlBtn').addEventListener('click', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const dlBtn = document.getElementById('dlBtn');
+    const src = player.src;
+    if (!src) return;
+
+    const labelSpan = dlBtn.querySelector('span');
+    dlBtn.classList.add('downloading');
+    if (labelSpan) labelSpan.textContent = 'Downloading...';
+
+    // Build filename from current clip info
+    const seq = currentClipData?.seq || '';
+    const title = (currentClipData?.title || 'clip').replace(/[^a-zA-Z0-9_\- ]/g, '').trim().substring(0, 60);
+    const filename = seq ? `clip_${seq}_${title}.mp4` : `${title}.mp4`;
+
+    try {
+      const resp = await fetch(src);
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch (err) {
+      debugLog("Download fetch failed, falling back to window.open: " + err, "warn");
+      window.open(src, '_blank');
+    }
+
+    if (labelSpan) labelSpan.textContent = 'Download';
+    dlBtn.classList.remove('downloading');
+  });
+
+  // === Copy Link Button ===
+  document.getElementById('copyLinkBtn').addEventListener('click', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const btn = document.getElementById('copyLinkBtn');
+    const clipId = currentClipData?.id || currentClipId;
+    if (!clipId) return;
+
+    const clipUrl = `https://clips.twitch.tv/${clipId}`;
+    const labelSpan = btn.querySelector('span');
+
+    try {
+      await navigator.clipboard.writeText(clipUrl);
+      btn.classList.add('copied');
+      if (labelSpan) labelSpan.textContent = 'Copied!';
+      setTimeout(() => {
+        btn.classList.remove('copied');
+        if (labelSpan) labelSpan.textContent = 'Copy Clip Link';
+      }, 2000);
+    } catch (err) {
+      // Fallback for older browsers / insecure contexts
+      const ta = document.createElement('textarea');
+      ta.value = clipUrl;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      btn.classList.add('copied');
+      if (labelSpan) labelSpan.textContent = 'Copied!';
+      setTimeout(() => {
+        btn.classList.remove('copied');
+        if (labelSpan) labelSpan.textContent = 'Copy Clip Link';
+      }, 2000);
+    }
+  });
+
+  // === Share ClipTV Button ===
+  document.getElementById('shareClipTVBtn').addEventListener('click', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const btn = document.getElementById('shareClipTVBtn');
+    const tvUrl = `${window.location.origin}/tv/${login}`;
+    const labelSpan = btn.querySelector('span');
+
+    try {
+      await navigator.clipboard.writeText(tvUrl);
+      btn.classList.add('copied');
+      if (labelSpan) labelSpan.textContent = 'Copied!';
+      setTimeout(() => {
+        btn.classList.remove('copied');
+        if (labelSpan) labelSpan.textContent = 'Share ClipTV';
+      }, 2000);
+    } catch (err) {
+      const ta = document.createElement('textarea');
+      ta.value = tvUrl;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      btn.classList.add('copied');
+      if (labelSpan) labelSpan.textContent = 'Copied!';
+      setTimeout(() => {
+        btn.classList.remove('copied');
+        if (labelSpan) labelSpan.textContent = 'Share ClipTV';
+      }, 2000);
+    }
+  });
+
+  // === Chat System ===
+  const chatPanel = document.getElementById('chatPanel');
+  const chatMessages = document.getElementById('chatMessages');
+  const chatInput = document.getElementById('chatInput');
+  const chatSend = document.getElementById('chatSend');
+  const chatBadge = document.getElementById('chatBadge');
+  const chatOnline = document.getElementById('chatOnline');
+  const chatBtn = document.getElementById('chatBtn');
+  const chatInputArea = document.getElementById('chatInputArea');
+  const chatLoginPrompt = document.getElementById('chatLoginPrompt');
+
+  let chatOpen = false;
+  let chatLoggedIn = false;
+  let chatLastId = 0;
+  let chatPollInterval = null;
+  let chatUnread = 0;
+  let chatSendCooldown = false;
+
+  const CHAT_COLORS = ['#ff6b6b', '#ffd93d', '#6bcb77', '#4d96ff', '#ff922b', '#a78bfa', '#f472b6', '#34d399', '#22d3ee', '#fb923c', '#e879f9', '#2dd4bf'];
+
+  function getChatColor(username) {
+    let hash = 0;
+    for (let i = 0; i < username.length; i++) {
+      hash = ((hash << 5) - hash) + username.charCodeAt(i);
+      hash |= 0;
+    }
+    return CHAT_COLORS[Math.abs(hash) % CHAT_COLORS.length];
+  }
+
+  function toggleChat() {
+    chatOpen = !chatOpen;
+    chatPanel.classList.toggle('open', chatOpen);
+    chatBtn.classList.toggle('active', chatOpen);
+    if (chatOpen) {
+      chatUnread = 0;
+      updateChatBadge();
+      pollChat(); // Fetch immediately
+      startChatPoll();
+      // Scroll to bottom
+      setTimeout(() => { chatMessages.scrollTop = chatMessages.scrollHeight; }, 100);
+    } else {
+      stopChatPoll();
+    }
+  }
+
+  chatBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleChat();
+    showControls();
+  });
+
+  document.getElementById('chatClose').addEventListener('click', () => {
+    chatOpen = false;
+    chatPanel.classList.remove('open');
+    chatBtn.classList.remove('active');
+    stopChatPoll();
+  });
+
+  let chatBgPollInterval = null; // Slow background poll for badge updates
+
+  function startChatPoll() {
+    stopChatPoll();
+    chatPollInterval = setInterval(pollChat, 3000);
+    // Stop background poll when active poll is running
+    if (chatBgPollInterval) { clearInterval(chatBgPollInterval); chatBgPollInterval = null; }
+  }
+
+  function stopChatPoll() {
+    if (chatPollInterval) {
+      clearInterval(chatPollInterval);
+      chatPollInterval = null;
+    }
+    // Resume background poll when chat is closed
+    if (!chatBgPollInterval) {
+      chatBgPollInterval = setInterval(pollChat, 10000);
+    }
+  }
+
+  // Start background poll immediately (picks up messages for badge)
+  chatBgPollInterval = setInterval(pollChat, 10000);
+  // Initial fetch after short delay (let init() complete first)
+  setTimeout(pollChat, 2000);
+
+  async function pollChat() {
+    try {
+      const url = `${API_BASE}/cliptv_chat.php?login=${encodeURIComponent(login)}&after=${chatLastId}`;
+      const res = await fetch(url, { cache: 'no-store', credentials: 'same-origin' });
+      const data = await res.json();
+
+      chatLoggedIn = !!data.logged_in;
+
+      // Show/hide input vs login prompt
+      if (chatLoggedIn) {
+        chatInputArea.style.display = '';
+        chatLoginPrompt.style.display = 'none';
+      } else {
+        chatInputArea.style.display = 'none';
+        chatLoginPrompt.style.display = '';
+      }
+
+      // Update chatter count
+      const count = data.chatter_count || 0;
+      chatOnline.textContent = count > 0 ? `${count} chatting` : '';
+
+      // Render new messages
+      if (data.messages && data.messages.length > 0) {
+        const isAtBottom = chatMessages.scrollTop + chatMessages.clientHeight >= chatMessages.scrollHeight - 30;
+
+        // Remove empty placeholder
+        const emptyEl = chatMessages.querySelector('.chat-empty');
+        if (emptyEl) emptyEl.remove();
+
+        data.messages.forEach(msg => {
+          if (msg.id > chatLastId) chatLastId = msg.id;
+          const div = document.createElement('div');
+          div.className = 'chat-msg';
+          const nameSpan = document.createElement('span');
+          nameSpan.className = 'chat-name';
+          nameSpan.style.color = getChatColor(msg.username);
+          nameSpan.textContent = msg.display_name + ':';
+          const textSpan = document.createElement('span');
+          textSpan.className = 'chat-text';
+          textSpan.textContent = ' ' + msg.message;
+          div.appendChild(nameSpan);
+          div.appendChild(textSpan);
+          chatMessages.appendChild(div);
+
+          // Track unread if chat is closed
+          if (!chatOpen) chatUnread++;
+        });
+
+        // Auto-scroll if user was at bottom
+        if (isAtBottom || chatOpen) {
+          chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        updateChatBadge();
+
+        // Trim old messages (keep last 100)
+        while (chatMessages.children.length > 100) {
+          chatMessages.removeChild(chatMessages.firstChild);
+        }
+      }
+
+      // Update badge count even when no new messages
+      if (!chatOpen && count > 0) {
+        updateChatBadge();
+      }
+    } catch (e) {
+      // Silently fail
+    }
+  }
+
+  function updateChatBadge() {
+    if (chatUnread > 0 && !chatOpen) {
+      chatBadge.textContent = chatUnread > 99 ? '99+' : chatUnread;
+      chatBadge.classList.add('show');
+    } else {
+      chatBadge.classList.remove('show');
+    }
+  }
+
+  async function sendChatMessage() {
+    const text = chatInput.value.trim();
+    if (!text || chatSendCooldown) return;
+
+    if (!chatLoggedIn) return;
+
+    chatSendCooldown = true;
+    chatSend.disabled = true;
+    chatInput.value = '';
+
+    try {
+      const formData = new FormData();
+      formData.append('login', login);
+      formData.append('message', text);
+      const res = await fetch(`${API_BASE}/cliptv_chat.php`, {
+        method: 'POST',
+        body: formData,
+        credentials: 'same-origin'
+      });
+      const data = await res.json();
+      if (data.error) {
+        debugLog("Chat error: " + data.error, "err");
+        chatInput.value = text; // Restore message on error
+      } else {
+        // Immediately poll for the new message
+        pollChat();
+      }
+    } catch (e) {
+      // Don't restore text - message may have been sent despite response error
+      debugLog("Chat send error: " + e.message, "err");
+    }
+
+    // Cooldown
+    setTimeout(() => {
+      chatSendCooldown = false;
+      chatSend.disabled = false;
+    }, 2000);
+  }
+
+  chatSend.addEventListener('click', sendChatMessage);
+  chatInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      sendChatMessage();
+    }
+  });
+
+  // Prevent chat input from triggering video controls
+  chatInput.addEventListener('keydown', (e) => e.stopPropagation());
+  chatInput.addEventListener('keyup', (e) => e.stopPropagation());
+
+  // Draggable chat panel (desktop only)
+  const chatHeader = document.getElementById('chatHeader');
+  let chatDragging = false;
+  let chatDragOffsetX = 0, chatDragOffsetY = 0;
+
+  chatHeader.addEventListener('mousedown', (e) => {
+    if (e.target.closest('button')) return; // Don't drag when clicking close
+    chatDragging = true;
+    chatDragOffsetX = e.clientX - chatPanel.offsetLeft;
+    chatDragOffsetY = e.clientY - chatPanel.offsetTop;
+    chatPanel.style.transition = 'none';
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!chatDragging) return;
+    const x = Math.max(0, Math.min(window.innerWidth - chatPanel.offsetWidth, e.clientX - chatDragOffsetX));
+    const y = Math.max(0, Math.min(window.innerHeight - chatPanel.offsetHeight, e.clientY - chatDragOffsetY));
+    chatPanel.style.left = x + 'px';
+    chatPanel.style.top = y + 'px';
+    chatPanel.style.bottom = 'auto';
+    chatPanel.style.right = 'auto';
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (chatDragging) {
+      chatDragging = false;
+      chatPanel.style.transition = '';
+    }
+  });
+
+  // Background chat badge polling (when chat is closed, check count every 15s)
+  let chatBadgePollInterval = setInterval(async () => {
+    if (chatOpen) return; // Already polling actively
+    try {
+      const res = await fetch(`${API_BASE}/cliptv_chat.php?login=${encodeURIComponent(login)}&after=${chatLastId}`, { cache: 'no-store', credentials: 'same-origin' });
+      const data = await res.json();
+      if (data.messages && data.messages.length > 0) {
+        data.messages.forEach(msg => {
+          if (msg.id > chatLastId) chatLastId = msg.id;
+          chatUnread++;
+        });
+        updateChatBadge();
+      }
+    } catch (e) {}
+  }, 15000);
+
+  // === Play specific clip ===
+  async function playSpecificClip(clip) {
+    debugLog(`Playing specific clip: #${clip.seq || '?'}`, "ok");
+
+    const clipId = clip.id || clip.clip_id;
+    const mp4Url = await getMp4Url(clipId);
+    if (!mp4Url) {
+      debugLog("Failed to get MP4 URL for clip", "err");
+      return;
+    }
+
+    // Broadcast to all viewers
+    await setServerState({
+      id: clipId,
+      title: clip.title,
+      creator_name: clip.creator_name,
+      duration: clip.duration,
+      seq: clip.seq,
+      created_at: clip.created_at
+    }, mp4Url);
+
+    // Play locally
+    await playClipAtPosition(clipId, mp4Url, 0, clip.duration || 30, {
+      clip_title: clip.title,
+      clip_curator: clip.creator_name,
+      clip_duration: clip.duration,
+      game_name: clip.game_name,
+      seq: clip.seq,
+      created_at: clip.created_at
+    });
+  }
+
+  // HTML escaping
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  // Start heartbeat interval
+  function startHeartbeat() {
+    // Send initial heartbeat
+    sendHeartbeat();
+    // Then every 3 seconds (reduced from 10s for more responsive skip voting)
+    if (heartbeatInterval) clearInterval(heartbeatInterval);
+    heartbeatInterval = setInterval(() => sendHeartbeat(), 3000);
+  }
+
+  // Controller heartbeat - keeps sync state updated_at fresh
+  // so other viewers know the controller is still active
+  function sendControllerHeartbeat() {
+    if (!isController) return;
+    const formData = new FormData();
+    formData.append("login", login);
+    fetch(`${API_BASE}/sync_state_heartbeat.php`, {
+      method: "POST",
+      body: formData
+    }).catch(() => {}); // Fire and forget
+  }
+
+  function startControllerHeartbeat() {
+    if (controllerHeartbeatInterval) clearInterval(controllerHeartbeatInterval);
+    // Send heartbeat every 5 seconds
+    sendControllerHeartbeat();
+    controllerHeartbeatInterval = setInterval(sendControllerHeartbeat, 5000);
+    debugLog("Controller heartbeat started", "ok");
+  }
+
+  function stopControllerHeartbeat() {
+    if (controllerHeartbeatInterval) {
+      clearInterval(controllerHeartbeatInterval);
+      controllerHeartbeatInterval = null;
+    }
+  }
+
+  // Stop heartbeat on page unload
+  window.addEventListener('beforeunload', () => {
+    if (heartbeatInterval) clearInterval(heartbeatInterval);
+    if (controllerHeartbeatInterval) clearInterval(controllerHeartbeatInterval);
+    if (chatPollInterval) clearInterval(chatPollInterval);
+    if (chatBgPollInterval) clearInterval(chatBgPollInterval);
+  });
+
+  async function init() {
+    debugLog("Init...");
+
+    // Fetch clips AND sync state in parallel for faster startup
+    const [clipsResult, syncResult] = await Promise.allSettled([
+      fetch(`${API_BASE}/twitch_reel_api.php?login=${encodeURIComponent(login)}&days=0&pool=100`, { cache: "no-store" })
+        .then(r => r.json())
+        .catch(() => ({ clips: [] })),
+      fetch(`${API_BASE}/sync_state.php?login=${encodeURIComponent(login)}`, { cache: "no-store" })
+        .then(r => r.json())
+        .catch(() => ({ has_state: false }))
+    ]);
+
+    // Process clips
+    if (clipsResult.status === 'fulfilled') {
+      clips = Array.isArray(clipsResult.value.clips) ? clipsResult.value.clips : [];
+      debugLog(`${clips.length} clips loaded`, "ok");
+      fillQueue(); // Pre-generate up next queue
+    }
+
+    // Process sync state
+    const syncData = syncResult.status === 'fulfilled' ? syncResult.value : { has_state: false };
+
+    if (syncData.has_state && !syncData.clip_ended && syncData.clip_id && !syncData.controller_stale) {
+      // Join existing stream immediately (and controller is still active)
+      debugLog("Joining stream...", "ok");
+      playClipAtPosition(
+        syncData.clip_id,
+        syncData.clip_url,
+        syncData.current_position,
+        syncData.clip_duration,
+        syncData
+      );
+    } else if (syncData.has_state && syncData.controller_stale && !syncData.clip_ended && syncData.clip_id) {
+      // Controller is stale but clip is still valid - take over as controller
+      isController = true;
+      debugLog(`Taking over stale stream (${syncData.stale_seconds}s stale)`, "warn");
+      startControllerHeartbeat();
+      playClipAtPosition(
+        syncData.clip_id,
+        syncData.clip_url,
+        syncData.current_position,
+        syncData.clip_duration,
+        syncData
+      );
+    } else {
+      // No active stream - become controller
+      isController = true;
+      debugLog("Starting new stream", "ok");
+      startControllerHeartbeat();
+      controllerAdvance();
+    }
+
+    // Start sync polling (slower on slow connections to save bandwidth)
+    const pollInterval = isSlowConnection ? 4000 : 2000;
+    syncInterval = setInterval(pollSyncState, pollInterval);
+    debugLog(`Sync poll: ${pollInterval}ms`);
+
+    // Start viewer heartbeat
+    startHeartbeat();
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>

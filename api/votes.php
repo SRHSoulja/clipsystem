@@ -34,9 +34,12 @@ if (!$pdo) {
   exit;
 }
 
-// Get current user (if logged in)
+// Get current user (if logged in via Twitch session, or via ?username= param for Discord)
 $user = getCurrentUser();
 $username = $user ? $user['login'] : null;
+if (!$username && !empty($_GET['username'])) {
+  $username = strtolower(trim($_GET['username']));
+}
 
 try {
   // Get clip_ids for the given seq numbers
