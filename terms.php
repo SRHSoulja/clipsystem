@@ -26,7 +26,7 @@ header("Content-Type: text/html; charset=utf-8");
 <body>
   <div class="container">
     <div class="logo">
-      <img src="/cliptvlogo.png" alt="ClipTV">
+      <img src="/tapefacectv.png" alt="ClipTV">
       <span>ClipTV</span>
     </div>
     <h1>Terms of Service</h1>
