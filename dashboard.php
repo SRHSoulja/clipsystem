@@ -1118,7 +1118,7 @@ if ($currentUser) {
             </div>
 
             <div class="card" data-permission="edit_hud">
-                <h3>HUD Position</h3>
+                <h3>Clip TV HUD Positioning</h3>
                 <p style="color: #adadb8; margin-bottom: 12px; font-size: 13px;">Position of the clip info overlay on each player.</p>
                 <div style="display:flex;gap:24px;flex-wrap:wrap;">
                     <div style="flex:1;min-width:200px;">
