@@ -69,6 +69,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $clipCreatedAt = $_POST['clip_created_at'] ?? null;
   $playlistIndex = intval($_POST['playlist_index'] ?? 0);
   $playlistIds = $_POST['playlist_ids'] ?? '[]';
+  // Validate JSON format to prevent data corruption
+  if (!is_array(json_decode($playlistIds, true)) && $playlistIds !== '[]') {
+    $playlistIds = '[]';
+  }
 
   try {
     $stmt = $pdo->prepare("
@@ -112,10 +116,10 @@ try {
   $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
   if ($row) {
-    // Calculate current position in clip
+    // Calculate current position with sub-second precision
     $startedAt = strtotime($row['started_at']);
     $updatedAt = strtotime($row['updated_at']);
-    $now = time();
+    $now = microtime(true);
     $elapsed = $now - $startedAt;
     $staleSeconds = $now - $updatedAt;
     $duration = floatval($row['clip_duration']);
@@ -123,8 +127,8 @@ try {
     // Check if clip has ended
     $clipEnded = $elapsed >= $duration;
 
-    // Controller is stale if no update in 15+ seconds
-    $controllerStale = $staleSeconds > 15;
+    // Controller is stale if no update in 8+ seconds (heartbeat is every 3-5s)
+    $controllerStale = $staleSeconds > 8;
 
     echo json_encode([
       "login" => $login,
@@ -137,10 +141,10 @@ try {
       "created_at" => $row['clip_created_at'] ?? null,
       "started_at" => $row['started_at'],
       "updated_at" => $row['updated_at'],
-      "current_position" => min($elapsed, $duration),
+      "current_position" => round(min($elapsed, $duration), 2),
       "clip_ended" => $clipEnded,
       "controller_stale" => $controllerStale,
-      "stale_seconds" => $staleSeconds,
+      "stale_seconds" => round($staleSeconds, 1),
       "playlist_index" => intval($row['playlist_index']),
       "playlist_ids" => $row['playlist_ids'],
       "has_state" => true

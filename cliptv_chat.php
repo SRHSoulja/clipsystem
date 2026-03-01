@@ -81,9 +81,11 @@ try {
       $file = $archiveDir . '/chat_' . $date . '.jsonl';
       $fp = fopen($file, 'a');
       if ($fp) {
+        flock($fp, LOCK_EX);
         foreach ($msgs as $msg) {
           fwrite($fp, json_encode($msg, JSON_UNESCAPED_UNICODE) . "\n");
         }
+        flock($fp, LOCK_UN);
         fclose($fp);
       }
     }

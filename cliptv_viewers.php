@@ -59,6 +59,12 @@ try {
   } catch (PDOException $e) {
     // ignore
   }
+  // Add index on last_seen for efficient stale viewer cleanup
+  try {
+    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_cliptv_viewers_last_seen ON cliptv_viewers(last_seen)");
+  } catch (PDOException $e) {
+    // ignore
+  }
 } catch (PDOException $e) {
   // Table exists
 }
@@ -68,7 +74,8 @@ $VIEWER_TIMEOUT = 12;
 
 // Clean up stale viewers
 try {
-  $pdo->prepare("DELETE FROM cliptv_viewers WHERE last_seen < NOW() - INTERVAL '$VIEWER_TIMEOUT seconds'")->execute();
+  $cutoff = date('Y-m-d H:i:s', time() - $VIEWER_TIMEOUT);
+  $pdo->prepare("DELETE FROM cliptv_viewers WHERE last_seen < ?")->execute([$cutoff]);
 } catch (PDOException $e) {
   // ignore cleanup errors
 }

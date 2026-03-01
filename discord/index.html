@@ -1876,17 +1876,26 @@ if (window.__discordResolve) window.__discordResolve();
     return true;
   }
 
-  // Freeze detection and recovery
+  // Freeze detection and recovery with debouncing
+  let lastRecoveryTime = 0;
+  const RECOVERY_COOLDOWN = 10000; // Min 10s between recovery attempts
+
   function tryRecoverPlayback() {
     if (isSwitching || player.paused) return;
     if (!canSkipClip()) return; // Don't skip during grace period
+
+    const now = Date.now();
+    if (now - lastRecoveryTime < RECOVERY_COOLDOWN) {
+      debugLog("Recovery on cooldown", "warn");
+      return;
+    }
+    lastRecoveryTime = now;
 
     stallRecoveryAttempts++;
     debugLog(`Stall recovery attempt ${stallRecoveryAttempts}/${MAX_STALL_RECOVERY}`, "warn");
     setSyncStatus("syncing", "Recovering...");
 
     if (stallRecoveryAttempts > MAX_STALL_RECOVERY) {
-      // Too many attempts - skip to next clip
       debugLog("Too many stall recoveries - skipping clip", "err");
       stallRecoveryAttempts = 0;
       if (isController) {
@@ -1895,15 +1904,19 @@ if (window.__discordResolve) window.__discordResolve();
       return;
     }
 
-    // Try to recover: seek slightly forward and replay
-    const currentTime = player.currentTime;
-    player.currentTime = currentTime + 0.1;
-    player.play().then(() => {
-      debugLog("Playback recovered", "ok");
-      setSyncStatus("synced", "Synced");
-    }).catch(e => {
-      debugLog("Recovery play failed: " + e.message, "err");
-    });
+    // Try pause+play first (less disruptive than seeking)
+    player.pause();
+    setTimeout(() => {
+      player.play().then(() => {
+        debugLog("Playback recovered via pause+play", "ok");
+        setSyncStatus("synced", "Synced");
+      }).catch(e => {
+        debugLog("Recovery play failed, seeking forward: " + e.message, "warn");
+        // Fallback: seek slightly forward
+        player.currentTime = player.currentTime + 0.2;
+        player.play().catch(() => {});
+      });
+    }, 200);
   }
 
   // Stalled event - network/buffer issue (don't auto-recover, just show status)
@@ -1972,39 +1985,38 @@ if (window.__discordResolve) window.__discordResolve();
     }
   });
 
-  // Periodic playback health check - catch silent freezes (balanced)
+  // Periodic playback health check - catch silent freezes
+  // Use longer intervals and higher thresholds — Discord proxy adds latency
   let consecutiveFreezeChecks = 0;
   setInterval(() => {
     if (isSwitching || player.paused || player.ended || player.seeking) return;
-    // Don't check if video is still loading
+    if (!canSkipClip()) return; // Respect grace period
     if (player.readyState < 3) return;
 
     const now = Date.now();
     const timeSinceCheck = (now - lastPlaybackCheck) / 1000;
     const actualProgress = player.currentTime - lastPlaybackTime;
 
-    // Consider frozen if fully loaded (readyState 4) and no progress for 5+ seconds
-    if (timeSinceCheck > 5 && actualProgress < 0.3 && player.readyState >= 4) {
+    // Consider frozen if no progress for 8+ seconds with data available
+    if (timeSinceCheck > 8 && actualProgress < 0.3 && player.readyState >= 3) {
       consecutiveFreezeChecks++;
-      debugLog(`Freeze check ${consecutiveFreezeChecks}/2: no progress for ${timeSinceCheck.toFixed(1)}s`, "warn");
+      debugLog(`Freeze check ${consecutiveFreezeChecks}/3: no progress for ${timeSinceCheck.toFixed(1)}s`, "warn");
 
-      // Recover after 2 consecutive freeze detections (10+ seconds frozen)
-      if (consecutiveFreezeChecks >= 2) {
+      // Recover after 3 consecutive freeze detections (24+ seconds truly frozen)
+      if (consecutiveFreezeChecks >= 3) {
         debugLog("Confirmed frozen - attempting recovery", "err");
         consecutiveFreezeChecks = 0;
-        // Drop quality before trying to recover
         dropQuality();
         tryRecoverPlayback();
       }
     } else {
       consecutiveFreezeChecks = 0;
-      // Try to recover quality if playing smoothly
       tryRecoverQuality();
     }
 
     lastPlaybackTime = player.currentTime;
     lastPlaybackCheck = now;
-  }, 5000);
+  }, 8000);
 
   // HUD Position polling
   let currentHudPosition = null;
@@ -2187,6 +2199,16 @@ if (window.__discordResolve) window.__discordResolve();
     syncText.textContent = text;
   }
 
+  // Rewrite Twitch CDN URLs for Discord's iframe proxy
+  // Only used at the moment of setting video element src - never stored in sync_state
+  function discordCdnUrl(url) {
+    if (!url) return url;
+    return url
+      .replace('https://production.assets.clips.twitchcdn.net/', '/twitch-clips/')
+      .replace('https://clips-media-assets2.twitch.tv/', '/twitch-clips/')
+      .replace('https://clips-media-assets.twitch.tv/', '/twitch-clips/');
+  }
+
   // GQL: Get MP4 URL (adapts quality for slow connections)
   async function getMp4Url(clipId, forceHighQuality = false) {
     try {
@@ -2237,23 +2259,26 @@ if (window.__discordResolve) window.__discordResolve();
       const sep = chosen.sourceURL.includes("?") ? "&" : "?";
       let videoUrl = `${chosen.sourceURL}${sep}sig=${encodeURIComponent(sig)}&token=${encodeURIComponent(token)}`;
 
-      // Rewrite Twitch CDN URLs through Discord's URL mapping proxy
-      // (Discord blocks direct external media URLs in Activity iframes)
-      // Handle all known Twitch clip CDN domains
-      videoUrl = videoUrl
-        .replace('https://production.assets.clips.twitchcdn.net/', '/twitch-clips/')
-        .replace('https://clips-media-assets2.twitch.tv/', '/twitch-clips/')
-        .replace('https://clips-media-assets.twitch.tv/', '/twitch-clips/');
-
-      // Catch-all: if URL still starts with https://, it's an external domain Discord will block
-      if (videoUrl.startsWith('https://')) {
-        debugLog(`WARNING: unhandled CDN domain: ${videoUrl.substring(0, 60)}`, "err");
-      }
-
+      // Return the ORIGINAL Twitch CDN URL - rewriting happens at player.src assignment
+      // This prevents poisoning sync_state with /twitch-clips/ URLs that desktop can't load
       return videoUrl;
     } catch (e) {
       debugLog("GQL err: " + e.message, "err");
       return null;
+    }
+  }
+
+  // Clean up preload video element fully (prevent memory leaks)
+  function cleanupPreloadVideo() {
+    if (preloadVideo) {
+      preloadVideo.oncanplaythrough = null;
+      preloadVideo.onerror = null;
+      preloadVideo.oncanplay = null;
+      preloadVideo.pause();
+      preloadVideo.removeAttribute('src');
+      preloadVideo.load();
+      preloadVideo.remove();
+      preloadVideo = null;
     }
   }
 
@@ -2265,20 +2290,13 @@ if (window.__discordResolve) window.__discordResolve();
     if (!next || next.id === currentClipId || next.id === preloadedClipId) return;
 
     try {
-      const url = await getMp4Url(next.id, true); // Force high quality for preload
+      // Use adaptive quality for preload (don't waste bandwidth on highest quality)
+      const url = await getMp4Url(next.id, false);
       if (url) {
         preloadedClipId = next.id;
         preloadedUrl = url;
 
-        // Cleanup previous preload element
-        if (preloadVideo) {
-          preloadVideo.oncanplaythrough = null;
-          preloadVideo.onerror = null;
-          preloadVideo.src = '';
-          preloadVideo.load();
-          preloadVideo.remove();
-          preloadVideo = null;
-        }
+        cleanupPreloadVideo();
 
         // Preload video data using a hidden video element
         preloadVideo = document.createElement('video');
@@ -2287,7 +2305,7 @@ if (window.__discordResolve) window.__discordResolve();
         preloadVideo.playsInline = true;
         preloadVideo.style.cssText = 'position:absolute;width:0;height:0;opacity:0;pointer-events:none';
         document.body.appendChild(preloadVideo);
-        preloadVideo.src = url;
+        preloadVideo.src = discordCdnUrl(url); // Rewrite for Discord iframe only
         preloadVideo.load();
 
         debugLog(`Preloading video: ${next.id.substring(0,15)}`, "ok");
@@ -2295,6 +2313,21 @@ if (window.__discordResolve) window.__discordResolve();
         preloadVideo.oncanplaythrough = () => {
           debugLog(`Preload ready: ${next.id.substring(0,15)}`, "ok");
         };
+        preloadVideo.onerror = () => {
+          debugLog(`Preload failed: ${next.id.substring(0,15)}`, "err");
+          preloadedUrl = null;
+          preloadedClipId = null;
+        };
+
+        // Cancel preload if it takes too long
+        setTimeout(() => {
+          if (preloadVideo && preloadedClipId === next.id && !preloadVideo.readyState) {
+            debugLog("Preload timeout - cancelling", "warn");
+            cleanupPreloadVideo();
+            preloadedUrl = null;
+            preloadedClipId = null;
+          }
+        }, 20000);
       }
     } catch (e) {
       // Silently fail - preloading is optional
@@ -2381,22 +2414,7 @@ if (window.__discordResolve) window.__discordResolve();
     // Always cleanup preload element on clip switch
     preloadedClipId = null;
     preloadedUrl = null;
-    if (preloadVideo) {
-      preloadVideo.oncanplaythrough = null;
-      preloadVideo.onerror = null;
-      preloadVideo.src = '';
-      preloadVideo.load();
-      preloadVideo.remove();
-      preloadVideo = null;
-    }
-
-    // Rewrite any external CDN URLs (sync state may have raw URLs from web player)
-    if (mp4Url && mp4Url.startsWith('https://')) {
-      mp4Url = mp4Url
-        .replace('https://production.assets.clips.twitchcdn.net/', '/twitch-clips/')
-        .replace('https://clips-media-assets2.twitch.tv/', '/twitch-clips/')
-        .replace('https://clips-media-assets.twitch.tv/', '/twitch-clips/');
-    }
+    cleanupPreloadVideo();
 
     // If we don't have URL, fetch it
     if (!mp4Url) {
@@ -2554,13 +2572,15 @@ if (window.__discordResolve) window.__discordResolve();
       if (isController) setTimeout(controllerAdvance, 500);
     };
 
-    debugLog(`Setting src: ${mp4Url?.substring(0, 60)}...`);
-    // Set source and explicitly load
-    player.src = mp4Url;
+    // Rewrite CDN URLs for Discord's iframe proxy (only at player.src, never in sync_state)
+    const playerUrl = discordCdnUrl(mp4Url);
+    debugLog(`Setting src: ${playerUrl?.substring(0, 60)}...`);
+    player.src = playerUrl;
     player.load();
 
     // Timeout: force play or advance if loading stalls
-    const loadTimeout = isSlowConnection ? 8000 : (isMobile ? 6000 : 4000);
+    // Give CDN enough time — Discord proxy adds latency on top of normal CDN delivery
+    const loadTimeout = isSlowConnection ? 18000 : (isMobile ? 14000 : 12000);
     setTimeout(() => {
       if (isSwitching && currentClipId === clipId && !hasStarted) {
         debugLog("Load timeout - forcing recovery", "warn");
@@ -2568,7 +2588,8 @@ if (window.__discordResolve) window.__discordResolve();
         isSwitching = false;
 
         // Try to force play anyway - sometimes video is ready but events didn't fire
-        if (player.readyState >= 1) {
+        // readyState >= 2 means we have at least current frame data
+        if (player.readyState >= 2) {
           debugLog(`readyState ${player.readyState}, forcing play`, "warn");
           player.play().then(() => {
             loadingOverlay.classList.add("hide");
@@ -2590,7 +2611,8 @@ if (window.__discordResolve) window.__discordResolve();
 
   // Track consecutive clip failures for error display
   let consecutiveFailures = 0;
-  const MAX_FAILURES = 5;
+  let lastFailureTime = 0;
+  const MAX_FAILURES = 10; // More tolerant for transient errors (Discord proxy adds latency)
 
   // Controller: pick next clip and broadcast
   async function controllerAdvance() {
@@ -2606,9 +2628,15 @@ if (window.__discordResolve) window.__discordResolve();
       return;
     }
 
+    // Reset failure counter if it's been a while since last failure
+    if (Date.now() - lastFailureTime > 30000) {
+      consecutiveFailures = 0;
+    }
+
     const mp4Url = await getMp4Url(next.id);
     if (!mp4Url) {
       consecutiveFailures++;
+      lastFailureTime = Date.now();
       debugLog(`Failed to get MP4 (${consecutiveFailures}/${MAX_FAILURES})`, "err");
       if (consecutiveFailures >= MAX_FAILURES) {
         setSyncStatus("error", "Clips won't load");
@@ -2617,11 +2645,12 @@ if (window.__discordResolve) window.__discordResolve();
         voteHud.classList.add("show");
         consecutiveFailures = 0;
         // Retry after a longer delay
-        setTimeout(controllerAdvance, 10000);
+        setTimeout(controllerAdvance, 15000);
         return;
       }
-      // Try another clip
-      setTimeout(controllerAdvance, 1000);
+      // Try another clip with increasing delay
+      const retryDelay = Math.min(1000 * consecutiveFailures, 5000);
+      setTimeout(controllerAdvance, retryDelay);
       return;
     }
 

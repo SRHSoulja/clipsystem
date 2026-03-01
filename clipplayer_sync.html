@@ -1702,17 +1702,26 @@
     return true;
   }
 
-  // Freeze detection and recovery
+  // Freeze detection and recovery with debouncing
+  let lastRecoveryTime = 0;
+  const RECOVERY_COOLDOWN = 10000; // Min 10s between recovery attempts
+
   function tryRecoverPlayback() {
     if (isSwitching || player.paused) return;
     if (!canSkipClip()) return; // Don't skip during grace period
+
+    const now = Date.now();
+    if (now - lastRecoveryTime < RECOVERY_COOLDOWN) {
+      debugLog("Recovery on cooldown", "warn");
+      return;
+    }
+    lastRecoveryTime = now;
 
     stallRecoveryAttempts++;
     debugLog(`Stall recovery attempt ${stallRecoveryAttempts}/${MAX_STALL_RECOVERY}`, "warn");
     setSyncStatus("syncing", "Recovering...");
 
     if (stallRecoveryAttempts > MAX_STALL_RECOVERY) {
-      // Too many attempts - skip to next clip
       debugLog("Too many stall recoveries - skipping clip", "err");
       stallRecoveryAttempts = 0;
       if (isController) {
@@ -1721,15 +1730,19 @@
       return;
     }
 
-    // Try to recover: seek slightly forward and replay
-    const currentTime = player.currentTime;
-    player.currentTime = currentTime + 0.1;
-    player.play().then(() => {
-      debugLog("Playback recovered", "ok");
-      setSyncStatus("synced", "Synced");
-    }).catch(e => {
-      debugLog("Recovery play failed: " + e.message, "err");
-    });
+    // Try pause+play first (less disruptive than seeking)
+    player.pause();
+    setTimeout(() => {
+      player.play().then(() => {
+        debugLog("Playback recovered via pause+play", "ok");
+        setSyncStatus("synced", "Synced");
+      }).catch(e => {
+        debugLog("Recovery play failed, seeking forward: " + e.message, "warn");
+        // Fallback: seek slightly forward
+        player.currentTime = player.currentTime + 0.2;
+        player.play().catch(() => {});
+      });
+    }, 200);
   }
 
   // Stalled event - network/buffer issue (don't auto-recover, just show status)
@@ -1798,10 +1811,12 @@
     }
   });
 
-  // Periodic playback health check - catch silent freezes (balanced)
+  // Periodic playback health check - catch silent freezes
+  // Use longer intervals and higher thresholds to avoid premature skipping
   let consecutiveFreezeChecks = 0;
   setInterval(() => {
     if (isSwitching || player.paused || player.ended || player.seeking) return;
+    if (!canSkipClip()) return; // Respect grace period
     // Don't check if video is still loading
     if (player.readyState < 3) return;
 
@@ -1809,28 +1824,26 @@
     const timeSinceCheck = (now - lastPlaybackCheck) / 1000;
     const actualProgress = player.currentTime - lastPlaybackTime;
 
-    // Consider frozen if fully loaded (readyState 4) and no progress for 5+ seconds
-    if (timeSinceCheck > 5 && actualProgress < 0.3 && player.readyState >= 4) {
+    // Consider frozen if no progress for 8+ seconds with data available
+    if (timeSinceCheck > 8 && actualProgress < 0.3 && player.readyState >= 3) {
       consecutiveFreezeChecks++;
-      debugLog(`Freeze check ${consecutiveFreezeChecks}/2: no progress for ${timeSinceCheck.toFixed(1)}s`, "warn");
+      debugLog(`Freeze check ${consecutiveFreezeChecks}/3: no progress for ${timeSinceCheck.toFixed(1)}s`, "warn");
 
-      // Recover after 2 consecutive freeze detections (10+ seconds frozen)
-      if (consecutiveFreezeChecks >= 2) {
+      // Recover after 3 consecutive freeze detections (24+ seconds truly frozen)
+      if (consecutiveFreezeChecks >= 3) {
         debugLog("Confirmed frozen - attempting recovery", "err");
         consecutiveFreezeChecks = 0;
-        // Drop quality before trying to recover
         dropQuality();
         tryRecoverPlayback();
       }
     } else {
       consecutiveFreezeChecks = 0;
-      // Try to recover quality if playing smoothly
       tryRecoverQuality();
     }
 
     lastPlaybackTime = player.currentTime;
     lastPlaybackCheck = now;
-  }, 5000);
+  }, 8000);
 
   // HUD Position polling
   let currentHudPosition = null;
@@ -2084,6 +2097,20 @@
     }
   }
 
+  // Clean up preload video element fully (prevent memory leaks)
+  function cleanupPreloadVideo() {
+    if (preloadVideo) {
+      preloadVideo.oncanplaythrough = null;
+      preloadVideo.onerror = null;
+      preloadVideo.oncanplay = null;
+      preloadVideo.pause();
+      preloadVideo.removeAttribute('src');
+      preloadVideo.load();
+      preloadVideo.remove();
+      preloadVideo = null;
+    }
+  }
+
   // Preload next clip in background (for smoother transitions)
   async function preloadNextClip() {
     if (!clips.length || !isController) return;
@@ -2092,20 +2119,13 @@
     if (!next || next.id === currentClipId || next.id === preloadedClipId) return;
 
     try {
-      const url = await getMp4Url(next.id, true); // Force high quality for preload
+      // Use adaptive quality for preload (don't waste bandwidth on highest quality)
+      const url = await getMp4Url(next.id, false);
       if (url) {
         preloadedClipId = next.id;
         preloadedUrl = url;
 
-        // Cleanup previous preload element
-        if (preloadVideo) {
-          preloadVideo.oncanplaythrough = null;
-          preloadVideo.onerror = null;
-          preloadVideo.src = '';
-          preloadVideo.load();
-          preloadVideo.remove();
-          preloadVideo = null;
-        }
+        cleanupPreloadVideo();
 
         // Preload video data using a hidden video element
         preloadVideo = document.createElement('video');
@@ -2122,6 +2142,21 @@
         preloadVideo.oncanplaythrough = () => {
           debugLog(`Preload ready: ${next.id.substring(0,15)}`, "ok");
         };
+        preloadVideo.onerror = () => {
+          debugLog(`Preload failed: ${next.id.substring(0,15)}`, "err");
+          preloadedUrl = null;
+          preloadedClipId = null;
+        };
+
+        // Cancel preload if it takes too long (save bandwidth)
+        setTimeout(() => {
+          if (preloadVideo && preloadedClipId === next.id && !preloadVideo.readyState) {
+            debugLog("Preload timeout - cancelling", "warn");
+            cleanupPreloadVideo();
+            preloadedUrl = null;
+            preloadedClipId = null;
+          }
+        }, 20000);
       }
     } catch (e) {
       // Silently fail - preloading is optional
@@ -2208,14 +2243,7 @@
     // Always cleanup preload element on clip switch
     preloadedClipId = null;
     preloadedUrl = null;
-    if (preloadVideo) {
-      preloadVideo.oncanplaythrough = null;
-      preloadVideo.onerror = null;
-      preloadVideo.src = '';
-      preloadVideo.load();
-      preloadVideo.remove();
-      preloadVideo = null;
-    }
+    cleanupPreloadVideo();
 
     // If we don't have URL, fetch it
     if (!mp4Url) {
@@ -2374,7 +2402,8 @@
     player.load();
 
     // Timeout: force play or advance if loading stalls
-    const loadTimeout = isSlowConnection ? 8000 : (isMobile ? 6000 : 4000);
+    // Give CDN enough time to deliver (real-world latency is 2-5s for first segment)
+    const loadTimeout = isSlowConnection ? 15000 : (isMobile ? 12000 : 10000);
     setTimeout(() => {
       if (isSwitching && currentClipId === clipId && !hasStarted) {
         debugLog("Load timeout - forcing recovery", "warn");
@@ -2382,7 +2411,8 @@
         isSwitching = false;
 
         // Try to force play anyway - sometimes video is ready but events didn't fire
-        if (player.readyState >= 1) {
+        // readyState >= 2 means we have at least current frame data
+        if (player.readyState >= 2) {
           debugLog(`readyState ${player.readyState}, forcing play`, "warn");
           player.play().then(() => {
             loadingOverlay.classList.add("hide");

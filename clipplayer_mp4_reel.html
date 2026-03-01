@@ -1453,8 +1453,11 @@ window.addEventListener('beforeunload', e => { e.preventDefault(); });
 
   function cleanupPreloadVideo() {
     if (preloadVideo) {
+      preloadVideo.oncanplaythrough = null;
+      preloadVideo.onerror = null;
+      preloadVideo.oncanplay = null;
       preloadVideo.pause();
-      preloadVideo.src = '';
+      preloadVideo.removeAttribute('src');
       preloadVideo.load();
       preloadVideo = null;
     }
@@ -1482,21 +1485,22 @@ window.addEventListener('beforeunload', e => { e.preventDefault(); });
 
         // Wait for some buffer before declaring ready
         await new Promise((resolve) => {
+          let resolved = false;
+          const done = () => { if (!resolved) { resolved = true; resolve(); } };
           const checkBuffer = () => {
             if (preloadVideo && preloadVideo.buffered.length > 0) {
               const buffered = preloadVideo.buffered.end(0);
-              if (buffered >= 4) { // At least 4 seconds buffered
+              if (buffered >= 4) {
                 debugLog(`Preloaded ${buffered.toFixed(1)}s`, "ok");
-                resolve();
-                return;
+                done();
               }
             }
-            // Timeout after 5 seconds regardless
-            setTimeout(resolve, 100);
           };
-          preloadVideo.addEventListener('progress', checkBuffer);
-          preloadVideo.addEventListener('canplay', () => resolve());
-          setTimeout(resolve, 5000); // Max 5s wait
+          if (preloadVideo) {
+            preloadVideo.addEventListener('progress', checkBuffer);
+            preloadVideo.addEventListener('canplay', done);
+          }
+          setTimeout(done, 5000); // Max 5s wait
         });
       }
     } catch {}
@@ -1764,33 +1768,33 @@ window.addEventListener('beforeunload', e => { e.preventDefault(); });
 
           // Wait for at least 8 seconds buffered (or timeout)
           await new Promise((resolve) => {
+            let resolved = false;
+            const done = () => { if (!resolved) { resolved = true; clearInterval(bufInterval); resolve(); } };
             const checkBuffer = () => {
               if (preloadVideo && preloadVideo.buffered.length > 0) {
                 const buffered = preloadVideo.buffered.end(0);
                 if (buffered >= 8) {
                   debugLog(`First clip buffered: ${buffered.toFixed(1)}s`, "ok");
-                  resolve();
-                  return;
+                  done();
                 }
               }
             };
-            preloadVideo.addEventListener('progress', checkBuffer);
-            preloadVideo.addEventListener('canplaythrough', () => {
-              debugLog("canplaythrough fired for preload");
-              resolve();
-            });
-            // Check periodically
-            const interval = setInterval(() => {
+            if (preloadVideo) {
+              preloadVideo.addEventListener('progress', checkBuffer);
+              preloadVideo.addEventListener('canplaythrough', () => {
+                debugLog("canplaythrough fired for preload");
+                done();
+              });
+            }
+            // Check periodically as backup
+            const bufInterval = setInterval(() => {
               if (preloadVideo && preloadVideo.buffered.length > 0) {
                 const buffered = preloadVideo.buffered.end(0);
                 debugLog(`Preload buffer: ${buffered.toFixed(1)}s`);
-                if (buffered >= 8) {
-                  clearInterval(interval);
-                  resolve();
-                }
+                if (buffered >= 8) { done(); }
               }
             }, 500);
-            setTimeout(() => { clearInterval(interval); debugLog("Preload timeout", "warn"); resolve(); }, 10000);
+            setTimeout(() => { debugLog("Preload timeout", "warn"); done(); }, 10000);
           });
 
           // Set preload state AFTER buffering complete, right before playClip
@@ -1836,6 +1840,15 @@ window.addEventListener('beforeunload', e => { e.preventDefault(); });
         }
       } catch {}
     }, 5 * 60 * 1000);
+
+    // Periodically clear failed clips so they can be retried
+    // (CDN issues are often transient, clips may work later)
+    setInterval(() => {
+      if (failedClips.size > 0) {
+        debugLog(`Clearing ${failedClips.size} failed clips for retry`);
+        failedClips.clear();
+      }
+    }, 30 * 60 * 1000); // Every 30 minutes
   }
 
   init();
