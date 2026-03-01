@@ -2,7 +2,7 @@
 // Redirect page with OG/Twitter meta tags for rich previews on X/Twitter/etc.
 // Immediately redirects browsers to the Discord Activity install link.
 $installUrl = 'https://discord.com/oauth2/authorize?client_id=1477451341776421046';
-$image = 'https://clips.gmgnrepeat.com/cliptvlogo.png';
+$image = 'https://clips.gmgnrepeat.com/CLIPTVMAIN.png';
 ?>
 <!DOCTYPE html>
 <html lang="en">
