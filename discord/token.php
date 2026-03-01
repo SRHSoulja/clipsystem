@@ -98,6 +98,10 @@ echo json_encode([
         'global_name' => $discordUser['global_name'] ?? $discordUser['username'],
         'avatar' => $discordUser['avatar'],
     ],
+    // Debug: show what connections API returned (remove after testing)
+    '_debug_connections' => is_array($connections) ? array_map(function($c) {
+        return ['type' => $c['type'] ?? '?', 'name' => $c['name'] ?? '?', 'verified' => $c['verified'] ?? null, 'visibility' => $c['visibility'] ?? null];
+    }, $connections) : $connections,
     'twitch_username' => $twitchUsername,
     'twitch_id' => $twitchId,
     'vote_token' => $voteToken,

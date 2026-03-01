@@ -1375,7 +1375,8 @@ if (window.__discordResolve) window.__discordResolve();
       console.log('[Discord] Auth result:', {
         discord_user: discordUser?.global_name,
         twitch_username: twitchUsername || '(none found)',
-        has_vote_token: !!voteToken
+        has_vote_token: !!voteToken,
+        connections: tokenData._debug_connections
       });
     } else {
       console.error('[Discord] Token exchange failed:', tokenData);
