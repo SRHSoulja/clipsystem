@@ -1,4 +1,10 @@
 <?php
+// Discord Activity: redirect to /discord/ when loaded inside Discord's iframe
+if (isset($_GET['frame_id']) && isset($_GET['instance_id'])) {
+  header('Location: /discord/?' . $_SERVER['QUERY_STRING']);
+  exit;
+}
+
 // Launch bot if not already running
 @include_once __DIR__ . '/bot_launcher.php';
 require_once __DIR__ . '/db_config.php';
