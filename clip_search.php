@@ -1444,11 +1444,11 @@ if ($hasArchivedClips && $pdo) {
           }
         }
 
-        // Format date
-        $clipDate = '';
+        // Store UTC timestamp for client-side localization
+        $clipDateUtc = '';
         if (!empty($clip['created_at'])) {
-          $dateObj = new DateTime($clip['created_at']);
-          $clipDate = $dateObj->format('M j, Y');
+          $dateObj = new DateTime($clip['created_at'], new DateTimeZone('UTC'));
+          $clipDateUtc = $dateObj->format('c'); // ISO 8601 format
         }
       ?>
       <div class="clip-card">
@@ -1468,8 +1468,8 @@ if ($hasArchivedClips && $pdo) {
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
               <?= number_format((int)($clip['view_count'] ?? 0)) ?>
             </span>
-            <?php if ($clipDate): ?>
-            <span class="clip-date"><?= $clipDate ?></span>
+            <?php if ($clipDateUtc): ?>
+            <span class="clip-date" data-utc="<?= $clipDateUtc ?>"></span>
             <?php endif; ?>
           </div>
           <div class="clip-meta">
@@ -1832,6 +1832,16 @@ if ($hasArchivedClips && $pdo) {
     });
   </script>
   <style>@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }</style>
+
+  <script>
+  // Localize clip dates to viewer's timezone
+  document.querySelectorAll('.clip-date[data-utc]').forEach(function(el) {
+    var d = new Date(el.getAttribute('data-utc'));
+    if (!isNaN(d)) {
+      el.textContent = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+  });
+  </script>
 
   </div>
 </body>

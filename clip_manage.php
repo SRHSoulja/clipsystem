@@ -674,10 +674,10 @@ $baseUrl = "/manage/" . urlencode($login);
           }
         }
 
-        $clipDate = '';
+        $clipDateUtc = '';
         if (!empty($clip['created_at'])) {
-          $dateObj = new DateTime($clip['created_at']);
-          $clipDate = $dateObj->format('M j, Y');
+          $dateObj = new DateTime($clip['created_at'], new DateTimeZone('UTC'));
+          $clipDateUtc = $dateObj->format('c');
         }
       ?>
       <div class="clip-card <?= $isBlocked ? 'is-blocked' : '' ?>" data-seq="<?= $seq ?>">
@@ -696,7 +696,7 @@ $baseUrl = "/manage/" . urlencode($login);
           <div class="clip-title"><?= htmlspecialchars($title) ?></div>
           <div class="clip-meta">
             <span><?= number_format((int)($clip['view_count'] ?? 0)) ?> views</span>
-            <?php if ($clipDate): ?><span><?= $clipDate ?></span><?php endif; ?>
+            <?php if ($clipDateUtc): ?><span class="clip-date" data-utc="<?= $clipDateUtc ?>"></span><?php endif; ?>
           </div>
           <?php if (!empty($clip['creator_name'])): ?>
           <div class="clip-clipper">&#9986; <?= htmlspecialchars($clip['creator_name']) ?></div>
@@ -809,6 +809,14 @@ $baseUrl = "/manage/" . urlencode($login);
         showToast('Error: ' + e.message, 'error');
       }
     }
+
+    // Localize clip dates to viewer's timezone
+    document.querySelectorAll('.clip-date[data-utc]').forEach(function(el) {
+      var d = new Date(el.getAttribute('data-utc'));
+      if (!isNaN(d)) {
+        el.textContent = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      }
+    });
   </script>
 </body>
 </html>
