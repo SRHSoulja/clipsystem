@@ -466,6 +466,10 @@ $navCurrentPath = $_SERVER['REQUEST_URI'] ?? '/';
     height: 24px;
 }
 
+.nav-mobile-menu {
+    display: none;
+}
+
 /* Mobile Styles */
 @media (max-width: 768px) {
     .nav-links {
