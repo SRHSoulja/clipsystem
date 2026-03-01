@@ -44,6 +44,7 @@ $tokenResponse = curl_discord('https://discord.com/api/oauth2/token', [
     'client_secret' => $DISCORD_CLIENT_SECRET,
     'grant_type' => 'authorization_code',
     'code' => $code,
+    'redirect_uri' => "https://{$DISCORD_CLIENT_ID}.discordsays.com",
 ]);
 
 if (!$tokenResponse || !isset($tokenResponse['access_token'])) {
