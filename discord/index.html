@@ -1347,10 +1347,14 @@ if (window.__discordResolve) window.__discordResolve();
   // Show channel picker overlay
   const pickerOverlay = document.getElementById('channelPickerOverlay');
 
+  const statusText = document.querySelector('#loadingOverlay .text');
+
   try {
+    statusText.textContent = 'Initializing Discord SDK...';
     discordSdk = new window.DiscordSDK(DISCORD_CLIENT_ID);
     await discordSdk.ready();
 
+    statusText.textContent = 'Authorizing...';
     // Authorize with Discord
     const { code } = await discordSdk.commands.authorize({
       client_id: DISCORD_CLIENT_ID,
@@ -1360,6 +1364,7 @@ if (window.__discordResolve) window.__discordResolve();
       scope: ['identify', 'connections']
     });
 
+    statusText.textContent = 'Exchanging token...';
     // Exchange code for token on our server
     const tokenRes = await fetch('/discord/token.php', {
       method: 'POST',
@@ -1369,15 +1374,21 @@ if (window.__discordResolve) window.__discordResolve();
     const tokenData = await tokenRes.json();
 
     if (tokenData.access_token) {
+      statusText.textContent = 'Authenticating...';
       await discordSdk.commands.authenticate({ access_token: tokenData.access_token });
       discordUser = tokenData.discord_user;
       twitchUsername = tokenData.twitch_username;
       voteToken = tokenData.vote_token;
       discordAuthComplete = true;
+    } else {
+      console.error('[Discord] Token exchange failed:', tokenData);
     }
   } catch (e) {
     console.error('[Discord] Auth error:', e);
   }
+
+  // Hide loading overlay, show channel picker
+  document.getElementById('loadingOverlay').classList.add('hide');
 
   // Show Discord identity badge
   const badge = document.getElementById('discordBadge');
