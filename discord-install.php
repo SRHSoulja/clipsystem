@@ -2,7 +2,7 @@
 // Redirect page with OG/Twitter meta tags for rich previews on X/Twitter/etc.
 // Immediately redirects browsers to the Discord Activity install link.
 $installUrl = 'https://discord.com/oauth2/authorize?client_id=1477451341776421046';
-$image = 'https://clips.gmgnrepeat.com/cliptv-banner.png';
+$image = 'https://clips.gmgnrepeat.com/cliptvlogo.png';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -21,7 +21,7 @@ $image = 'https://clips.gmgnrepeat.com/cliptv-banner.png';
 <meta property="og:site_name" content="ClipTV by GMGNRepeat">
 
 <!-- Twitter Card -->
-<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="ClipTV - Watch Clips Together on Discord">
 <meta name="twitter:description" content="A synced Twitch clip viewer you can launch right inside Discord. Browse streamers, vote, chat, and watch together with friends.">
 <meta name="twitter:image" content="<?= $image ?>">
