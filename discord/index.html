@@ -2216,7 +2216,13 @@ if (window.__discordResolve) window.__discordResolve();
       }
 
       const sep = chosen.sourceURL.includes("?") ? "&" : "?";
-      return `${chosen.sourceURL}${sep}sig=${encodeURIComponent(sig)}&token=${encodeURIComponent(token)}`;
+      let videoUrl = `${chosen.sourceURL}${sep}sig=${encodeURIComponent(sig)}&token=${encodeURIComponent(token)}`;
+
+      // Rewrite Twitch CDN URLs through Discord's URL mapping proxy
+      // (Discord blocks direct external media URLs in Activity iframes)
+      videoUrl = videoUrl.replace('https://production.assets.clips.twitchcdn.net/', '/twitch-clips/');
+
+      return videoUrl;
     } catch (e) {
       debugLog("GQL err: " + e.message, "err");
       return null;
