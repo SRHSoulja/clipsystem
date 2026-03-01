@@ -1169,8 +1169,12 @@
     <button id="chatBtn">💬<span id="chatBadge" class="chat-badge"></span></button>
   </div>
 
-  <!-- clipActions hidden in Discord Activity (links don't work in sandboxed iframe) -->
-  <div id="clipActions" style="display:none;"></div>
+  <!-- clipActions hidden in Discord Activity (buttons must exist for JS references) -->
+  <div id="clipActions" style="display:none;">
+    <button class="action-btn" id="dlBtn"><span>Download</span></button>
+    <button class="action-btn" id="shareClipTVBtn"><span>Share ClipTV</span></button>
+    <button class="action-btn" id="copyLinkBtn"><span>Copy Clip Link</span></button>
+  </div>
 
   <!-- Chat Panel (draggable on desktop) -->
   <div id="chatPanel">
