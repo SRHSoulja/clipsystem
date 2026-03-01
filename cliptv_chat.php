@@ -96,8 +96,29 @@ try {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-  // Require Twitch login
+  // Require Twitch login (via PHP session or Discord HMAC token)
   $currentUser = getCurrentUser();
+
+  // Fallback: Discord Activity auth via HMAC token
+  if (!$currentUser) {
+    $twitchUsername = strtolower(trim($_POST['twitch_username'] ?? ''));
+    $discordUserId = trim($_POST['discord_user_id'] ?? '');
+    $voteToken = trim($_POST['vote_token'] ?? '');
+    $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
+
+    if ($twitchUsername && $discordUserId && $voteToken && $ADMIN_KEY) {
+      $expected = hash_hmac('sha256', $twitchUsername . '|' . $discordUserId, $ADMIN_KEY);
+      if (hash_equals($expected, $voteToken)) {
+        // Valid Discord auth - create a synthetic user object
+        $currentUser = [
+          'id' => 'discord_' . $discordUserId,
+          'login' => $twitchUsername,
+          'display_name' => $twitchUsername,
+        ];
+      }
+    }
+  }
+
   if (!$currentUser) {
     http_response_code(401);
     echo json_encode(["error" => "Login required", "logged_in" => false]);

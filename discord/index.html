@@ -1151,7 +1151,7 @@
       </div>
     </div>
     <div class="login-prompt" id="loginPrompt" style="display:none;">
-      <span id="loginLink" style="color:#adadb8;font-size:13px;">Link your Twitch in Discord Settings to vote</span>
+      <span id="loginLink" style="color:#adadb8;font-size:13px;">Link your Twitch in Discord Settings → Connections to vote and chat</span>
     </div>
     <div id="discordBadge" style="display:none;margin-top:8px;font-size:11px;color:#5865F2;text-align:center;"></div>
   </div>
@@ -1191,7 +1191,7 @@
       <button id="chatSend">➤</button>
     </div>
     <div class="chat-login-prompt" id="chatLoginPrompt">
-      <a id="chatLoginLink" href="#">Log in with Twitch to chat</a>
+      <a id="chatLoginLink" href="#" onclick="return false;">Link your Twitch in Discord Settings → Connections to chat</a>
     </div>
   </div>
 
@@ -3667,7 +3667,8 @@ if (window.__discordResolve) window.__discordResolve();
       const res = await fetch(url, { cache: 'no-store', credentials: 'same-origin' });
       const data = await res.json();
 
-      chatLoggedIn = !!data.logged_in;
+      // In Discord, use twitchUsername from Discord auth instead of PHP session
+      chatLoggedIn = !!twitchUsername || !!data.logged_in;
 
       // Show/hide input vs login prompt
       if (chatLoggedIn) {
@@ -3754,6 +3755,12 @@ if (window.__discordResolve) window.__discordResolve();
       const formData = new FormData();
       formData.append('login', login);
       formData.append('message', text);
+      // Include Discord auth for users without PHP sessions
+      if (twitchUsername && voteToken) {
+        formData.append('twitch_username', twitchUsername);
+        formData.append('discord_user_id', discordUser?.id || '');
+        formData.append('vote_token', voteToken);
+      }
       const res = await fetch(`${API_BASE}/cliptv_chat.php`, {
         method: 'POST',
         body: formData,
