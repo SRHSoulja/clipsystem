@@ -1335,6 +1335,7 @@ if (window.__discordResolve) window.__discordResolve();
 
   let discordSdk, discordUser, twitchUsername, voteToken;
   let discordAuthComplete = false;
+  let debugConnections = null;
 
   // Show channel picker overlay
   const pickerOverlay = document.getElementById('channelPickerOverlay');
@@ -1372,11 +1373,12 @@ if (window.__discordResolve) window.__discordResolve();
       twitchUsername = tokenData.twitch_username;
       voteToken = tokenData.vote_token;
       discordAuthComplete = true;
+      debugConnections = tokenData._debug_connections;
       console.log('[Discord] Auth result:', {
         discord_user: discordUser?.global_name,
         twitch_username: twitchUsername || '(none found)',
         has_vote_token: !!voteToken,
-        connections: tokenData._debug_connections
+        connections: debugConnections
       });
     } else {
       console.error('[Discord] Token exchange failed:', tokenData);
@@ -1396,8 +1398,7 @@ if (window.__discordResolve) window.__discordResolve();
       badge.textContent = `Voting as ${twitchUsername}`;
     } else {
       // Debug: show what connections were found
-      const conns = tokenData?._debug_connections;
-      const connTypes = conns && conns.length ? conns.map(c => c.type).join(', ') : 'none';
+      const connTypes = debugConnections && debugConnections.length ? debugConnections.map(c => c.type).join(', ') : 'none';
       badge.textContent = `${discordUser.global_name} | Connections found: ${connTypes}`;
       badge.style.color = '#ff6b6b';
     }
