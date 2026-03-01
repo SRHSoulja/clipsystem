@@ -1582,7 +1582,7 @@ if (window.__discordResolve) window.__discordResolve();
   // Wait for channel selection
   const login = await new Promise(resolve => {
     const qs = new URLSearchParams(location.search);
-    const preselected = qs.get("login");
+    const preselected = qs.get("login") || sessionStorage.getItem('cliptv_last_channel');
     if (preselected) {
       if (pickerOverlay) pickerOverlay.style.display = 'none';
       resolve(preselected.toLowerCase());
@@ -1623,6 +1623,7 @@ if (window.__discordResolve) window.__discordResolve();
     });
   });
 
+  sessionStorage.setItem('cliptv_last_channel', login);
   document.title = login + " ClipTV";
   const API_BASE = "";
 
