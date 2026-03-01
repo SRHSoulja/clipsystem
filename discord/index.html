@@ -1559,7 +1559,7 @@ if (window.__discordResolve) window.__discordResolve();
   });
 
   // Debug
-  const debugEnabled = true; // Temporarily forced on to diagnose black screen
+  const debugEnabled = new URLSearchParams(window.location.search).has('debug');
   const debugOverlay = document.getElementById("debugOverlay");
   const debugLines = [];
 
