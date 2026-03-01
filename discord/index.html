@@ -1212,10 +1212,10 @@
       <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>
       <span>Copy Clip Link</span>
     </button>
-    <a class="action-btn" id="bugReportBtn" href="mailto:contact@gmgnrepeat.com?subject=Bug%20Report%20-%20ClipTV%20Discord%20Activity" title="Report a bug" style="text-decoration:none;">
+    <button class="action-btn" id="bugReportBtn" title="Report a bug">
       <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 8h-2.81c-.45-.78-1.07-1.45-1.82-1.96L17 4.41 15.59 3l-2.17 2.17C12.96 5.06 12.49 5 12 5s-.96.06-1.41.17L8.41 3 7 4.41l1.62 1.63C7.88 6.55 7.26 7.22 6.81 8H4v2h2.09c-.05.33-.09.66-.09 1v1H4v2h2v1c0 .34.04.67.09 1H4v2h2.81c1.04 1.79 2.97 3 5.19 3s4.15-1.21 5.19-3H20v-2h-2.09c.05-.33.09-.66.09-1v-1h2v-2h-2v-1c0-.34-.04-.67-.09-1H20V8zm-6 8h-4v-2h4v2zm0-4h-4v-2h4v2z"/></svg>
       <span>Report Bug</span>
-    </a>
+    </button>
   </div>
 
   <!-- Chat Panel (draggable on desktop) -->
@@ -3637,40 +3637,22 @@ if (window.__discordResolve) window.__discordResolve();
   });
 
   // === Download Button ===
+  // Discord Activities can't trigger downloads, so open the clip URL externally
   document.getElementById('dlBtn').addEventListener('click', async (e) => {
     e.preventDefault();
     e.stopPropagation();
-    const dlBtn = document.getElementById('dlBtn');
-    const src = player.src;
-    if (!src) return;
-
-    const labelSpan = dlBtn.querySelector('span');
-    dlBtn.classList.add('downloading');
-    if (labelSpan) labelSpan.textContent = 'Downloading...';
-
-    // Build filename from current clip info
-    const seq = currentClipData?.seq || '';
-    const title = (currentClipData?.title || 'clip').replace(/[^a-zA-Z0-9_\- ]/g, '').trim().substring(0, 60);
-    const filename = seq ? `clip_${seq}_${title}.mp4` : `${title}.mp4`;
-
+    const clipId = currentClipData?.clip_id;
+    if (!clipId) return;
+    const clipUrl = `https://clips.twitch.tv/${clipId}`;
     try {
-      const resp = await fetch(src);
-      const blob = await resp.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      if (discordSdk) {
+        await discordSdk.commands.openExternalLink({ url: clipUrl });
+      } else {
+        window.open(clipUrl, '_blank');
+      }
     } catch (err) {
-      debugLog("Download fetch failed, falling back to window.open: " + err, "warn");
-      window.open(src, '_blank');
+      debugLog("openExternalLink failed: " + err, "warn");
     }
-
-    if (labelSpan) labelSpan.textContent = 'Download';
-    dlBtn.classList.remove('downloading');
   });
 
   // === Copy Link Button ===
@@ -3742,6 +3724,32 @@ if (window.__discordResolve) window.__discordResolve();
         btn.classList.remove('copied');
         if (labelSpan) labelSpan.textContent = 'Share ClipTV';
       }, 2000);
+    }
+  });
+
+  // === Bug Report Button ===
+  // Discord Activities can't open mailto: links, so use openExternalLink
+  document.getElementById('bugReportBtn').addEventListener('click', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const mailUrl = 'mailto:contact@gmgnrepeat.com?subject=Bug%20Report%20-%20ClipTV%20Discord%20Activity';
+    try {
+      if (discordSdk) {
+        await discordSdk.commands.openExternalLink({ url: mailUrl });
+      } else {
+        window.location.href = mailUrl;
+      }
+    } catch (err) {
+      debugLog("openExternalLink for bug report failed: " + err, "warn");
+      // Fallback: copy email to clipboard
+      try {
+        await navigator.clipboard.writeText('contact@gmgnrepeat.com');
+        const labelSpan = document.getElementById('bugReportBtn').querySelector('span');
+        if (labelSpan) {
+          labelSpan.textContent = 'Email copied!';
+          setTimeout(() => { labelSpan.textContent = 'Report Bug'; }, 2000);
+        }
+      } catch (_) {}
     }
   });
 
