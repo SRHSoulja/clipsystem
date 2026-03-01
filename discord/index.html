@@ -1317,11 +1317,16 @@
 <script type="module" id="discord-init">
 import { DiscordSDK } from 'https://unpkg.com/@discord/embedded-app-sdk/dist/index.mjs';
 window.DiscordSDK = DiscordSDK;
-window.__discordReady = new Promise(resolve => { window.__discordResolve = resolve; });
+if (window.__discordResolve) window.__discordResolve();
 </script>
 <script>
 (async () => {
   // ===== DISCORD ACTIVITY INIT =====
+  window.__discordReady = new Promise(resolve => { window.__discordResolve = resolve; });
+
+  // Wait for Discord SDK module to load
+  await window.__discordReady;
+
   const DISCORD_CLIENT_ID = window.DISCORD_CLIENT_ID || '';
 
   let discordSdk, discordUser, twitchUsername, voteToken;
