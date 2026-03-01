@@ -1104,24 +1104,26 @@ if ($currentUser) {
                         </div>
                     </div>
                 </div>
+            </div>
 
-                <div style="border-top:1px solid #2a2a2d;padding-top:16px;margin-top:16px;">
-                    <div style="display:flex;gap:24px;flex-wrap:wrap;">
-                        <div style="flex:1;min-width:200px;">
-                            <label style="color:#adadb8;font-size:13px;margin-bottom:8px;display:block;">Desktop ClipTV HUD</label>
-                            <div class="position-picker" id="hudPositionPicker" style="display:flex;gap:6px;">
-                                <button class="position-btn" data-pos="tl">Left</button>
-                                <button class="position-btn" data-pos="tc">Center</button>
-                                <button class="position-btn" data-pos="tr">Right</button>
-                            </div>
+            <div class="card" data-permission="edit_hud">
+                <h3>HUD Position</h3>
+                <p style="color: #adadb8; margin-bottom: 12px; font-size: 13px;">Position of the clip info overlay on each player.</p>
+                <div style="display:flex;gap:24px;flex-wrap:wrap;">
+                    <div style="flex:1;min-width:200px;">
+                        <label style="color:#adadb8;font-size:13px;margin-bottom:8px;display:block;">Desktop ClipTV</label>
+                        <div class="position-picker" id="hudPositionPicker" style="display:flex;gap:6px;">
+                            <button class="position-btn" data-pos="tl">Left</button>
+                            <button class="position-btn" data-pos="tc">Center</button>
+                            <button class="position-btn" data-pos="tr">Right</button>
                         </div>
-                        <div style="flex:1;min-width:200px;">
-                            <label style="color:#adadb8;font-size:13px;margin-bottom:8px;display:block;">Discord Activity HUD</label>
-                            <div class="position-picker" id="discordHudPositionPicker" style="display:flex;gap:6px;">
-                                <button class="position-btn" data-pos="tl">Left</button>
-                                <button class="position-btn" data-pos="tc">Center</button>
-                                <button class="position-btn" data-pos="tr">Right</button>
-                            </div>
+                    </div>
+                    <div style="flex:1;min-width:200px;">
+                        <label style="color:#adadb8;font-size:13px;margin-bottom:8px;display:block;">Discord Activity</label>
+                        <div class="position-picker" id="discordHudPositionPicker" style="display:flex;gap:6px;">
+                            <button class="position-btn" data-pos="tl">Left</button>
+                            <button class="position-btn" data-pos="tc">Center</button>
+                            <button class="position-btn" data-pos="tr">Right</button>
                         </div>
                     </div>
                 </div>
