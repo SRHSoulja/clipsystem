@@ -1114,10 +1114,13 @@
       #chatPanel { width: 280px; height: 340px; left: 12px; bottom: 70px; }
     }
 
-    /* Portrait mobile: stack clipActions above viewerControls */
+    /* Portrait mobile: stack bottom controls with breathing room */
     @media (max-width: 768px) and (orientation: portrait) {
+      #viewerControls {
+        bottom: max(28px, env(safe-area-inset-bottom));
+      }
       #clipActions {
-        bottom: calc(max(12px, env(safe-area-inset-bottom)) + 52px);
+        bottom: calc(max(28px, env(safe-area-inset-bottom)) + 52px);
       }
     }
 
