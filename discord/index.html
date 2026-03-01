@@ -2200,7 +2200,16 @@ if (window.__discordResolve) window.__discordResolve();
 
       // Rewrite Twitch CDN URLs through Discord's URL mapping proxy
       // (Discord blocks direct external media URLs in Activity iframes)
-      videoUrl = videoUrl.replace('https://production.assets.clips.twitchcdn.net/', '/twitch-clips/');
+      // Handle all known Twitch clip CDN domains
+      videoUrl = videoUrl
+        .replace('https://production.assets.clips.twitchcdn.net/', '/twitch-clips/')
+        .replace('https://clips-media-assets2.twitch.tv/', '/twitch-clips/')
+        .replace('https://clips-media-assets.twitch.tv/', '/twitch-clips/');
+
+      // Catch-all: if URL still starts with https://, it's an external domain Discord will block
+      if (videoUrl.startsWith('https://')) {
+        debugLog(`WARNING: unhandled CDN domain: ${videoUrl.substring(0, 60)}`, "err");
+      }
 
       return videoUrl;
     } catch (e) {
@@ -2340,6 +2349,14 @@ if (window.__discordResolve) window.__discordResolve();
       preloadVideo.load();
       preloadVideo.remove();
       preloadVideo = null;
+    }
+
+    // Rewrite any external CDN URLs (sync state may have raw URLs from web player)
+    if (mp4Url && mp4Url.startsWith('https://')) {
+      mp4Url = mp4Url
+        .replace('https://production.assets.clips.twitchcdn.net/', '/twitch-clips/')
+        .replace('https://clips-media-assets2.twitch.tv/', '/twitch-clips/')
+        .replace('https://clips-media-assets.twitch.tv/', '/twitch-clips/');
     }
 
     // If we don't have URL, fetch it
@@ -2532,6 +2549,10 @@ if (window.__discordResolve) window.__discordResolve();
     }, loadTimeout);
   }
 
+  // Track consecutive clip failures for error display
+  let consecutiveFailures = 0;
+  const MAX_FAILURES = 5;
+
   // Controller: pick next clip and broadcast
   async function controllerAdvance() {
     if (!isController) return;
@@ -2540,16 +2561,32 @@ if (window.__discordResolve) window.__discordResolve();
     const next = pickNextClip();
     if (!next) {
       debugLog("No clips available", "err");
+      setSyncStatus("error", "No clips found");
+      voteSeq.textContent = "No clips available";
+      voteHud.classList.add("show");
       return;
     }
 
     const mp4Url = await getMp4Url(next.id);
     if (!mp4Url) {
-      debugLog("Failed to get MP4 for next clip", "err");
+      consecutiveFailures++;
+      debugLog(`Failed to get MP4 (${consecutiveFailures}/${MAX_FAILURES})`, "err");
+      if (consecutiveFailures >= MAX_FAILURES) {
+        setSyncStatus("error", "Clips won't load");
+        voteSeq.textContent = "Clips failed to load";
+        clipTitle.textContent = "Try restarting the Activity";
+        voteHud.classList.add("show");
+        consecutiveFailures = 0;
+        // Retry after a longer delay
+        setTimeout(controllerAdvance, 10000);
+        return;
+      }
       // Try another clip
       setTimeout(controllerAdvance, 1000);
       return;
     }
+
+    consecutiveFailures = 0;
 
     // Update server state (this broadcasts to all viewers)
     await setServerState(next, mp4Url);
@@ -3898,6 +3935,16 @@ if (window.__discordResolve) window.__discordResolve();
       clips = Array.isArray(clipsResult.value.clips) ? clipsResult.value.clips : [];
       debugLog(`${clips.length} clips loaded`, "ok");
       fillQueue(); // Pre-generate up next queue
+    }
+
+    if (!clips.length) {
+      debugLog("No clips found for this channel!", "err");
+      setSyncStatus("error", "No clips");
+      voteSeq.textContent = "No clips found";
+      clipTitle.textContent = "This channel has no archived clips";
+      voteHud.classList.add("show");
+      loadingOverlay.classList.add("hide");
+      return;
     }
 
     // Process sync state
