@@ -91,6 +91,8 @@
     #voteHud.pos-tr.show { transform: translateX(0); }
     #voteHud.pos-tl { top: max(24px, env(safe-area-inset-top)) !important; left: max(24px, env(safe-area-inset-left)) !important; bottom: auto !important; right: auto !important; transform: translateX(-6px); }
     #voteHud.pos-tl.show { transform: translateX(0); }
+    #voteHud.pos-tc { top: max(24px, env(safe-area-inset-top)) !important; left: 50% !important; right: auto !important; bottom: auto !important; transform: translateX(-50%) translateY(-6px); }
+    #voteHud.pos-tc.show { transform: translateX(-50%) translateY(0); }
     #voteHud.pos-br { bottom: max(24px, env(safe-area-inset-bottom)) !important; right: max(24px, env(safe-area-inset-right)) !important; top: auto !important; left: auto !important; transform: translateX(6px); }
     #voteHud.pos-br.show { transform: translateX(0); }
     #voteHud.pos-bl { bottom: max(24px, env(safe-area-inset-bottom)) !important; left: max(24px, env(safe-area-inset-left)) !important; top: auto !important; right: auto !important; transform: translateX(-6px); }
@@ -1849,12 +1851,12 @@
   let currentHudPosition = null;
 
   function setHudPosition(pos, force = false) {
-    const validPositions = ['tr', 'tl', 'br', 'bl'];
+    const validPositions = ['tr', 'tl', 'tc', 'br', 'bl'];
     if (!validPositions.includes(pos)) pos = 'tr';
     if (!force && pos === currentHudPosition) return;
 
     currentHudPosition = pos;
-    voteHud.classList.remove('pos-tr', 'pos-tl', 'pos-br', 'pos-bl');
+    voteHud.classList.remove('pos-tr', 'pos-tl', 'pos-tc', 'pos-br', 'pos-bl');
     voteHud.classList.add(`pos-${pos}`);
     debugLog(`HUD position: ${pos}`);
   }

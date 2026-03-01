@@ -29,7 +29,7 @@ $type = strtolower($_GET["type"] ?? $_POST["type"] ?? "hud"); // "hud" or "top"
 $ADMIN_KEY = getenv('ADMIN_KEY') ?: '';
 
 // Valid positions and types
-$validPositions = ['tr', 'tl', 'br', 'bl'];
+$validPositions = ['tr', 'tl', 'tc', 'br', 'bl'];
 $validTypes = ['hud', 'top'];
 if (!in_array($type, $validTypes)) $type = 'hud';
 
@@ -78,6 +78,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['set'])) {
         $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS voting_enabled BOOLEAN DEFAULT TRUE");
         $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS last_refresh TIMESTAMP");
         $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS banner_config TEXT DEFAULT '{}'");
+        $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS discord_hud_position VARCHAR(10) DEFAULT 'tr'");
       } catch (PDOException $e) {
         // Columns might already exist, ignore
       }
@@ -111,11 +112,12 @@ $debug = isset($_GET['debug']);
 
 if ($pdo) {
   try {
-    $stmt = $pdo->prepare("SELECT hud_position, top_position, banner_config FROM channel_settings WHERE login = ?");
+    $stmt = $pdo->prepare("SELECT hud_position, discord_hud_position, top_position, banner_config FROM channel_settings WHERE login = ?");
     $stmt->execute([$login]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
     $hudPosition = $row && isset($row['hud_position']) ? $row['hud_position'] : 'tr';
+    $discordHudPosition = $row && isset($row['discord_hud_position']) ? $row['discord_hud_position'] : 'tr';
     $topPosition = $row && isset($row['top_position']) ? $row['top_position'] : 'br';
 
     // Parse banner_config - handle empty/default cases
@@ -132,6 +134,7 @@ if ($pdo) {
       "login" => $login,
       "position" => $type === 'top' ? $topPosition : $hudPosition,
       "hud_position" => $hudPosition,
+      "discord_hud_position" => $discordHudPosition,
       "top_position" => $topPosition,
       "banner_config" => $bannerConfig
     ];
@@ -152,6 +155,7 @@ if ($pdo) {
       "login" => $login,
       "position" => $defaultPos,
       "hud_position" => "tr",
+      "discord_hud_position" => "tr",
       "top_position" => "br",
       "banner_config" => new stdClass()
     ];
@@ -165,6 +169,7 @@ if ($pdo) {
     "login" => $login,
     "position" => $defaultPos,
     "hud_position" => "tr",
+    "discord_hud_position" => "tr",
     "top_position" => "br",
     "banner_config" => new stdClass()
   ]);

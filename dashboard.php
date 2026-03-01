@@ -950,13 +950,22 @@ if ($currentUser) {
             </div>
 
             <div class="card" data-permission="edit_hud">
-                <h3>HUD Position</h3>
-                <p style="color: #adadb8; margin-bottom: 12px;">Position of the clip info overlay on screen.</p>
+                <h3>Desktop ClipTV HUD Position</h3>
+                <p style="color: #adadb8; margin-bottom: 12px;">Position of the clip info overlay on the desktop Clip TV player.</p>
                 <div class="position-picker" id="hudPositionPicker">
                     <button class="position-btn" data-pos="tl">Top Left</button>
+                    <button class="position-btn" data-pos="tc">Top Center</button>
                     <button class="position-btn" data-pos="tr">Top Right</button>
-                    <button class="position-btn" data-pos="bl">Bottom Left</button>
-                    <button class="position-btn" data-pos="br">Bottom Right</button>
+                </div>
+            </div>
+
+            <div class="card" data-permission="edit_hud">
+                <h3>Discord Activity HUD Position</h3>
+                <p style="color: #adadb8; margin-bottom: 12px;">Position of the clip info overlay on the Discord Activity player.</p>
+                <div class="position-picker" id="discordHudPositionPicker">
+                    <button class="position-btn" data-pos="tl">Top Left</button>
+                    <button class="position-btn" data-pos="tc">Top Center</button>
+                    <button class="position-btn" data-pos="tr">Top Right</button>
                 </div>
             </div>
 
@@ -1833,9 +1842,11 @@ if ($currentUser) {
                 btn.addEventListener('click', async () => {
                     picker.querySelectorAll('.position-btn').forEach(b => b.classList.remove('active'));
                     btn.classList.add('active');
-                    const field = picker.id === 'hudPositionPicker' ? 'hud_position' : 'top_position';
-                    const posLabels = { tl: 'Top Left', tr: 'Top Right', bl: 'Bottom Left', br: 'Bottom Right' };
-                    const fieldLabel = field === 'hud_position' ? 'HUD' : 'Top Clips';
+                    const fieldMap = { hudPositionPicker: 'hud_position', discordHudPositionPicker: 'discord_hud_position', topPositionPicker: 'top_position' };
+                    const field = fieldMap[picker.id] || 'hud_position';
+                    const posLabels = { tl: 'Top Left', tc: 'Top Center', tr: 'Top Right', bl: 'Bottom Left', br: 'Bottom Right' };
+                    const labelMap = { hud_position: 'Desktop HUD', discord_hud_position: 'Discord HUD', top_position: 'Top Clips' };
+                    const fieldLabel = labelMap[field] || 'HUD';
                     const success = await saveSetting(field, btn.dataset.pos, false);
                     if (success) {
                         showToast('success', `${fieldLabel} Position Updated`, `Now showing in ${posLabels[btn.dataset.pos]}`);
@@ -2021,6 +2032,7 @@ if ($currentUser) {
 
                 // HUD positions
                 setPositionPicker('hudPositionPicker', settings.hud_position || 'tr');
+                setPositionPicker('discordHudPositionPicker', settings.discord_hud_position || 'tr');
                 setPositionPicker('topPositionPicker', settings.top_position || 'br');
 
                 // Voting

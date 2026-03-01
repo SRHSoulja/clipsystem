@@ -167,6 +167,7 @@ try {
     $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS profile_image_url TEXT");
     $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS profile_image_updated_at TIMESTAMP");
     $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS banner_config TEXT DEFAULT '{}'");
+    $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS discord_hud_position VARCHAR(10) DEFAULT 'tr'");
 
     // Ensure channel_mods table exists
     $pdo->exec("
@@ -191,7 +192,7 @@ switch ($action) {
 
         try {
             $stmt = $pdo->prepare("
-                SELECT hud_position, top_position, blocked_words, blocked_clippers, voting_enabled, vote_feedback, silent_prefix, last_refresh, command_settings, banner_config
+                SELECT hud_position, discord_hud_position, top_position, blocked_words, blocked_clippers, voting_enabled, vote_feedback, silent_prefix, last_refresh, command_settings, banner_config
                 FROM channel_settings WHERE login = ?
             ");
             $stmt->execute([$login]);
@@ -200,6 +201,7 @@ switch ($action) {
             if (!$settings) {
                 $settings = [
                     'hud_position' => 'tr',
+                    'discord_hud_position' => 'tr',
                     'top_position' => 'br',
                     'blocked_words' => '[]',
                     'blocked_clippers' => '[]',
@@ -255,6 +257,7 @@ switch ($action) {
 
         $allowedFields = [
             'hud_position' => 'change_hud',
+            'discord_hud_position' => 'change_hud',
             'top_position' => 'change_hud',
             'voting_enabled' => 'toggle_voting',
             'vote_feedback' => 'toggle_voting',
@@ -277,6 +280,9 @@ switch ($action) {
             // Validate and format value based on field
             switch ($field) {
                 case 'hud_position':
+                case 'discord_hud_position':
+                    if (!in_array($value, ['tr', 'tl', 'tc', 'br', 'bl'])) $value = 'tr';
+                    break;
                 case 'top_position':
                     if (!in_array($value, ['tr', 'tl', 'br', 'bl'])) $value = 'tr';
                     break;
