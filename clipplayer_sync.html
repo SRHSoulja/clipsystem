@@ -1303,7 +1303,9 @@
 <script>
 (() => {
   const qs = new URLSearchParams(location.search);
-  const login = (qs.get("login") || "floppyjimmie").toLowerCase();
+  // Extract login from /tv/username path or ?login= query param
+  const pathMatch = location.pathname.match(/^\/tv\/([a-zA-Z0-9_]+)/);
+  const login = (qs.get("login") || (pathMatch && pathMatch[1]) || "floppyjimmie").toLowerCase();
   document.title = login + " Clip TV";
   const API_BASE = "https://clips.gmgnrepeat.com";
 
