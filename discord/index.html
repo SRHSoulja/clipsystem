@@ -1315,7 +1315,7 @@
 
 <script src="/discord/config.php"></script>
 <script type="module" id="discord-init">
-import { DiscordSDK } from 'https://unpkg.com/@discord/embedded-app-sdk/dist/index.mjs';
+import { DiscordSDK } from 'https://esm.sh/@discord/embedded-app-sdk@2.4.0';
 window.DiscordSDK = DiscordSDK;
 if (window.__discordResolve) window.__discordResolve();
 </script>
@@ -1324,8 +1324,20 @@ if (window.__discordResolve) window.__discordResolve();
   // ===== DISCORD ACTIVITY INIT =====
   window.__discordReady = new Promise(resolve => { window.__discordResolve = resolve; });
 
-  // Wait for Discord SDK module to load
-  await window.__discordReady;
+  // Wait for Discord SDK module to load (with 10s timeout)
+  const sdkTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 10000));
+  try {
+    await Promise.race([window.__discordReady, sdkTimeout]);
+  } catch (e) {
+    document.querySelector('#loadingOverlay .text').textContent = 'Failed to load Discord SDK. Try restarting the Activity.';
+    console.error('[Discord] SDK load failed:', e);
+    return;
+  }
+
+  if (!window.DiscordSDK) {
+    document.querySelector('#loadingOverlay .text').textContent = 'Discord SDK not available.';
+    return;
+  }
 
   const DISCORD_CLIENT_ID = window.DISCORD_CLIENT_ID || '';
 
