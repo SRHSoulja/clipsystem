@@ -1355,7 +1355,8 @@ if (window.__discordResolve) window.__discordResolve();
       response_type: 'code',
       state: '',
       prompt: 'none',
-      scope: ['identify', 'connections']
+      scope: ['identify', 'connections'],
+      redirect_uri: `https://${DISCORD_CLIENT_ID}.discordsays.com`
     });
 
     statusText.textContent = 'Exchanging token...';

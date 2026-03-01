@@ -35,7 +35,7 @@ if (!in_array($type, $validTypes)) $type = 'hud';
 
 // Column name based on type
 $column = $type === 'top' ? 'top_position' : 'hud_position';
-$defaultPos = $type === 'top' ? 'br' : 'tl'; // HUD defaults to top-left
+$defaultPos = $type === 'top' ? 'br' : 'tr'; // HUD defaults to top-right
 
 // Use database to store position per channel
 $pdo = get_db_connection();
@@ -59,7 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['set'])) {
       // Use channel_settings table (create if not exists) - add top_position column
       $pdo->exec("CREATE TABLE IF NOT EXISTS channel_settings (
         login VARCHAR(50) PRIMARY KEY,
-        hud_position VARCHAR(10) DEFAULT 'tl',
+        hud_position VARCHAR(10) DEFAULT 'tr',
         top_position VARCHAR(10) DEFAULT 'br',
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )");
@@ -110,17 +110,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['set'])) {
 $debug = isset($_GET['debug']);
 
 if ($pdo) {
-  // Migrate old default: tr -> tl for all channels that weren't explicitly set
-  try {
-    $pdo->exec("UPDATE channel_settings SET hud_position = 'tl' WHERE hud_position = 'tr'");
-  } catch (PDOException $e) { /* ignore */ }
-
   try {
     $stmt = $pdo->prepare("SELECT hud_position, top_position, banner_config FROM channel_settings WHERE login = ?");
     $stmt->execute([$login]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    $hudPosition = $row && isset($row['hud_position']) ? $row['hud_position'] : 'tl';
+    $hudPosition = $row && isset($row['hud_position']) ? $row['hud_position'] : 'tr';
     $topPosition = $row && isset($row['top_position']) ? $row['top_position'] : 'br';
 
     // Parse banner_config - handle empty/default cases
@@ -156,7 +151,7 @@ if ($pdo) {
     $response = [
       "login" => $login,
       "position" => $defaultPos,
-      "hud_position" => "tl",
+      "hud_position" => "tr",
       "top_position" => "br",
       "banner_config" => new stdClass()
     ];
@@ -169,7 +164,7 @@ if ($pdo) {
   echo json_encode([
     "login" => $login,
     "position" => $defaultPos,
-    "hud_position" => "tl",
+    "hud_position" => "tr",
     "top_position" => "br",
     "banner_config" => new stdClass()
   ]);
