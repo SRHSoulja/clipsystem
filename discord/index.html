@@ -1551,8 +1551,21 @@ if (window.__discordResolve) window.__discordResolve();
     if (!html) {
       html = '<div style="color:#666;padding:16px;text-align:center;">No channels available yet</div>';
     }
+    // CTA at bottom of picker
+    html += `<div style="padding:16px;text-align:center;border-top:1px solid #333;margin-top:8px;">
+      <div style="color:#adadb8;font-size:13px;margin-bottom:8px;">Don't see your favorite streamer?</div>
+      <button class="cta-add-streamer" style="background:#9147ff;color:#fff;border:none;border-radius:8px;padding:10px 20px;font-size:13px;font-weight:600;cursor:pointer;transition:opacity 0.2s;">Add them to ClipTV</button>
+      <div style="margin-top:10px;"><button class="cta-visit-site" style="background:none;border:1px solid #555;border-radius:8px;padding:8px 16px;color:#a78bfa;font-size:12px;cursor:pointer;transition:opacity 0.2s;">Are you a streamer? Check out our tools</button></div>
+    </div>`;
     resultsDiv.innerHTML = html;
     attachPickerListeners(resultsDiv, resolve);
+    // CTA button handlers
+    resultsDiv.querySelector('.cta-add-streamer')?.addEventListener('click', () => {
+      discordSdk.commands.openExternalLink({ url: 'https://clips.gmgnrepeat.com/archive' }).catch(() => {});
+    });
+    resultsDiv.querySelector('.cta-visit-site')?.addEventListener('click', () => {
+      discordSdk.commands.openExternalLink({ url: 'https://gmgnrepeat.com' }).catch(() => {});
+    });
   }
 
   let pickerResolve = null; // stored so toggleFavorite can re-render the picker
@@ -1660,7 +1673,14 @@ if (window.__discordResolve) window.__discordResolve();
           }).join('');
           attachPickerListeners(resultsDiv, resolve);
         } else {
-          resultsDiv.innerHTML = '<div style="color:#ef4444;padding:12px;text-align:center;">No streamer found with that name</div>';
+          resultsDiv.innerHTML = `<div style="padding:16px;text-align:center;">
+            <div style="color:#ef4444;font-size:14px;margin-bottom:10px;">No streamer found with that name</div>
+            <div style="color:#adadb8;font-size:13px;margin-bottom:8px;">Want to add them?</div>
+            <button class="cta-add-streamer" style="background:#9147ff;color:#fff;border:none;border-radius:8px;padding:10px 20px;font-size:13px;font-weight:600;cursor:pointer;">Add a streamer to ClipTV</button>
+          </div>`;
+          resultsDiv.querySelector('.cta-add-streamer')?.addEventListener('click', () => {
+            discordSdk.commands.openExternalLink({ url: 'https://clips.gmgnrepeat.com/archive' }).catch(() => {});
+          });
         }
       } catch (e) {
         resultsDiv.innerHTML = '<div style="color:#ef4444;padding:12px;text-align:center;">Search failed, try again</div>';
