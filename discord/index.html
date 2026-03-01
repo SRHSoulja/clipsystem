@@ -604,6 +604,23 @@
     #backBtn:hover { background: rgba(96, 165, 250, 0.2); border-color: #60a5fa; }
     #backBtn:active { transform: scale(0.95); }
 
+    #channelSwitchBtn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.7);
+      border: 2px solid rgba(74, 222, 128, 0.6);
+      color: #4ade80;
+      font: 600 16px system-ui, sans-serif;
+      backdrop-filter: blur(12px);
+      cursor: pointer;
+      transition: all 200ms;
+    }
+    #channelSwitchBtn:hover { background: rgba(74, 222, 128, 0.2); border-color: #4ade80; }
+    #channelSwitchBtn:active { transform: scale(0.95); }
+
     /* Clip action buttons (bottom center) */
     #clipActions {
       position: absolute;
@@ -1193,6 +1210,7 @@
 
   <div id="viewerControls">
     <div id="viewerCount"><span class="eye">👁</span><span id="viewerNum">1</span></div>
+    <button id="channelSwitchBtn" title="Switch channel">📺</button>
     <button id="backBtn">⏮</button>
     <button id="remoteBtn">🎛️ Remote</button>
     <button id="skipBtn">⏭ Skip<span id="skipStatus"></span></button>
@@ -2039,7 +2057,7 @@ if (window.__discordResolve) window.__discordResolve();
     // If HUD is locked, don't show controls
     if (hudLocked) return;
     // Ignore taps on interactive elements - let them handle their own events
-    if (e.target.closest('#volumeControl, #volumeBtn, #volumeSlider, #unmuteOverlay, #skipBtn, #remoteBtn, #remoteSheet, #viewerControls, #voteUp, #voteDown, #loginPrompt, #clipRequestBanner, #chatPanel, #chatBtn, #backBtn, #clipActions, #dlBtn, #copyLinkBtn, #shareClipTVBtn, #bugReportBtn')) {
+    if (e.target.closest('#volumeControl, #volumeBtn, #volumeSlider, #unmuteOverlay, #skipBtn, #remoteBtn, #remoteSheet, #viewerControls, #voteUp, #voteDown, #loginPrompt, #clipRequestBanner, #chatPanel, #chatBtn, #backBtn, #channelSwitchBtn, #clipActions, #dlBtn, #copyLinkBtn, #shareClipTVBtn, #bugReportBtn')) {
       // But still reset the hide timeout so controls stay visible while interacting
       if (controlsVisible && hideTimeout) {
         clearTimeout(hideTimeout);
@@ -3768,6 +3786,12 @@ if (window.__discordResolve) window.__discordResolve();
       clearServerRequest();
       debugLog("Request cancelled", "ok");
     }
+  });
+
+  // === Channel Switch Button ===
+  document.getElementById('channelSwitchBtn').addEventListener('click', () => {
+    sessionStorage.removeItem('cliptv_last_channel');
+    location.reload();
   });
 
   // === Back Button ===
