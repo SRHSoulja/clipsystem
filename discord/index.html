@@ -1341,12 +1341,12 @@
     <div style="text-align:center;margin-bottom:16px;">
       <img src="/tapefacectv.png" alt="ClipTV" style="width:56px;height:56px;border-radius:10px;margin-bottom:6px;">
       <h1 style="color:#efeff1;font-size:24px;font-weight:700;margin:0 0 4px;">ClipTV</h1>
-      <p style="color:#adadb8;font-size:13px;margin:0;">Search for a streamer to start watching clips</p>
+      <p style="color:#adadb8;font-size:13px;margin:0;">Browse or search for a streamer to start watching clips</p>
       <div id="discordIdentity" style="display:none;margin-top:8px;padding:6px 12px;background:#1a1a2e;border:1px solid #3a3a5d;border-radius:8px;font-size:12px;color:#adadb8;"></div>
     </div>
     <input type="text" id="channelSearchInput" placeholder="Search streamers..." autofocus
       style="width:100%;padding:12px 16px;background:#1a1a1d;border:1px solid #555;border-radius:10px;color:#efeff1;font-size:16px;outline:none;box-sizing:border-box;">
-    <div id="channelSearchResults" style="margin-top:8px;max-height:320px;overflow-y:auto;border-radius:10px;background:#18181b;"></div>
+    <div id="channelSearchResults" style="margin-top:8px;max-height:calc(100vh - 220px);overflow-y:auto;border-radius:10px;background:#18181b;"></div>
   </div>
 </div>
 
@@ -1378,9 +1378,11 @@ if (window.__discordResolve) window.__discordResolve();
 
   const DISCORD_CLIENT_ID = window.DISCORD_CLIENT_ID || '';
 
-  let discordSdk, discordUser, twitchUsername, voteToken;
+  let discordSdk, discordUser, twitchUsername, voteToken, discordToken;
   let discordAuthComplete = false;
   let debugConnections = null;
+  let userFavorites = [];
+  let browseChannels = [];
 
   // Show channel picker overlay
   const pickerOverlay = document.getElementById('channelPickerOverlay');
@@ -1417,6 +1419,7 @@ if (window.__discordResolve) window.__discordResolve();
       discordUser = tokenData.discord_user;
       twitchUsername = tokenData.twitch_username;
       voteToken = tokenData.vote_token;
+      discordToken = tokenData.discord_token;
       discordAuthComplete = true;
       debugConnections = tokenData._debug_connections;
       console.log('[Discord] Auth result:', {
@@ -1469,6 +1472,106 @@ if (window.__discordResolve) window.__discordResolve();
   // Show channel picker
   if (pickerOverlay) pickerOverlay.style.display = 'flex';
 
+  // --- Channel picker helper functions ---
+  function renderChannelCard(ch, isFavorited) {
+    const starColor = isFavorited ? '#fbbf24' : '#555';
+    const starChar = isFavorited ? '&#9733;' : '&#9734;';
+    const starTitle = isFavorited ? 'Remove from favorites' : 'Add to favorites';
+    return `
+      <div class="channel-result" data-login="${ch.login}" style="display:flex;align-items:center;gap:12px;padding:10px 16px;cursor:pointer;border-radius:8px;transition:background 0.15s;">
+        <img src="${ch.profile_image_url || ''}" style="width:40px;height:40px;border-radius:50%;background:#333;flex-shrink:0;" onerror="this.style.display='none'">
+        <div style="flex:1;min-width:0;">
+          <div style="color:#efeff1;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${ch.display_name || ch.login}</div>
+          <div style="color:#adadb8;font-size:12px;">${ch.clip_count ? ch.clip_count + ' clips' : ''}</div>
+        </div>
+        <button class="fav-toggle" data-login="${ch.login}" style="background:none;border:none;color:${starColor};font-size:22px;cursor:pointer;padding:4px 8px;flex-shrink:0;line-height:1;" title="${starTitle}">${starChar}</button>
+      </div>
+    `;
+  }
+
+  function attachPickerListeners(container, resolve) {
+    container.querySelectorAll('.channel-result').forEach(el => {
+      el.addEventListener('mouseenter', () => el.style.background = '#2a2a2d');
+      el.addEventListener('mouseleave', () => el.style.background = 'transparent');
+      el.addEventListener('click', (e) => {
+        if (e.target.closest('.fav-toggle')) return;
+        if (pickerOverlay) pickerOverlay.style.display = 'none';
+        resolve(el.dataset.login.toLowerCase());
+      });
+    });
+    container.querySelectorAll('.fav-toggle').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleFavorite(btn.dataset.login, btn);
+      });
+    });
+  }
+
+  function renderPickerDefault(resultsDiv, resolve) {
+    let html = '';
+    if (userFavorites.length > 0) {
+      html += '<div style="padding:8px 16px 4px;color:#fbbf24;font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px;"><span style="font-size:15px;">&#9733;</span> Favorites</div>';
+      html += userFavorites.map(ch => renderChannelCard(ch, true)).join('');
+      html += '<div style="height:1px;background:#333;margin:4px 16px;"></div>';
+    }
+    if (browseChannels.length > 0) {
+      html += '<div style="padding:8px 16px 4px;color:#adadb8;font-size:13px;font-weight:700;">Browse Channels</div>';
+      const favLogins = new Set(userFavorites.map(f => f.login));
+      const filtered = browseChannels.filter(ch => !favLogins.has(ch.login));
+      html += filtered.map(ch => renderChannelCard(ch, false)).join('');
+    }
+    if (!html) {
+      html = '<div style="color:#666;padding:16px;text-align:center;">No channels available yet</div>';
+    }
+    resultsDiv.innerHTML = html;
+    attachPickerListeners(resultsDiv, resolve);
+  }
+
+  async function toggleFavorite(login, btnEl) {
+    if (!discordUser?.id || !discordToken) return;
+    const wasFav = userFavorites.some(f => f.login === login);
+    // Optimistic UI
+    if (wasFav) {
+      btnEl.innerHTML = '\u2606';
+      btnEl.style.color = '#555';
+      userFavorites = userFavorites.filter(f => f.login !== login);
+    } else {
+      btnEl.innerHTML = '\u2605';
+      btnEl.style.color = '#fbbf24';
+      const chData = browseChannels.find(c => c.login === login) || { login, display_name: login, profile_image_url: '', clip_count: 0 };
+      userFavorites.push({ ...chData });
+    }
+    try {
+      await fetch('/discord/channel_favorites.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel_login: login, discord_user_id: discordUser.id, discord_token: discordToken })
+      });
+    } catch (e) {
+      console.error('[Favorites] toggle error:', e);
+    }
+  }
+
+  // --- Fetch browse + favorites, then show picker ---
+  const resultsDiv = document.getElementById('channelSearchResults');
+  try {
+    const fetches = [
+      fetch('/discord/channel_browse.php').then(r => r.json()).catch(() => [])
+    ];
+    if (discordUser?.id && discordToken) {
+      fetches.push(
+        fetch(`/discord/channel_favorites.php?discord_user_id=${encodeURIComponent(discordUser.id)}&discord_token=${encodeURIComponent(discordToken)}`).then(r => r.json()).catch(() => [])
+      );
+    } else {
+      fetches.push(Promise.resolve([]));
+    }
+    const [browseRes, favRes] = await Promise.all(fetches);
+    browseChannels = Array.isArray(browseRes) ? browseRes : [];
+    userFavorites = Array.isArray(favRes) ? favRes : [];
+  } catch (e) {
+    console.error('[Picker] Failed to load browse/favorites:', e);
+  }
+
   // Wait for channel selection
   const login = await new Promise(resolve => {
     const qs = new URLSearchParams(location.search);
@@ -1479,35 +1582,25 @@ if (window.__discordResolve) window.__discordResolve();
       return;
     }
 
+    // Render default browse/favorites view
+    renderPickerDefault(resultsDiv, resolve);
+
     const searchInput = document.getElementById('channelSearchInput');
-    const resultsDiv = document.getElementById('channelSearchResults');
     let searchTimeout;
 
     searchInput?.addEventListener('input', () => {
       clearTimeout(searchTimeout);
       const q = searchInput.value.trim();
-      if (q.length < 2) { resultsDiv.innerHTML = ''; return; }
+      if (q.length < 2) { renderPickerDefault(resultsDiv, resolve); return; }
       searchTimeout = setTimeout(async () => {
         try {
           const res = await fetch(`/channel_search.php?q=${encodeURIComponent(q)}`);
           const channels = await res.json();
-          resultsDiv.innerHTML = channels.map(ch => `
-            <div class="channel-result" data-login="${ch.login}" style="display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer;border-radius:8px;transition:background 0.15s;">
-              <img src="${ch.profile_image_url || ''}" style="width:40px;height:40px;border-radius:50%;background:#333;" onerror="this.style.display='none'">
-              <div>
-                <div style="color:#efeff1;font-weight:600;">${ch.display_name || ch.login}</div>
-                <div style="color:#adadb8;font-size:12px;">${ch.clip_count ? ch.clip_count + ' clips' : ''}</div>
-              </div>
-            </div>
-          `).join('');
-          resultsDiv.querySelectorAll('.channel-result').forEach(el => {
-            el.addEventListener('mouseenter', () => el.style.background = '#2a2a2d');
-            el.addEventListener('mouseleave', () => el.style.background = 'transparent');
-            el.addEventListener('click', () => {
-              if (pickerOverlay) pickerOverlay.style.display = 'none';
-              resolve(el.dataset.login.toLowerCase());
-            });
-          });
+          resultsDiv.innerHTML = channels.map(ch => {
+            const isFav = userFavorites.some(f => f.login === ch.login);
+            return renderChannelCard(ch, isFav);
+          }).join('');
+          attachPickerListeners(resultsDiv, resolve);
         } catch (e) {
           resultsDiv.innerHTML = '<div style="color:#666;padding:12px;">Search failed</div>';
         }
@@ -1874,8 +1967,8 @@ if (window.__discordResolve) window.__discordResolve();
   }
 
   // HUD lock toggle
-  hudToggle.addEventListener('click', (e) => {
-    e.stopPropagation();
+  let hudToggleTouched = false;
+  function doHudToggle() {
     hudLocked = !hudLocked;
     if (hudLocked) {
       hideControls();
@@ -1886,6 +1979,18 @@ if (window.__discordResolve) window.__discordResolve();
       hudToggleIcon.innerHTML = '<path d="' + eyeOpenPath + '"/>';
       showControls();
     }
+  }
+  hudToggle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (hudToggleTouched) { hudToggleTouched = false; return; }
+    doHudToggle();
+  });
+  // Touch devices (esp. Discord Activity iframe) may not fire click from touch
+  hudToggle.addEventListener('touchend', (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    hudToggleTouched = true;
+    doHudToggle();
   });
 
   // Handle tap to show controls on mobile (single tap shows, auto-hides after 4s)

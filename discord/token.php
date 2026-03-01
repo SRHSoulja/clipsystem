@@ -90,6 +90,12 @@ if ($twitchUsername && $ADMIN_KEY) {
     $voteToken = hash_hmac('sha256', $twitchUsername . '|' . $discordUser['id'], $ADMIN_KEY);
 }
 
+// Step 5: Generate discord identity token (works for ALL Discord users, used for favorites)
+$discordToken = null;
+if ($discordUser['id'] && $ADMIN_KEY) {
+    $discordToken = hash_hmac('sha256', 'discord|' . $discordUser['id'], $ADMIN_KEY);
+}
+
 // Return everything the client needs
 echo json_encode([
     'access_token' => $accessToken,
@@ -106,6 +112,7 @@ echo json_encode([
     'twitch_username' => $twitchUsername,
     'twitch_id' => $twitchId,
     'vote_token' => $voteToken,
+    'discord_token' => $discordToken,
 ]);
 
 // --- Helper functions ---
