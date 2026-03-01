@@ -1477,9 +1477,13 @@ if (window.__discordResolve) window.__discordResolve();
     const starColor = isFavorited ? '#fbbf24' : '#555';
     const starChar = isFavorited ? '&#9733;' : '&#9734;';
     const starTitle = isFavorited ? 'Remove from favorites' : 'Add to favorites';
+    const initial = (ch.display_name || ch.login || '?')[0].toUpperCase();
+    const avatarHtml = ch.profile_image_url
+      ? `<img src="${ch.profile_image_url}" style="width:40px;height:40px;border-radius:50%;background:#333;flex-shrink:0;" onerror="this.outerHTML='<div style=\\'width:40px;height:40px;border-radius:50%;background:#333;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#888;font-weight:700;font-size:16px;\\'>${initial}</div>'">`
+      : `<div style="width:40px;height:40px;border-radius:50%;background:#333;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#888;font-weight:700;font-size:16px;">${initial}</div>`;
     return `
       <div class="channel-result" data-login="${ch.login}" style="display:flex;align-items:center;gap:12px;padding:10px 16px;cursor:pointer;border-radius:8px;transition:background 0.15s;">
-        <img src="${ch.profile_image_url || ''}" style="width:40px;height:40px;border-radius:50%;background:#333;flex-shrink:0;" onerror="this.style.display='none'">
+        ${avatarHtml}
         <div style="flex:1;min-width:0;">
           <div style="color:#efeff1;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${ch.display_name || ch.login}</div>
           <div style="color:#adadb8;font-size:12px;">${ch.clip_count ? ch.clip_count + ' clips' : ''}</div>
@@ -1995,8 +1999,8 @@ if (window.__discordResolve) window.__discordResolve();
 
   // Handle tap to show controls on mobile (single tap shows, auto-hides after 4s)
   function handleTap(e) {
-    // Always allow HUD toggle tap
-    if (e.target.closest('#hudToggle')) return;
+    // HUD toggle tap - handle directly since click may not fire in Discord iframe
+    if (e.target.closest('#hudToggle')) { doHudToggle(); return; }
     // If HUD is locked, don't show controls
     if (hudLocked) return;
     // Ignore taps on interactive elements - let them handle their own events
