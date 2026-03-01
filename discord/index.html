@@ -1534,19 +1534,21 @@ if (window.__discordResolve) window.__discordResolve();
     attachPickerListeners(resultsDiv, resolve);
   }
 
+  let pickerResolve = null; // stored so toggleFavorite can re-render the picker
+
   async function toggleFavorite(login, btnEl) {
     if (!discordUser?.id || !discordToken) return;
     const wasFav = userFavorites.some(f => f.login === login);
-    // Optimistic UI
+    // Update data
     if (wasFav) {
-      btnEl.innerHTML = '\u2606';
-      btnEl.style.color = '#555';
       userFavorites = userFavorites.filter(f => f.login !== login);
     } else {
-      btnEl.innerHTML = '\u2605';
-      btnEl.style.color = '#fbbf24';
       const chData = browseChannels.find(c => c.login === login) || { login, display_name: login, profile_image_url: '', clip_count: 0 };
       userFavorites.push({ ...chData });
+    }
+    // Re-render picker so favorites section updates instantly
+    if (pickerResolve) {
+      renderPickerDefault(resultsDiv, pickerResolve);
     }
     try {
       await fetch('/discord/channel_favorites.php', {
@@ -1590,6 +1592,7 @@ if (window.__discordResolve) window.__discordResolve();
     }
 
     // Render default browse/favorites view
+    pickerResolve = resolve;
     renderPickerDefault(resultsDiv, resolve);
 
     const searchInput = document.getElementById('channelSearchInput');
