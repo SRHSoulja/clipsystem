@@ -691,18 +691,18 @@ if ($hasArchivedClips && $pdo) {
       color: #adadb8;
       font-size: 14px;
     }
-    .nav-links {
+    .streamer-links {
       display: flex;
       gap: 15px;
       margin-top: 6px;
     }
-    .nav-links a {
+    .streamer-links a {
       color: #adadb8;
       text-decoration: none;
       font-size: 13px;
       transition: color 0.2s;
     }
-    .nav-links a:hover {
+    .streamer-links a:hover {
       color: #9147ff;
     }
     .header-right {
@@ -1197,6 +1197,10 @@ if ($hasArchivedClips && $pdo) {
     @media (max-width: 768px) {
       body { padding: 12px; }
       header { flex-direction: column; align-items: flex-start; }
+      .header-left { flex-wrap: wrap; }
+      h1 { font-size: 20px; }
+      .streamer-links { gap: 12px; }
+      .streamer-links a { color: #9147ff; font-size: 14px; }
       .filters { flex-direction: column; }
       .filter-group input,
       .filter-group select { min-width: 100%; }
@@ -1218,7 +1222,7 @@ if ($hasArchivedClips && $pdo) {
         <div>
           <h1><?= htmlspecialchars($login) ?>'s Clips</h1>
           <p class="subtitle"><?= $hasArchivedClips ? 'Archived' : 'Live from Twitch' ?></p>
-          <div class="nav-links">
+          <div class="streamer-links">
             <a href="/tv/<?= htmlspecialchars(urlencode($login)) ?>">Watch on ClipTV</a>
             <a href="https://twitch.tv/<?= htmlspecialchars(urlencode($login)) ?>" target="_blank">Twitch Channel</a>
           </div>

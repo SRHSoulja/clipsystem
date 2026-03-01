@@ -272,9 +272,9 @@ $baseUrl = "/manage/" . urlencode($login);
     }
     h1 { margin: 0; font-size: 24px; color: #9147ff; }
     .subtitle { color: #adadb8; font-size: 14px; margin-top: 4px; }
-    .nav-links { display: flex; gap: 15px; margin-top: 8px; }
-    .nav-links a { color: #9147ff; text-decoration: none; font-size: 13px; }
-    .nav-links a:hover { text-decoration: underline; }
+    .streamer-links { display: flex; gap: 15px; margin-top: 8px; }
+    .streamer-links a { color: #9147ff; text-decoration: none; font-size: 13px; }
+    .streamer-links a:hover { text-decoration: underline; }
 
     .stats-bar {
       display: flex;
@@ -554,7 +554,7 @@ $baseUrl = "/manage/" . urlencode($login);
       <div>
         <h1>Clip Manager</h1>
         <p class="subtitle"><?= htmlspecialchars($login) ?>'s Clips</p>
-        <div class="nav-links">
+        <div class="streamer-links">
           <a href="/mod/<?= htmlspecialchars($login) ?>">Back to Dashboard</a>
           <a href="/search/<?= htmlspecialchars($login) ?>">Public Search</a>
         </div>

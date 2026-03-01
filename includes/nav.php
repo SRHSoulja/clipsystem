@@ -183,9 +183,34 @@ $navCurrentPath = $_SERVER['REQUEST_URI'] ?? '/';
             <?php endif; ?>
         </div>
 
-        <button class="nav-mobile-toggle" id="navMobileToggle">
+        <button class="nav-mobile-toggle" id="navMobileToggle" aria-label="Menu">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
         </button>
+    </div>
+
+    <div class="nav-mobile-menu" id="navMobileMenu">
+        <a href="/">Home</a>
+        <?php if ($navHasAccess): ?>
+        <a href="/channels">Dashboard</a>
+        <?php endif; ?>
+        <?php if ($navIsSuperAdmin): ?>
+        <a href="/admin.php">Admin Panel</a>
+        <?php endif; ?>
+        <?php if ($navIsArchivedStreamer): ?>
+        <div class="nav-mobile-divider"></div>
+        <?php foreach ($navChannels as $ch): ?>
+        <?php if ($ch['role'] === 'streamer'): ?>
+        <a href="/dashboard/<?= urlencode($ch['login']) ?>">Streamer Dashboard</a>
+        <a href="/tv/<?= urlencode($ch['login']) ?>">Watch ClipTV</a>
+        <?php endif; ?>
+        <?php endforeach; ?>
+        <?php endif; ?>
+        <div class="nav-mobile-divider"></div>
+        <?php if ($navUser): ?>
+        <a href="/auth/logout.php?return=<?= urlencode($navCurrentPath) ?>">Logout (<?= htmlspecialchars($navUser['display_name'] ?? $navUser['login']) ?>)</a>
+        <?php else: ?>
+        <a href="/auth/login.php?return=<?= urlencode($navCurrentPath) ?>">Login with Twitch</a>
+        <?php endif; ?>
     </div>
 </nav>
 
@@ -447,15 +472,7 @@ $navCurrentPath = $_SERVER['REQUEST_URI'] ?? '/';
         display: none;
     }
 
-    .nav-user-name {
-        display: none;
-    }
-
-    .nav-user-btn {
-        padding: 4px;
-    }
-
-    .nav-chevron {
+    .nav-right {
         display: none;
     }
 
@@ -463,12 +480,48 @@ $navCurrentPath = $_SERVER['REQUEST_URI'] ?? '/';
         display: block;
     }
 
-    .nav-login-btn span {
+    .nav-mobile-menu {
         display: none;
+        position: absolute;
+        top: 56px;
+        left: 0;
+        right: 0;
+        background: #1f1f23;
+        border-bottom: 1px solid #3d3d42;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+        padding: 8px 0;
+        z-index: 999;
     }
 
-    .nav-login-btn {
-        padding: 8px 12px;
+    .nav-mobile-menu.open {
+        display: block;
+    }
+
+    .nav-mobile-menu a {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 20px;
+        color: #efeff1;
+        text-decoration: none;
+        font-size: 15px;
+        transition: background 0.1s;
+    }
+
+    .nav-mobile-menu a:hover {
+        background: rgba(145, 71, 255, 0.15);
+    }
+
+    .nav-mobile-menu a svg {
+        width: 18px;
+        height: 18px;
+        color: #adadb8;
+    }
+
+    .nav-mobile-menu .nav-mobile-divider {
+        height: 1px;
+        background: #3d3d42;
+        margin: 4px 0;
     }
 }
 
@@ -504,13 +557,17 @@ $navCurrentPath = $_SERVER['REQUEST_URI'] ?? '/';
         });
     }
 
-    // Mobile toggle (for future mobile menu implementation)
+    // Mobile menu toggle
     const mobileToggle = document.getElementById('navMobileToggle');
-    if (mobileToggle) {
-        mobileToggle.addEventListener('click', () => {
-            // Mobile menu implementation
-            if (dropdown) {
-                dropdown.classList.toggle('open');
+    const mobileMenu = document.getElementById('navMobileMenu');
+    if (mobileToggle && mobileMenu) {
+        mobileToggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            mobileMenu.classList.toggle('open');
+        });
+        document.addEventListener('click', (e) => {
+            if (!mobileMenu.contains(e.target) && !mobileToggle.contains(e.target)) {
+                mobileMenu.classList.remove('open');
             }
         });
     }
