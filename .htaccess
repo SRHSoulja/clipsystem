@@ -25,6 +25,10 @@
     # Clean URLs - /invite/username -> invite.php (streamer onboarding)
     RewriteRule ^invite/([a-zA-Z0-9_]+)/?$ invite.php?login=$1 [QSA,L]
     RewriteRule ^invite/?$ invite.php [QSA,L]
+
+    # Clean URLs - /terms and /privacy
+    RewriteRule ^terms/?$ terms.php [QSA,L]
+    RewriteRule ^privacy/?$ privacy.php [QSA,L]
 </IfModule>
 
 # Enable CORS for all origins and security headers
