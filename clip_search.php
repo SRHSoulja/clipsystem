@@ -620,7 +620,7 @@ if ($hasArchivedClips && $pdo) {
   <?php if ($streamerProfileImage): ?>
   <link rel="icon" type="image/png" href="<?= htmlspecialchars($streamerProfileImage) ?>">
   <?php else: ?>
-  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="/tapefacecliptv.png" type="image/png">
   <?php endif; ?>
   <title>Clip Search<?= $query ? ': ' . htmlspecialchars($query) : '' ?> - <?= htmlspecialchars($login) ?></title>
   <style>

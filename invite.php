@@ -64,7 +64,7 @@ $ogTitle = $login ? "ClipTV - " . htmlspecialchars($login) : "ClipTV - Twitch Cl
 $ogDesc = $login && $isArchived
   ? number_format($clipCount) . " clips archived for " . htmlspecialchars($login) . ". Search, play, and manage your clips."
   : "Give your viewers a way to browse, share, and relive your best clips. BRB overlay, ClipTV, chat bot, and more.";
-$ogImage = $profileImage ?: 'https://clips.gmgnrepeat.com/favicon.svg';
+$ogImage = $profileImage ?: 'https://clips.gmgnrepeat.com/tapefacecliptv.png';
 $ogUrl = 'https://clips.gmgnrepeat.com/invite' . ($login ? '/' . urlencode($login) : '');
 
 header("Content-Type: text/html; charset=utf-8");
@@ -74,7 +74,7 @@ header("Content-Type: text/html; charset=utf-8");
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="/tapefacecliptv.png" type="image/png">
   <title><?= $ogTitle ?></title>
 
   <!-- Open Graph -->
@@ -294,7 +294,7 @@ header("Content-Type: text/html; charset=utf-8");
       <?php if ($profileImage): ?>
         <img src="<?= htmlspecialchars($profileImage) ?>" alt="" class="hero-avatar">
       <?php elseif (!$login): ?>
-        <div class="hero-icon">📺</div>
+        <div class="hero-icon"><img src="/tapefacecliptv.png" alt="ClipTV" style="width:80px;height:80px;border-radius:16px;"></div>
       <?php endif; ?>
 
       <h1><?= $heroTitle ?></h1>
@@ -312,7 +312,7 @@ header("Content-Type: text/html; charset=utf-8");
       </div>
 
       <div class="feature-card">
-        <div class="feature-emoji">📺</div>
+        <div class="feature-emoji"><img src="/tapefacecliptv.png" alt="ClipTV" style="width:36px;height:36px;border-radius:6px;"></div>
         <div class="feature-text">
           <h3>ClipTV</h3>
           <p>A synchronized clip channel for the community. Watch together in real-time, vote on favorites, and chat. Works on the web, on mobile, and in <a href="https://discord.com/oauth2/authorize?client_id=1477451341776421046" target="_blank" style="color:#5865F2;font-weight:600;">Discord as an Activity</a>.<?php if ($isArchived): ?> <a href="/tv/<?= htmlspecialchars($login) ?>">Watch now</a><?php endif; ?></p>

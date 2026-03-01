@@ -58,12 +58,12 @@ header("Content-Type: text/html; charset=utf-8");
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="/tapefacecliptv.png" type="image/png">
   <title>ClipTV - Your stream's greatest hits, on demand</title>
   <meta name="description" content="Give your viewers a way to browse, share, and relive your best Twitch clips. BRB overlay, ClipTV, chat bot, and more.">
   <meta property="og:title" content="ClipTV">
   <meta property="og:description" content="Your stream's greatest hits, on demand. Browse, share, vote, and replay Twitch clips.">
-  <meta property="og:image" content="https://clips.gmgnrepeat.com/favicon.svg">
+  <meta property="og:image" content="https://clips.gmgnrepeat.com/tapefacecliptv.png">
   <meta name="theme-color" content="#9147ff">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -465,7 +465,7 @@ header("Content-Type: text/html; charset=utf-8");
         </div>
       </div>
       <div class="feature-card">
-        <div class="feature-icon">📺</div>
+        <div class="feature-icon"><img src="/tapefacecliptv.png" alt="ClipTV" style="width:48px;height:48px;border-radius:8px;"></div>
         <div>
           <h3>ClipTV</h3>
           <p>A synchronized clip channel for your community. Everyone watches together in real-time, votes on favorites, and chats. Works on the web, on mobile, and in <a href="https://discord.com/oauth2/authorize?client_id=1477451341776421046" target="_blank" style="color:#5865F2;font-weight:600;">Discord as an Activity</a>.</p>

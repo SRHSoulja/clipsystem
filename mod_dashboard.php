@@ -123,7 +123,7 @@ if ($currentUser && $login === $oauthChannel && !$isStreamerOfChannel && !$isSup
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="/tapefacecliptv.png" type="image/png">
   <title>Playlist Manager - <?php echo htmlspecialchars($login); ?></title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }

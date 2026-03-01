@@ -84,7 +84,7 @@ $notArchivedRedirect = isset($_GET['not_archived']) && $_GET['not_archived'] ===
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="icon" href="/tapefacecliptv.png" type="image/png">
     <title>Dashboard Hub - ClipTV</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }

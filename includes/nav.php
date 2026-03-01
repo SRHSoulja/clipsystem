@@ -91,7 +91,7 @@ $navCurrentPath = $_SERVER['REQUEST_URI'] ?? '/';
     <div class="nav-container">
         <div class="nav-left">
             <a href="/" class="nav-brand">
-                <span class="nav-logo">📺</span>
+                <img src="/tapefacecliptv.png" alt="ClipTV" class="nav-logo-img" style="width:28px;height:28px;border-radius:6px;">
                 <span class="nav-title">ClipTV</span>
             </a>
             <div class="nav-links">
