@@ -143,6 +143,18 @@ function init_votes_tables($pdo) {
         $pdo->exec("CREATE INDEX IF NOT EXISTS idx_clip_plays_login ON clip_plays(login)");
         $pdo->exec("CREATE INDEX IF NOT EXISTS idx_clip_plays_last ON clip_plays(login, last_played_at)");
 
+        // Skip events table - tracks when clips are skipped (vote, mod, error)
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS skip_events (
+                id SERIAL PRIMARY KEY,
+                login VARCHAR(64) NOT NULL,
+                clip_id VARCHAR(256) NOT NULL,
+                skip_type VARCHAR(16) NOT NULL DEFAULT 'vote',
+                skipped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ");
+        $pdo->exec("CREATE INDEX IF NOT EXISTS idx_skip_events_login ON skip_events(login)");
+
         // Command requests table - replaces file-based state for reliability at scale
         $pdo->exec("
             CREATE TABLE IF NOT EXISTS command_requests (

@@ -2945,6 +2945,9 @@ if (window.__discordResolve) window.__discordResolve();
     // Update server state (this broadcasts to all viewers)
     await setServerState(next, mp4Url);
 
+    // Record play for analytics
+    fetch(`${API_BASE}/clip_played.php?login=${encodeURIComponent(login)}&clip_id=${encodeURIComponent(next.id)}`).catch(() => {});
+
     // Play locally
     await playClipAtPosition(next.id, mp4Url, 0, next.duration || 30, {
       clip_title: next.title,
@@ -3180,6 +3183,11 @@ if (window.__discordResolve) window.__discordResolve();
     // Prevent multiple skip triggers for same clip
     if (skipTriggered) return;
     skipTriggered = true;
+
+    // Record skip event for analytics (only manual vote-to-skip)
+    if (currentClipId) {
+      fetch(`${API_BASE}/clip_played.php?login=${encodeURIComponent(login)}&clip_id=${encodeURIComponent(currentClipId)}&skipped=1&skip_type=vote`).catch(() => {});
+    }
 
     // Immediately clear local vote state for instant UI feedback
     mySkipVote = false;

@@ -36,9 +36,16 @@ function json_response($success, $message, $data = null) {
 // Accept both GET and POST
 $login = clean_login($_REQUEST["login"] ?? "");
 $clipId = trim((string)($_REQUEST["clip_id"] ?? ""));
+$skipped = ($_REQUEST["skipped"] ?? "") === "1";
+$skipType = trim((string)($_REQUEST["skip_type"] ?? "vote"));
 
 if ($clipId === "") {
   json_response(false, "Missing clip_id parameter");
+}
+
+// Validate skip_type
+if ($skipped && !in_array($skipType, ['vote', 'mod'], true)) {
+  $skipType = 'vote';
 }
 
 // Try to get database connection
@@ -64,13 +71,22 @@ try {
   ");
   $stmt->execute([$login, $clipId]);
 
+  // Record skip event if this was a manual skip (vote-to-skip or mod skip)
+  if ($skipped) {
+    $stmt = $pdo->prepare("
+      INSERT INTO skip_events (login, clip_id, skip_type)
+      VALUES (?, ?, ?)
+    ");
+    $stmt->execute([$login, $clipId, $skipType]);
+  }
+
   // Get the updated play count
   $stmt = $pdo->prepare("SELECT play_count, last_played_at FROM clip_plays WHERE login = ? AND clip_id = ?");
   $stmt->execute([$login, $clipId]);
   $row = $stmt->fetch();
 
   if ($row) {
-    json_response(true, "Play recorded successfully", [
+    json_response(true, $skipped ? "Skip recorded" : "Play recorded", [
       'play_count' => (int)$row['play_count'],
       'last_played_at' => $row['last_played_at']
     ]);

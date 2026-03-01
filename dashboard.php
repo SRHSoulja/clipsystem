@@ -1634,7 +1634,8 @@ if ($currentUser) {
         </div>
 
         <div class="tab-content" id="tab-stats">
-            <div class="stats-grid" id="statsGrid">
+            <!-- Row 1: Overview stat boxes -->
+            <div class="stats-grid" id="statsGrid" style="grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));">
                 <div class="stat-box">
                     <div class="stat-value" id="statTotal">-</div>
                     <div class="stat-label">Total Clips</div>
@@ -1651,12 +1652,66 @@ if ($currentUser) {
                     <div class="stat-value" id="statTotalVotes">-</div>
                     <div class="stat-label">Total Votes</div>
                 </div>
+                <div class="stat-box">
+                    <div class="stat-value" id="statTotalPlays">-</div>
+                    <div class="stat-label">Total Plays</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value" id="statTotalSkips">-</div>
+                    <div class="stat-label">Total Skips</div>
+                </div>
             </div>
 
+            <!-- Row 2: Charts -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px; margin-top: 20px;">
+                <div class="card">
+                    <h3>Votes by Hour (UTC)</h3>
+                    <div id="hourlyChart" style="display: flex; align-items: flex-end; gap: 2px; height: 140px; margin-top: 16px; padding-bottom: 24px; position: relative;">
+                        <p style="color: #666; font-size: 13px;">Loading...</p>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>Daily Activity (Last 30 Days)</h3>
+                    <div id="dailyChart" style="display: flex; align-items: flex-end; gap: 2px; height: 140px; margin-top: 16px; padding-bottom: 24px; position: relative;">
+                        <p style="color: #666; font-size: 13px;">Loading...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Row 3: Ranked lists -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-top: 20px;">
+                <div class="card">
+                    <h3 style="display: flex; align-items: center; gap: 8px;">
+                        <span style="color: #fbbf24;">&#9733;</span> Community Favorites
+                    </h3>
+                    <p style="color: #666; font-size: 11px; margin-top: 2px;">Highest approval rate (min 5 votes)</p>
+                    <div id="communityFavsList" style="margin-top: 12px;">
+                        <p style="color: #666; font-size: 13px;">Loading...</p>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3 style="display: flex; align-items: center; gap: 8px;">
+                        <span style="color: #9147ff;">&#9654;</span> Most Played
+                    </h3>
+                    <div id="mostPlayedList" style="margin-top: 12px;">
+                        <p style="color: #666; font-size: 13px;">Loading...</p>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3 style="display: flex; align-items: center; gap: 8px;">
+                        <span style="color: #f97316;">&#9193;</span> Most Skipped
+                    </h3>
+                    <div id="mostSkippedList" style="margin-top: 12px;">
+                        <p style="color: #666; font-size: 13px;">Loading...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Row 4: Existing vote lists -->
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px; margin-top: 20px;">
                 <div class="card">
                     <h3 style="display: flex; align-items: center; gap: 8px;">
-                        <span style="color: #00ad03;">▲</span> Top Liked Clips
+                        <span style="color: #00ad03;">&#9650;</span> Top Liked Clips
                     </h3>
                     <div id="topLikedList" style="margin-top: 12px;">
                         <p style="color: #666; font-size: 13px;">Loading...</p>
@@ -1665,7 +1720,7 @@ if ($currentUser) {
 
                 <div class="card">
                     <h3 style="display: flex; align-items: center; gap: 8px;">
-                        <span style="color: #eb0400;">▼</span> Most Disliked Clips
+                        <span style="color: #eb0400;">&#9660;</span> Most Disliked Clips
                     </h3>
                     <div id="topDislikedList" style="margin-top: 12px;">
                         <p style="color: #666; font-size: 13px;">Loading...</p>
@@ -2901,8 +2956,105 @@ if ($currentUser) {
             }
         }
 
-        // Load vote stats when Stats tab is clicked
-        document.querySelector('.tab[data-tab="stats"]')?.addEventListener('click', loadVoteStats);
+        // Analytics dashboard
+        async function loadAnalytics() {
+            try {
+                const res = await fetch(`${API_BASE}/dashboard_api.php?action=get_analytics&key=${encodeURIComponent(authKey)}&login=${encodeURIComponent(authLogin)}`, { credentials: 'same-origin' });
+                const data = await res.json();
+                if (!data.success) return;
+
+                const ov = data.overview;
+
+                // Update stat boxes
+                document.getElementById('statTotalVotes').textContent = ov.total_votes.toLocaleString();
+                document.getElementById('statTotalPlays').textContent = ov.total_plays.toLocaleString();
+                document.getElementById('statTotalSkips').textContent = ov.total_skips.toLocaleString();
+
+                // Hourly chart
+                renderBarChart('hourlyChart', data.hourly_activity, (i) => {
+                    const h = i % 12 || 12;
+                    const ampm = i < 12 ? 'a' : 'p';
+                    return `${h}${ampm}`;
+                }, '#9147ff');
+
+                // Daily chart
+                const dailyValues = [];
+                const dailyLabels = [];
+                // Fill 30 days
+                const today = new Date();
+                const dayMap = {};
+                data.daily_activity.forEach(d => { dayMap[d.day] = parseInt(d.count); });
+                for (let i = 29; i >= 0; i--) {
+                    const d = new Date(today);
+                    d.setDate(d.getDate() - i);
+                    const key = d.toISOString().split('T')[0];
+                    dailyValues.push(dayMap[key] || 0);
+                    dailyLabels.push((d.getMonth() + 1) + '/' + d.getDate());
+                }
+                renderBarChart('dailyChart', dailyValues, (i) => {
+                    // Show label every 5th bar
+                    return i % 5 === 0 ? dailyLabels[i] : '';
+                }, '#22d3ee');
+
+                // Community favorites
+                renderRankedList('communityFavsList', data.community_favorites, (clip) =>
+                    `<span style="color: #fbbf24; font-weight: 700;">${clip.approval_pct}%</span>` +
+                    `<span style="color: #666; font-size: 11px; margin-left: 4px;">` +
+                    `(${clip.up_votes}&#9650; ${clip.down_votes}&#9660;)</span>`
+                );
+
+                // Most played
+                renderRankedList('mostPlayedList', data.most_played, (clip) =>
+                    `<span style="color: #9147ff; font-weight: 700;">${parseInt(clip.play_count).toLocaleString()}x</span>`
+                );
+
+                // Most skipped
+                renderRankedList('mostSkippedList', data.most_skipped, (clip) =>
+                    `<span style="color: #f97316; font-weight: 700;">${parseInt(clip.skip_count).toLocaleString()}x</span>`
+                );
+
+            } catch (e) {
+                console.error('Error loading analytics:', e);
+            }
+        }
+
+        function renderBarChart(containerId, values, labelFn, color) {
+            const container = document.getElementById(containerId);
+            const max = Math.max(...values, 1);
+            container.innerHTML = values.map((v, i) => {
+                const pct = Math.max((v / max) * 100, v > 0 ? 2 : 0);
+                const label = labelFn(i);
+                return `<div style="flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: flex-end; position: relative;" title="${v} votes">` +
+                    `<div style="width: 100%; min-width: 4px; background: ${color}; border-radius: 2px 2px 0 0; height: ${pct}%; transition: height 0.3s; opacity: ${v > 0 ? 1 : 0.15};"></div>` +
+                    (label ? `<span style="position: absolute; bottom: -20px; font-size: 9px; color: #666; white-space: nowrap;">${label}</span>` : '') +
+                    `</div>`;
+            }).join('');
+        }
+
+        function renderRankedList(containerId, items, statFn) {
+            const container = document.getElementById(containerId);
+            if (!items || items.length === 0) {
+                container.innerHTML = '<p style="color: #666; font-size: 13px;">No data yet</p>';
+                return;
+            }
+            container.innerHTML = items.map((clip, i) => `
+                <div style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid #3a3a3d;">
+                    <span style="color: #666; font-size: 12px; width: 20px;">${i + 1}.</span>
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(clip.title || 'Untitled')}">#${clip.seq} - ${escapeHtml(clip.title || 'Untitled')}</div>
+                    </div>
+                    <div style="font-size: 12px; text-align: right; white-space: nowrap;">
+                        ${statFn(clip)}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Load all stats when Stats tab is clicked
+        document.querySelector('.tab[data-tab="stats"]')?.addEventListener('click', () => {
+            loadVoteStats();
+            loadAnalytics();
+        });
 
         // ============ WEIGHTING FUNCTIONS ============
         let weightingConfig = null;

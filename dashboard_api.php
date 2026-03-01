@@ -768,6 +768,129 @@ switch ($action) {
         }
         break;
 
+    case 'get_analytics':
+        if (!$auth->canDo('view')) json_error("Permission denied", 403);
+
+        try {
+            // Overview stats
+            $stmt = $pdo->prepare("SELECT COALESCE(SUM(up_votes), 0) as total_up, COALESCE(SUM(down_votes), 0) as total_down FROM votes WHERE login = ?");
+            $stmt->execute([$login]);
+            $voteTotals = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            $stmt = $pdo->prepare("SELECT COALESCE(SUM(play_count), 0) as total_plays FROM clip_plays WHERE login = ?");
+            $stmt->execute([$login]);
+            $playTotals = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            $stmt = $pdo->prepare("SELECT COUNT(*) as total_skips FROM skip_events WHERE login = ?");
+            $stmt->execute([$login]);
+            $skipTotals = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            $stmt = $pdo->prepare("SELECT COUNT(DISTINCT username) as unique_voters FROM vote_ledger WHERE login = ?");
+            $stmt->execute([$login]);
+            $voterCount = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            // Top 15 clips by score (up - down)
+            $stmt = $pdo->prepare("
+                SELECT v.seq, v.title, v.up_votes, v.down_votes,
+                       (v.up_votes - v.down_votes) as score,
+                       COALESCE(cp.play_count, 0) as play_count,
+                       COALESCE(sk.skip_count, 0) as skip_count
+                FROM votes v
+                LEFT JOIN clip_plays cp ON v.login = cp.login AND v.clip_id = cp.clip_id
+                LEFT JOIN (SELECT login, clip_id, COUNT(*) as skip_count FROM skip_events GROUP BY login, clip_id) sk ON v.login = sk.login AND v.clip_id = sk.clip_id
+                WHERE v.login = ? AND (v.up_votes + v.down_votes) > 0
+                ORDER BY score DESC, v.up_votes DESC
+                LIMIT 15
+            ");
+            $stmt->execute([$login]);
+            $topClips = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // Most played clips
+            $stmt = $pdo->prepare("
+                SELECT cp.play_count, cp.last_played_at, c.title, c.seq
+                FROM clip_plays cp
+                JOIN clips c ON cp.login = c.login AND cp.clip_id = c.clip_id
+                WHERE cp.login = ?
+                ORDER BY cp.play_count DESC
+                LIMIT 15
+            ");
+            $stmt->execute([$login]);
+            $mostPlayed = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // Most skipped clips
+            $stmt = $pdo->prepare("
+                SELECT se.clip_id, COUNT(*) as skip_count, c.title, c.seq
+                FROM skip_events se
+                JOIN clips c ON se.login = c.login AND se.clip_id = c.clip_id
+                WHERE se.login = ?
+                GROUP BY se.clip_id, c.title, c.seq
+                ORDER BY skip_count DESC
+                LIMIT 15
+            ");
+            $stmt->execute([$login]);
+            $mostSkipped = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // Community favorites (highest approval ratio, min 5 votes)
+            $stmt = $pdo->prepare("
+                SELECT v.seq, v.title, v.up_votes, v.down_votes,
+                       ROUND(v.up_votes::numeric / NULLIF(v.up_votes + v.down_votes, 0) * 100) as approval_pct
+                FROM votes v
+                WHERE v.login = ? AND (v.up_votes + v.down_votes) >= 5
+                ORDER BY approval_pct DESC, v.up_votes DESC
+                LIMIT 15
+            ");
+            $stmt->execute([$login]);
+            $communityFavs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // Hourly vote activity (0-23)
+            $stmt = $pdo->prepare("
+                SELECT EXTRACT(HOUR FROM voted_at) as hour, COUNT(*) as count
+                FROM vote_ledger
+                WHERE login = ?
+                GROUP BY hour
+                ORDER BY hour
+            ");
+            $stmt->execute([$login]);
+            $hourlyRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $hourly = array_fill(0, 24, 0);
+            foreach ($hourlyRows as $r) {
+                $hourly[(int)$r['hour']] = (int)$r['count'];
+            }
+
+            // Daily vote activity (last 30 days)
+            $stmt = $pdo->prepare("
+                SELECT DATE(voted_at) as day, COUNT(*) as count
+                FROM vote_ledger
+                WHERE login = ? AND voted_at >= CURRENT_DATE - INTERVAL '30 days'
+                GROUP BY day
+                ORDER BY day
+            ");
+            $stmt->execute([$login]);
+            $daily = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            json_response([
+                "success" => true,
+                "overview" => [
+                    "total_votes" => (int)$voteTotals['total_up'] + (int)$voteTotals['total_down'],
+                    "total_up" => (int)$voteTotals['total_up'],
+                    "total_down" => (int)$voteTotals['total_down'],
+                    "total_plays" => (int)$playTotals['total_plays'],
+                    "total_skips" => (int)$skipTotals['total_skips'],
+                    "unique_voters" => (int)$voterCount['unique_voters']
+                ],
+                "top_clips" => $topClips,
+                "most_played" => $mostPlayed,
+                "most_skipped" => $mostSkipped,
+                "community_favorites" => $communityFavs,
+                "hourly_activity" => $hourly,
+                "daily_activity" => $daily
+            ]);
+        } catch (PDOException $e) {
+            error_log("Analytics API error: " . $e->getMessage());
+            json_error("Database error occurred", 500);
+        }
+        break;
+
     // ===== CLIP WEIGHTING ENDPOINTS =====
 
     case 'get_weighting':
