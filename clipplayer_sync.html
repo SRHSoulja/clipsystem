@@ -1146,8 +1146,8 @@
       <button class="pill up" id="voteUp" type="button">👍 0</button>
       <button class="pill down" id="voteDown" type="button">👎 0</button>
       <div class="hints">
-        <span class="hint-like" id="hintLike">!like #</span>
-        <span class="hint-dislike" id="hintDislike">!dislike #</span>
+        <span class="hint-like" id="hintLike">Tap 👍 to like</span>
+        <span class="hint-dislike" id="hintDislike">Tap 👎 to dislike</span>
       </div>
     </div>
     <div class="login-prompt" id="loginPrompt" style="display:none;">
@@ -1991,8 +1991,8 @@
 
     // Update sequence number and hints
     voteSeq.textContent = `Clip #${seq}`;
-    hintLike.textContent = `!like ${seq}`;
-    hintDislike.textContent = `!dislike ${seq}`;
+    hintLike.textContent = `Tap 👍 to like`;
+    hintDislike.textContent = `Tap 👎 to dislike`;
 
     // Show clip date
     clipDateHud.textContent = formatDate(clip.created_at) ? `• ${formatDate(clip.created_at)}` : "";

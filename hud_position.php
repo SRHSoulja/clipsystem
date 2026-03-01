@@ -110,11 +110,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['set'])) {
 $debug = isset($_GET['debug']);
 
 if ($pdo) {
-  // One-time migration: move all channels to top-right (remove after deploy)
-  try {
-    $pdo->exec("UPDATE channel_settings SET hud_position = 'tr' WHERE hud_position IN ('tl', 'bl', 'br')");
-  } catch (PDOException $e) { /* ignore */ }
-
   try {
     $stmt = $pdo->prepare("SELECT hud_position, top_position, banner_config FROM channel_settings WHERE login = ?");
     $stmt->execute([$login]);
