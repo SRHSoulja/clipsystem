@@ -925,7 +925,7 @@ switch ($action) {
             $stmt->execute([$login]);
             $daily = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-            json_response([
+            $response = [
                 "success" => true,
                 "overview" => [
                     "total_votes" => (int)$voteTotals['total_up'] + (int)$voteTotals['total_down'],
@@ -946,7 +946,100 @@ switch ($action) {
                 "community_favorites" => $communityFavs,
                 "hourly_activity" => $hourly,
                 "daily_activity" => $daily
-            ]);
+            ];
+
+            // Platform-wide stats for super admins
+            if ($currentUser && isSuperAdmin()) {
+                try {
+                    $platform = [];
+
+                    // Total channels with clips
+                    $stmt = $pdo->query("SELECT COUNT(DISTINCT login) FROM clips");
+                    $platform['total_channels'] = (int)$stmt->fetchColumn();
+
+                    // Total clips across all channels
+                    $stmt = $pdo->query("SELECT COUNT(*) FROM clips");
+                    $platform['total_clips'] = (int)$stmt->fetchColumn();
+
+                    // Total plays across all channels
+                    $stmt = $pdo->query("SELECT COALESCE(SUM(play_count), 0) FROM clip_plays");
+                    $platform['total_plays'] = (int)$stmt->fetchColumn();
+
+                    // Total votes across all channels
+                    $stmt = $pdo->query("SELECT COALESCE(SUM(up_votes + down_votes), 0) FROM votes");
+                    $platform['total_votes'] = (int)$stmt->fetchColumn();
+
+                    // Total page views across all channels
+                    try {
+                        $stmt = $pdo->query("SELECT COUNT(*) FROM page_views");
+                        $platform['total_page_views'] = (int)$stmt->fetchColumn();
+
+                        $stmt = $pdo->query("SELECT COUNT(*) FROM page_views WHERE viewed_at >= CURRENT_DATE - INTERVAL '30 days'");
+                        $platform['page_views_30d'] = (int)$stmt->fetchColumn();
+
+                        $stmt = $pdo->query("SELECT COUNT(*) FROM page_views WHERE viewed_at >= CURRENT_DATE - INTERVAL '1 day'");
+                        $platform['page_views_today'] = (int)$stmt->fetchColumn();
+                    } catch (PDOException $e) {
+                        $platform['total_page_views'] = 0;
+                        $platform['page_views_30d'] = 0;
+                        $platform['page_views_today'] = 0;
+                    }
+
+                    // Total unique voters across all channels
+                    $stmt = $pdo->query("SELECT COUNT(DISTINCT username) FROM vote_ledger");
+                    $platform['unique_voters'] = (int)$stmt->fetchColumn();
+
+                    // Current viewers across all channels
+                    try {
+                        $stmt = $pdo->query("SELECT COUNT(*) FROM cliptv_viewers WHERE last_seen > NOW() - INTERVAL '12 seconds'");
+                        $platform['current_viewers'] = (int)$stmt->fetchColumn();
+                    } catch (PDOException $e) {
+                        $platform['current_viewers'] = 0;
+                    }
+
+                    // Top channels by page views (last 30 days)
+                    try {
+                        $stmt = $pdo->query("
+                            SELECT login, COUNT(*) as views
+                            FROM page_views
+                            WHERE viewed_at >= CURRENT_DATE - INTERVAL '30 days'
+                            GROUP BY login
+                            ORDER BY views DESC
+                            LIMIT 10
+                        ");
+                        $platform['top_channels_views'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                    } catch (PDOException $e) {
+                        $platform['top_channels_views'] = [];
+                    }
+
+                    // Top channels by plays
+                    $stmt = $pdo->query("
+                        SELECT login, SUM(play_count) as plays
+                        FROM clip_plays
+                        GROUP BY login
+                        ORDER BY plays DESC
+                        LIMIT 10
+                    ");
+                    $platform['top_channels_plays'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+                    // Top channels by votes
+                    $stmt = $pdo->query("
+                        SELECT login, SUM(up_votes + down_votes) as votes
+                        FROM votes
+                        GROUP BY login
+                        ORDER BY votes DESC
+                        LIMIT 10
+                    ");
+                    $platform['top_channels_votes'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+                    $response['platform'] = $platform;
+                } catch (PDOException $e) {
+                    error_log("Platform analytics error: " . $e->getMessage());
+                    // Non-critical, skip platform stats
+                }
+            }
+
+            json_response($response);
         } catch (PDOException $e) {
             error_log("Analytics API error: " . $e->getMessage());
             json_error("Database error occurred", 500);

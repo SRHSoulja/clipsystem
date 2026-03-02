@@ -1682,7 +1682,64 @@ if ($currentUser) {
         </div>
 
         <div class="tab-content" id="tab-stats">
+            <?php if ($isSuperAdmin): ?>
+            <!-- Platform-wide stats (super admin only) -->
+            <div id="platformStatsSection" style="display: none; margin-bottom: 24px;">
+                <h3 style="margin-bottom: 12px; color: #bf94ff;">Platform Overview</h3>
+                <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));">
+                    <div class="stat-box" style="border: 1px solid #9147ff33;">
+                        <div class="stat-value" id="platChannels">-</div>
+                        <div class="stat-label">Channels</div>
+                    </div>
+                    <div class="stat-box" style="border: 1px solid #9147ff33;">
+                        <div class="stat-value" id="platClips">-</div>
+                        <div class="stat-label">Total Clips</div>
+                    </div>
+                    <div class="stat-box" style="border: 1px solid #9147ff33;">
+                        <div class="stat-value" id="platPlays">-</div>
+                        <div class="stat-label">Total Plays</div>
+                    </div>
+                    <div class="stat-box" style="border: 1px solid #9147ff33;">
+                        <div class="stat-value" id="platVotes">-</div>
+                        <div class="stat-label">Total Votes</div>
+                    </div>
+                    <div class="stat-box" style="border: 1px solid #9147ff33;">
+                        <div class="stat-value" id="platVoters">-</div>
+                        <div class="stat-label">Unique Voters</div>
+                    </div>
+                    <div class="stat-box" style="border: 1px solid #9147ff33;">
+                        <div class="stat-value" id="platPageViews">-</div>
+                        <div class="stat-label">Page Views</div>
+                    </div>
+                    <div class="stat-box" style="border: 1px solid #9147ff33;">
+                        <div class="stat-value" id="platViewsToday">-</div>
+                        <div class="stat-label">Views Today</div>
+                    </div>
+                    <div class="stat-box" style="border: 1px solid #9147ff33;">
+                        <div class="stat-value" id="platCurrentViewers">-</div>
+                        <div class="stat-label">Watching Now</div>
+                    </div>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; margin-top: 16px;">
+                    <div class="card" style="border: 1px solid #9147ff33;">
+                        <h4 style="margin-bottom: 8px;">Top Channels by Views (30d)</h4>
+                        <div id="platTopViews" style="font-size: 13px; color: #adadb8;">Loading...</div>
+                    </div>
+                    <div class="card" style="border: 1px solid #9147ff33;">
+                        <h4 style="margin-bottom: 8px;">Top Channels by Plays</h4>
+                        <div id="platTopPlays" style="font-size: 13px; color: #adadb8;">Loading...</div>
+                    </div>
+                    <div class="card" style="border: 1px solid #9147ff33;">
+                        <h4 style="margin-bottom: 8px;">Top Channels by Votes</h4>
+                        <div id="platTopVotes" style="font-size: 13px; color: #adadb8;">Loading...</div>
+                    </div>
+                </div>
+                <hr style="border-color: #3a3a3d; margin: 24px 0 0;">
+            </div>
+            <?php endif; ?>
+
             <!-- Row 1: Overview stat boxes -->
+            <h3 style="margin-bottom: 12px; <?= $isSuperAdmin ? '' : 'display: none;' ?>">Channel Stats</h3>
             <div class="stats-grid" id="statsGrid" style="grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));">
                 <div class="stat-box">
                     <div class="stat-value" id="statTotal">-</div>
@@ -3132,6 +3189,42 @@ if ($currentUser) {
                 renderRankedList('mostSkippedList', data.most_skipped, (clip) =>
                     `<span style="color: #f97316; font-weight: 700;">${parseInt(clip.skip_count).toLocaleString()}x</span>`
                 );
+
+                // Platform-wide stats (super admin only)
+                if (data.platform && IS_SUPER_ADMIN) {
+                    const p = data.platform;
+                    document.getElementById('platformStatsSection').style.display = '';
+                    document.getElementById('platChannels').textContent = p.total_channels.toLocaleString();
+                    document.getElementById('platClips').textContent = p.total_clips.toLocaleString();
+                    document.getElementById('platPlays').textContent = p.total_plays.toLocaleString();
+                    document.getElementById('platVotes').textContent = p.total_votes.toLocaleString();
+                    document.getElementById('platVoters').textContent = p.unique_voters.toLocaleString();
+                    document.getElementById('platPageViews').textContent = p.total_page_views.toLocaleString();
+                    document.getElementById('platPageViews').title = `${p.page_views_30d.toLocaleString()} in last 30 days`;
+                    document.getElementById('platViewsToday').textContent = p.page_views_today.toLocaleString();
+                    document.getElementById('platCurrentViewers').textContent = p.current_viewers.toLocaleString();
+                    if (p.current_viewers > 0) {
+                        document.getElementById('platCurrentViewers').style.color = '#22c55e';
+                    }
+
+                    // Render top channel lists
+                    function renderChannelList(containerId, items, valueKey, valueSuffix) {
+                        const el = document.getElementById(containerId);
+                        if (!items || !items.length) {
+                            el.innerHTML = '<span style="color: #666;">No data yet</span>';
+                            return;
+                        }
+                        el.innerHTML = items.map((item, i) =>
+                            `<div style="display: flex; justify-content: space-between; padding: 4px 0; ${i < items.length - 1 ? 'border-bottom: 1px solid #2a2a2d;' : ''}">` +
+                            `<a href="/dashboard/${item.login}" style="color: #bf94ff; text-decoration: none;">${item.login}</a>` +
+                            `<span style="color: #efeff1; font-weight: 600;">${parseInt(item[valueKey]).toLocaleString()}${valueSuffix}</span>` +
+                            `</div>`
+                        ).join('');
+                    }
+                    renderChannelList('platTopViews', p.top_channels_views, 'views', '');
+                    renderChannelList('platTopPlays', p.top_channels_plays, 'plays', '');
+                    renderChannelList('platTopVotes', p.top_channels_votes, 'votes', '');
+                }
 
             } catch (e) {
                 console.error('Error loading analytics:', e);
