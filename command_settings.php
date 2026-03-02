@@ -51,7 +51,7 @@ $defaultCommands = [
 ];
 
 try {
-    $stmt = $pdo->prepare("SELECT command_settings FROM channel_settings WHERE login = ?");
+    $stmt = $pdo->prepare("SELECT command_settings, command_aliases FROM channel_settings WHERE login = ?");
     $stmt->execute([$login]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -60,13 +60,19 @@ try {
         $customSettings = json_decode($row['command_settings'], true) ?: [];
     }
 
+    $aliases = [];
+    if ($row && isset($row['command_aliases']) && $row['command_aliases']) {
+        $aliases = json_decode($row['command_aliases'], true) ?: [];
+    }
+
     // Merge defaults with custom settings
     $commands = array_merge($defaultCommands, $customSettings);
 
     echo json_encode([
         "success" => true,
         "login" => $login,
-        "commands" => $commands
+        "commands" => $commands,
+        "aliases" => (object)$aliases
     ]);
 } catch (PDOException $e) {
     echo json_encode(["error" => "Database error"]);

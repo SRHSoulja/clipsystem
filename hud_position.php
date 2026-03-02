@@ -113,7 +113,7 @@ $debug = isset($_GET['debug']);
 
 if ($pdo) {
   try {
-    $stmt = $pdo->prepare("SELECT hud_position, discord_hud_position, obs_hud_position, top_position, banner_config FROM channel_settings WHERE login = ?");
+    $stmt = $pdo->prepare("SELECT hud_position, discord_hud_position, obs_hud_position, top_position, banner_config, command_aliases FROM channel_settings WHERE login = ?");
     $stmt->execute([$login]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -132,6 +132,10 @@ if ($pdo) {
         $bannerConfig = new stdClass();
     }
 
+    // Parse command_aliases
+    $rawAliases = $row ? ($row['command_aliases'] ?? null) : null;
+    $commandAliases = ($rawAliases && $rawAliases !== '{}') ? (json_decode($rawAliases, true) ?: []) : [];
+
     $response = [
       "login" => $login,
       "position" => $type === 'top' ? $topPosition : $hudPosition,
@@ -139,7 +143,8 @@ if ($pdo) {
       "discord_hud_position" => $discordHudPosition,
       "obs_hud_position" => $obsHudPosition,
       "top_position" => $topPosition,
-      "banner_config" => $bannerConfig
+      "banner_config" => $bannerConfig,
+      "command_aliases" => (object)$commandAliases
     ];
 
     if ($debug) {

@@ -1382,6 +1382,54 @@ if ($currentUser) {
                     </div>
                 </div>
             </div>
+
+            <div class="card" data-permission="toggle_commands">
+                <h3>Command Aliases</h3>
+                <p style="color: #adadb8; margin-bottom: 16px; font-size: 13px;">
+                    Rename commands to avoid conflicts with other bots. Custom names replace the defaults.
+                    Leave blank to use the default name. No <code>!</code> prefix needed.
+                </p>
+                <div id="aliasMessage"></div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px;" id="aliasInputs">
+                    <div class="alias-row">
+                        <label style="color: #adadb8; font-size: 13px; width: 80px; display: inline-block;">Like</label>
+                        <input type="text" id="alias_like" placeholder="like" maxlength="20" style="background: #1a1a1e; border: 1px solid #3a3a3d; border-radius: 6px; color: #efeff1; padding: 8px 12px; font-size: 14px; width: 140px;">
+                    </div>
+                    <div class="alias-row">
+                        <label style="color: #adadb8; font-size: 13px; width: 80px; display: inline-block;">Dislike</label>
+                        <input type="text" id="alias_dislike" placeholder="dislike" maxlength="20" style="background: #1a1a1e; border: 1px solid #3a3a3d; border-radius: 6px; color: #efeff1; padding: 8px 12px; font-size: 14px; width: 140px;">
+                    </div>
+                    <div class="alias-row">
+                        <label style="color: #adadb8; font-size: 13px; width: 80px; display: inline-block;">Clip Info</label>
+                        <input type="text" id="alias_cclip" placeholder="cclip" maxlength="20" style="background: #1a1a1e; border: 1px solid #3a3a3d; border-radius: 6px; color: #efeff1; padding: 8px 12px; font-size: 14px; width: 140px;">
+                    </div>
+                    <div class="alias-row">
+                        <label style="color: #adadb8; font-size: 13px; width: 80px; display: inline-block;">Find</label>
+                        <input type="text" id="alias_cfind" placeholder="cfind" maxlength="20" style="background: #1a1a1e; border: 1px solid #3a3a3d; border-radius: 6px; color: #efeff1; padding: 8px 12px; font-size: 14px; width: 140px;">
+                    </div>
+                    <div class="alias-row">
+                        <label style="color: #adadb8; font-size: 13px; width: 80px; display: inline-block;">Skip</label>
+                        <input type="text" id="alias_cskip" placeholder="cskip" maxlength="20" style="background: #1a1a1e; border: 1px solid #3a3a3d; border-radius: 6px; color: #efeff1; padding: 8px 12px; font-size: 14px; width: 140px;">
+                    </div>
+                    <div class="alias-row">
+                        <label style="color: #adadb8; font-size: 13px; width: 80px; display: inline-block;">Help</label>
+                        <input type="text" id="alias_chelp" placeholder="chelp" maxlength="20" style="background: #1a1a1e; border: 1px solid #3a3a3d; border-radius: 6px; color: #efeff1; padding: 8px 12px; font-size: 14px; width: 140px;">
+                    </div>
+                    <div class="alias-row">
+                        <label style="color: #adadb8; font-size: 13px; width: 80px; display: inline-block;">Play</label>
+                        <input type="text" id="alias_cplay" placeholder="cplay" maxlength="20" style="background: #1a1a1e; border: 1px solid #3a3a3d; border-radius: 6px; color: #efeff1; padding: 8px 12px; font-size: 14px; width: 140px;">
+                    </div>
+                    <div class="alias-row">
+                        <label style="color: #adadb8; font-size: 13px; width: 80px; display: inline-block;">Previous</label>
+                        <input type="text" id="alias_cprev" placeholder="cprev" maxlength="20" style="background: #1a1a1e; border: 1px solid #3a3a3d; border-radius: 6px; color: #efeff1; padding: 8px 12px; font-size: 14px; width: 140px;">
+                    </div>
+                    <div class="alias-row">
+                        <label style="color: #adadb8; font-size: 13px; width: 80px; display: inline-block;">HUD</label>
+                        <input type="text" id="alias_chud" placeholder="chud" maxlength="20" style="background: #1a1a1e; border: 1px solid #3a3a3d; border-radius: 6px; color: #efeff1; padding: 8px 12px; font-size: 14px; width: 140px;">
+                    </div>
+                </div>
+                <button onclick="saveCommandAliases()" class="btn btn-primary" style="margin-top: 16px;">Save Aliases</button>
+            </div>
         </div>
 
         <div class="tab-content" id="tab-settings">
@@ -1665,7 +1713,20 @@ if ($currentUser) {
             <!-- Row 2: Charts -->
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px; margin-top: 20px;">
                 <div class="card">
-                    <h3>Votes by Hour (UTC)</h3>
+                    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+                        <h3 style="margin: 0;">Votes by Hour</h3>
+                        <select id="analyticsTimezone" onchange="reRenderHourlyChart()" style="background: #1a1a1e; border: 1px solid #3a3a3d; border-radius: 6px; color: #efeff1; padding: 4px 8px; font-size: 12px;">
+                            <option value="UTC">UTC</option>
+                            <option value="America/New_York">Eastern (ET)</option>
+                            <option value="America/Chicago">Central (CT)</option>
+                            <option value="America/Denver">Mountain (MT)</option>
+                            <option value="America/Los_Angeles">Pacific (PT)</option>
+                            <option value="Europe/London">London (GMT)</option>
+                            <option value="Europe/Berlin">Central Europe (CET)</option>
+                            <option value="Asia/Tokyo">Japan (JST)</option>
+                            <option value="Australia/Sydney">Sydney (AEST)</option>
+                        </select>
+                    </div>
                     <div id="hourlyChart" style="display: flex; align-items: flex-end; gap: 2px; height: 140px; margin-top: 16px; padding-bottom: 24px; position: relative;">
                         <p style="color: #666; font-size: 13px;">Loading...</p>
                     </div>
@@ -2150,6 +2211,7 @@ if ($currentUser) {
 
                 // Command settings
                 loadCommandSettings(settings.command_settings || {});
+                loadCommandAliases(settings.command_aliases || {});
 
                 // Banner overlay
                 loadBannerConfig(settings.banner_config || {});
@@ -2209,6 +2271,43 @@ if ($currentUser) {
                 if (toggle) toggle.checked = !enabled;
                 commandSettings[cmdName] = !enabled;
                 showToast('error', 'Connection Error', 'Could not save command setting');
+            }
+        }
+
+        // Command aliases
+        let commandAliases = {};
+
+        function loadCommandAliases(saved) {
+            commandAliases = saved || {};
+            const aliasKeys = ['like', 'dislike', 'cclip', 'cfind', 'cskip', 'chelp', 'cplay', 'cprev', 'chud'];
+            aliasKeys.forEach(k => {
+                const input = document.getElementById('alias_' + k);
+                if (input) input.value = commandAliases[k] || '';
+            });
+        }
+
+        async function saveCommandAliases() {
+            const aliases = {};
+            const aliasKeys = ['like', 'dislike', 'cclip', 'cfind', 'cskip', 'chelp', 'cplay', 'cprev', 'chud'];
+            aliasKeys.forEach(k => {
+                const input = document.getElementById('alias_' + k);
+                if (input) {
+                    const val = input.value.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
+                    if (val && val !== k) aliases[k] = val;
+                }
+            });
+
+            try {
+                const res = await fetch(`${API_BASE}/dashboard_api.php?action=save_settings&key=${encodeURIComponent(authKey)}&login=${encodeURIComponent(authLogin)}&field=command_aliases&value=${encodeURIComponent(JSON.stringify(aliases))}`, { credentials: 'same-origin' });
+                const data = await res.json();
+                if (data.success) {
+                    commandAliases = aliases;
+                    showToast('success', 'Aliases Saved', 'Command aliases updated. Bot will pick up changes within 30 seconds.');
+                } else {
+                    showToast('error', 'Save Failed', data.error || 'Could not save aliases');
+                }
+            } catch (e) {
+                showToast('error', 'Connection Error', 'Could not save aliases');
             }
         }
 
@@ -2970,12 +3069,10 @@ if ($currentUser) {
                 document.getElementById('statTotalPlays').textContent = ov.total_plays.toLocaleString();
                 document.getElementById('statTotalSkips').textContent = ov.total_skips.toLocaleString();
 
-                // Hourly chart
-                renderBarChart('hourlyChart', data.hourly_activity, (i) => {
-                    const h = i % 12 || 12;
-                    const ampm = i < 12 ? 'a' : 'p';
-                    return `${h}${ampm}`;
-                }, '#9147ff');
+                // Hourly chart - store raw UTC data for timezone shifting
+                window._hourlyUtcData = data.hourly_activity;
+                autoSelectTimezone();
+                reRenderHourlyChart();
 
                 // Daily chart
                 const dailyValues = [];
@@ -3016,6 +3113,51 @@ if ($currentUser) {
             } catch (e) {
                 console.error('Error loading analytics:', e);
             }
+        }
+
+        function autoSelectTimezone() {
+            const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            const sel = document.getElementById('analyticsTimezone');
+            if (sel) {
+                // Try exact match first
+                for (const opt of sel.options) {
+                    if (opt.value === tz) { sel.value = tz; return; }
+                }
+                // Fallback: keep UTC
+            }
+        }
+
+        function getTimezoneOffsetHours(tz) {
+            // Calculate offset by comparing a fixed UTC time in both timezones
+            const now = new Date();
+            const utcStr = now.toLocaleString('en-US', { timeZone: 'UTC', hour: 'numeric', hour12: false });
+            const tzStr = now.toLocaleString('en-US', { timeZone: tz, hour: 'numeric', hour12: false });
+            let diff = parseInt(tzStr) - parseInt(utcStr);
+            // Handle day boundary
+            if (diff > 12) diff -= 24;
+            if (diff < -12) diff += 24;
+            return diff;
+        }
+
+        function shiftHourlyData(utcData, tz) {
+            if (tz === 'UTC') return [...utcData];
+            const offset = getTimezoneOffsetHours(tz);
+            const shifted = new Array(24);
+            for (let i = 0; i < 24; i++) {
+                shifted[((i + offset) % 24 + 24) % 24] = utcData[i];
+            }
+            return shifted;
+        }
+
+        function reRenderHourlyChart() {
+            if (!window._hourlyUtcData) return;
+            const tz = document.getElementById('analyticsTimezone')?.value || 'UTC';
+            const shifted = shiftHourlyData(window._hourlyUtcData, tz);
+            renderBarChart('hourlyChart', shifted, (i) => {
+                const h = i % 12 || 12;
+                const ampm = i < 12 ? 'a' : 'p';
+                return `${h}${ampm}`;
+            }, '#9147ff');
         }
 
         function renderBarChart(containerId, values, labelFn, color) {

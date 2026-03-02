@@ -170,6 +170,7 @@ try {
     $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS discord_hud_position VARCHAR(10) DEFAULT 'tr'");
     $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS obs_hud_position VARCHAR(10) DEFAULT 'tr'");
     $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS platform VARCHAR(16) DEFAULT 'twitch'");
+    $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS command_aliases TEXT DEFAULT '{}'");
 
     // Ensure clips table has platform and mp4_url columns
     $pdo->exec("ALTER TABLE clips ADD COLUMN IF NOT EXISTS platform VARCHAR(16) DEFAULT 'twitch'");
@@ -199,7 +200,7 @@ switch ($action) {
 
         try {
             $stmt = $pdo->prepare("
-                SELECT hud_position, discord_hud_position, obs_hud_position, top_position, blocked_words, blocked_clippers, voting_enabled, vote_feedback, silent_prefix, last_refresh, command_settings, banner_config, platform
+                SELECT hud_position, discord_hud_position, obs_hud_position, top_position, blocked_words, blocked_clippers, voting_enabled, vote_feedback, silent_prefix, last_refresh, command_settings, command_aliases, banner_config, platform
                 FROM channel_settings WHERE login = ?
             ");
             $stmt->execute([$login]);
@@ -218,6 +219,7 @@ switch ($action) {
                     'silent_prefix' => false,
                     'last_refresh' => null,
                     'command_settings' => '{}',
+                    'command_aliases' => '{}',
                     'banner_config' => '{}',
                     'platform' => 'twitch'
                 ];
@@ -227,6 +229,7 @@ switch ($action) {
             $settings['blocked_words'] = json_decode($settings['blocked_words'] ?: '[]', true) ?: [];
             $settings['blocked_clippers'] = json_decode($settings['blocked_clippers'] ?: '[]', true) ?: [];
             $settings['command_settings'] = json_decode($settings['command_settings'] ?: '{}', true) ?: [];
+            $settings['command_aliases'] = json_decode($settings['command_aliases'] ?: '{}', true) ?: [];
             $settings['banner_config'] = json_decode($settings['banner_config'] ?: '{}', true) ?: [];
 
             // Get clip stats
@@ -275,6 +278,7 @@ switch ($action) {
             'blocked_words' => 'add_blocked_words',
             'blocked_clippers' => 'add_blocked_clippers',
             'command_settings' => 'toggle_commands',
+            'command_aliases' => 'toggle_commands',
             'banner_config' => 'change_hud',
             'platform' => 'change_hud'
         ];
@@ -315,6 +319,19 @@ switch ($action) {
                     $obj = json_decode($value, true);
                     if (!is_array($obj)) $obj = [];
                     $value = json_encode($obj);
+                    break;
+                case 'command_aliases':
+                    // Expect JSON object: { "like": "fire", "dislike": "trash", ... }
+                    $obj = json_decode($value, true);
+                    if (!is_array($obj)) $obj = [];
+                    // Sanitize: lowercase, alphanumeric only, max 20 chars each
+                    $clean = [];
+                    foreach ($obj as $k => $v) {
+                        $k = preg_replace('/[^a-z0-9_]/', '', strtolower(trim($k)));
+                        $v = preg_replace('/[^a-z0-9_]/', '', strtolower(trim($v)));
+                        if ($k && $v) $clean[$k] = substr($v, 0, 20);
+                    }
+                    $value = json_encode($clean);
                     break;
                 case 'platform':
                     if (!in_array($value, ['twitch', 'kick'])) $value = 'twitch';

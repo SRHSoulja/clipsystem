@@ -106,7 +106,7 @@ async function isVoteFeedbackEnabled(login) {
   return settings.voteFeedback;
 }
 
-// Fetch command settings for a channel
+// Fetch command settings for a channel (includes aliases)
 async function getCommandSettings(login) {
   const cached = commandSettingsCache.get(login);
   const now = Date.now();
@@ -123,7 +123,11 @@ async function getCommandSettings(login) {
     const data = await res.json();
 
     if (data.success && data.commands) {
-      commandSettingsCache.set(login, { commands: data.commands, cachedAt: now });
+      commandSettingsCache.set(login, {
+        commands: data.commands,
+        aliases: data.aliases || {},
+        cachedAt: now
+      });
       return data.commands;
     }
     return null;
@@ -132,6 +136,18 @@ async function getCommandSettings(login) {
     // On error, use cached value if available
     return cached ? cached.commands : null;
   }
+}
+
+// Get command aliases for a channel (reverse map: custom name -> internal name)
+function getCommandAliases(login) {
+  const cached = commandSettingsCache.get(login);
+  if (!cached || !cached.aliases) return {};
+  // Build reverse lookup: { "fire": "like", "trash": "dislike" }
+  const reverse = {};
+  for (const [internal, custom] of Object.entries(cached.aliases)) {
+    if (custom) reverse[custom] = internal;
+  }
+  return reverse;
 }
 
 // Check if a specific command is enabled for a channel
@@ -844,21 +860,40 @@ client.on('message', async (channel, tags, message, self) => {
   if (!trimmed.startsWith('!')) return;
 
   const parts = trimmed.split(/\s+/);
-  const cmdName = parts[0].substring(1).toLowerCase();
+  let cmdName = parts[0].substring(1).toLowerCase();
   const args = parts.slice(1);
 
-  // Find command handler
-  const handler = commands[cmdName];
+  const clipChannel = getClipChannel(channel);
+
+  // Resolve custom aliases: e.g. "fire" -> "like" for this channel
+  // Ensure settings are cached first (triggers fetch if needed)
+  await getCommandSettings(clipChannel);
+  const aliasMap = getCommandAliases(clipChannel);
+  const resolvedName = aliasMap[cmdName] || cmdName;
+
+  // If this channel has a custom alias for a command, ONLY the alias works
+  // (prevents conflicts with other bots using the default command name)
+  const cached = commandSettingsCache.get(clipChannel);
+  if (cached && cached.aliases) {
+    const channelAliases = cached.aliases;
+    // If the typed command is a default name that has been aliased, ignore it
+    if (channelAliases[cmdName] && channelAliases[cmdName] !== cmdName) {
+      // e.g. "like" is aliased to "fire" - ignore "!like", only "!fire" works
+      return;
+    }
+  }
+
+  // Find command handler using resolved name
+  const handler = commands[resolvedName];
   if (!handler) return;
 
   // Check cooldown (except for mods)
-  if (!isMod(tags) && isOnCooldown(tags.username, cmdName)) {
+  if (!isMod(tags) && isOnCooldown(tags.username, resolvedName)) {
     return;
   }
 
   // Check if command is enabled for this channel
-  const clipChannel = getClipChannel(channel);
-  const commandEnabled = await isCommandEnabled(clipChannel, cmdName);
+  const commandEnabled = await isCommandEnabled(clipChannel, resolvedName);
   if (!commandEnabled) {
     // Command is disabled for this channel - silently ignore
     return;

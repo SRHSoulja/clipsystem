@@ -2434,6 +2434,11 @@
         clipStartTime = Date.now(); // Start grace period
         debugLog(`Playing!`, "ok");
 
+        // Record play for analytics (controller only to avoid duplicates)
+        if (isController && currentClipId) {
+          fetch(`${API_BASE}/clip_played.php?login=${encodeURIComponent(login)}&clip_id=${encodeURIComponent(currentClipId)}`).catch(() => {});
+        }
+
         // Reset skip votes and trigger flag for new clip
         skipTriggered = false;
         if (isController) resetSkipVotes();
@@ -2565,9 +2570,6 @@
 
     // Update server state (this broadcasts to all viewers)
     await setServerState(next, mp4Url);
-
-    // Record play for analytics
-    fetch(`${API_BASE}/clip_played.php?login=${encodeURIComponent(login)}&clip_id=${encodeURIComponent(next.id)}`).catch(() => {});
 
     // Play locally
     await playClipAtPosition(next.id, mp4Url, 0, next.duration || 30, {
