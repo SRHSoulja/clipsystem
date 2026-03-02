@@ -197,6 +197,23 @@ function init_votes_tables($pdo) {
         $pdo->exec("CREATE INDEX IF NOT EXISTS idx_page_views_login ON page_views(login)");
         $pdo->exec("CREATE INDEX IF NOT EXISTS idx_page_views_login_page ON page_views(login, page)");
 
+        // Known users table - tracks all Twitch users who have logged in
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS known_users (
+                id SERIAL PRIMARY KEY,
+                twitch_id VARCHAR(64) NOT NULL UNIQUE,
+                login VARCHAR(64) NOT NULL,
+                display_name VARCHAR(64),
+                profile_image_url TEXT,
+                user_type VARCHAR(16) NOT NULL DEFAULT 'viewer',
+                first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                login_count INTEGER DEFAULT 1
+            )
+        ");
+        $pdo->exec("CREATE INDEX IF NOT EXISTS idx_known_users_login ON known_users(login)");
+        $pdo->exec("CREATE INDEX IF NOT EXISTS idx_known_users_type ON known_users(user_type)");
+
         // Viewer peaks table - tracks peak concurrent viewer counts per channel
         $pdo->exec("
             CREATE TABLE IF NOT EXISTS viewer_peaks (

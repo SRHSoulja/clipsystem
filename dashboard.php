@@ -1720,6 +1720,33 @@ if ($currentUser) {
                         <div class="stat-label">Watching Now</div>
                     </div>
                 </div>
+                <!-- User breakdown -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 12px; margin-top: 16px;">
+                    <div class="stat-box" style="border: 1px solid #22d3ee33;">
+                        <div class="stat-value" id="platUsersTotal">-</div>
+                        <div class="stat-label">Registered Users</div>
+                    </div>
+                    <div class="stat-box" style="border: 1px solid #22d3ee33;">
+                        <div class="stat-value" id="platUsersStreamers">-</div>
+                        <div class="stat-label">Streamers</div>
+                    </div>
+                    <div class="stat-box" style="border: 1px solid #22d3ee33;">
+                        <div class="stat-value" id="platUsersMods">-</div>
+                        <div class="stat-label">Mods</div>
+                    </div>
+                    <div class="stat-box" style="border: 1px solid #22d3ee33;">
+                        <div class="stat-value" id="platUsersViewers">-</div>
+                        <div class="stat-label">Viewers</div>
+                    </div>
+                    <div class="stat-box" style="border: 1px solid #22d3ee33;">
+                        <div class="stat-value" id="platUsersActive7d">-</div>
+                        <div class="stat-label">Active (7d)</div>
+                    </div>
+                    <div class="stat-box" style="border: 1px solid #22d3ee33;">
+                        <div class="stat-value" id="platUsersActive30d">-</div>
+                        <div class="stat-label">Active (30d)</div>
+                    </div>
+                </div>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; margin-top: 16px;">
                     <div class="card" style="border: 1px solid #9147ff33;">
                         <h4 style="margin-bottom: 8px;">Top Channels by Views (30d)</h4>
@@ -1732,6 +1759,10 @@ if ($currentUser) {
                     <div class="card" style="border: 1px solid #9147ff33;">
                         <h4 style="margin-bottom: 8px;">Top Channels by Votes</h4>
                         <div id="platTopVotes" style="font-size: 13px; color: #adadb8;">Loading...</div>
+                    </div>
+                    <div class="card" style="border: 1px solid #9147ff33;">
+                        <h4 style="margin-bottom: 8px;">Recent Logins</h4>
+                        <div id="platRecentLogins" style="font-size: 13px; color: #adadb8;">Loading...</div>
                     </div>
                 </div>
                 <hr style="border-color: #3a3a3d; margin: 24px 0 0;">
@@ -3224,6 +3255,33 @@ if ($currentUser) {
                     renderChannelList('platTopViews', p.top_channels_views, 'views', '');
                     renderChannelList('platTopPlays', p.top_channels_plays, 'plays', '');
                     renderChannelList('platTopVotes', p.top_channels_votes, 'votes', '');
+
+                    // User stats
+                    if (p.users) {
+                        document.getElementById('platUsersTotal').textContent = p.users.total.toLocaleString();
+                        document.getElementById('platUsersStreamers').textContent = p.users.streamers.toLocaleString();
+                        document.getElementById('platUsersMods').textContent = p.users.mods.toLocaleString();
+                        document.getElementById('platUsersViewers').textContent = p.users.viewers.toLocaleString();
+                        document.getElementById('platUsersActive7d').textContent = p.users.active_7d.toLocaleString();
+                        document.getElementById('platUsersActive30d').textContent = p.users.active_30d.toLocaleString();
+                    }
+
+                    // Recent logins
+                    const loginsEl = document.getElementById('platRecentLogins');
+                    if (p.recent_logins && p.recent_logins.length) {
+                        const typeColors = { streamer: '#9147ff', mod: '#22d3ee', viewer: '#adadb8' };
+                        loginsEl.innerHTML = p.recent_logins.map((u, i) => {
+                            const d = new Date(u.last_seen + 'Z');
+                            const ago = timeAgo(d);
+                            const color = typeColors[u.user_type] || '#adadb8';
+                            return `<div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 0; ${i < p.recent_logins.length - 1 ? 'border-bottom: 1px solid #2a2a2d;' : ''}">` +
+                                `<span><span style="color: ${color}; font-weight: 600;">${u.display_name || u.login}</span> <span style="color: #666; font-size: 11px;">${u.user_type}</span></span>` +
+                                `<span style="color: #666; font-size: 11px;" title="${d.toLocaleString()}">${ago}</span>` +
+                                `</div>`;
+                        }).join('');
+                    } else {
+                        loginsEl.innerHTML = '<span style="color: #666;">No logins recorded yet</span>';
+                    }
                 }
 
             } catch (e) {
@@ -3274,6 +3332,18 @@ if ($currentUser) {
                 const ampm = i < 12 ? 'a' : 'p';
                 return `${h}${ampm}`;
             }, '#9147ff');
+        }
+
+        function timeAgo(date) {
+            const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+            if (seconds < 60) return 'just now';
+            const minutes = Math.floor(seconds / 60);
+            if (minutes < 60) return minutes + 'm ago';
+            const hours = Math.floor(minutes / 60);
+            if (hours < 24) return hours + 'h ago';
+            const days = Math.floor(hours / 24);
+            if (days < 30) return days + 'd ago';
+            return date.toLocaleDateString();
         }
 
         function renderBarChart(containerId, values, labelFn, color) {

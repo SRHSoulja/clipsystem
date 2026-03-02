@@ -997,6 +997,41 @@ switch ($action) {
                         $platform['current_viewers'] = 0;
                     }
 
+                    // Registered users breakdown
+                    try {
+                        $stmt = $pdo->query("
+                            SELECT
+                                COUNT(*) as total_users,
+                                COUNT(*) FILTER (WHERE user_type = 'streamer') as streamers,
+                                COUNT(*) FILTER (WHERE user_type = 'mod') as mods,
+                                COUNT(*) FILTER (WHERE user_type = 'viewer') as viewers,
+                                COUNT(*) FILTER (WHERE last_seen >= CURRENT_DATE - INTERVAL '30 days') as active_30d,
+                                COUNT(*) FILTER (WHERE last_seen >= CURRENT_DATE - INTERVAL '7 days') as active_7d
+                            FROM known_users
+                        ");
+                        $userStats = $stmt->fetch(PDO::FETCH_ASSOC);
+                        $platform['users'] = [
+                            'total' => (int)$userStats['total_users'],
+                            'streamers' => (int)$userStats['streamers'],
+                            'mods' => (int)$userStats['mods'],
+                            'viewers' => (int)$userStats['viewers'],
+                            'active_30d' => (int)$userStats['active_30d'],
+                            'active_7d' => (int)$userStats['active_7d']
+                        ];
+
+                        // Recent logins (last 20)
+                        $stmt = $pdo->query("
+                            SELECT login, display_name, user_type, last_seen, login_count
+                            FROM known_users
+                            ORDER BY last_seen DESC
+                            LIMIT 20
+                        ");
+                        $platform['recent_logins'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                    } catch (PDOException $e) {
+                        $platform['users'] = ['total' => 0, 'streamers' => 0, 'mods' => 0, 'viewers' => 0, 'active_30d' => 0, 'active_7d' => 0];
+                        $platform['recent_logins'] = [];
+                    }
+
                     // Top channels by page views (last 30 days)
                     try {
                         $stmt = $pdo->query("

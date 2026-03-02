@@ -87,6 +87,51 @@ if ($pdo && !empty($userInfo['profile_image_url'])) {
   }
 }
 
+// Track user login in known_users table
+if ($pdo) {
+  $userLogin = strtolower($userInfo['login']);
+  try {
+    // Determine user type: streamer (has clips), mod, or viewer
+    $userType = 'viewer';
+
+    $stmt = $pdo->prepare("SELECT 1 FROM clips WHERE login = ? LIMIT 1");
+    $stmt->execute([$userLogin]);
+    if ($stmt->fetch()) {
+      $userType = 'streamer';
+    } else {
+      $stmt = $pdo->prepare("SELECT 1 FROM channel_mods WHERE mod_username = ? LIMIT 1");
+      $stmt->execute([$userLogin]);
+      if ($stmt->fetch()) {
+        $userType = 'mod';
+      }
+    }
+
+    $pdo->prepare("
+      INSERT INTO known_users (twitch_id, login, display_name, profile_image_url, user_type, first_seen, last_seen, login_count)
+      VALUES (?, ?, ?, ?, ?, NOW(), NOW(), 1)
+      ON CONFLICT (twitch_id) DO UPDATE SET
+        login = EXCLUDED.login,
+        display_name = EXCLUDED.display_name,
+        profile_image_url = EXCLUDED.profile_image_url,
+        user_type = CASE
+          WHEN EXCLUDED.user_type = 'streamer' THEN 'streamer'
+          WHEN EXCLUDED.user_type = 'mod' AND known_users.user_type != 'streamer' THEN 'mod'
+          ELSE known_users.user_type
+        END,
+        last_seen = NOW(),
+        login_count = known_users.login_count + 1
+    ")->execute([
+      $userInfo['id'],
+      $userLogin,
+      $userInfo['display_name'] ?? $userLogin,
+      $userInfo['profile_image_url'] ?? '',
+      $userType
+    ]);
+  } catch (PDOException $e) {
+    error_log("Failed to track user login for $userLogin: " . $e->getMessage());
+  }
+}
+
 // Validate return URL (must be relative or same domain)
 // Allow root path "/" as valid
 if ($returnTo !== '/' && !preg_match('#^/[^/]#', $returnTo) && !preg_match('#^https?://' . preg_quote($_SERVER['HTTP_HOST']) . '#', $returnTo)) {
