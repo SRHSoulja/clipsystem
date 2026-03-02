@@ -1708,6 +1708,18 @@ if ($currentUser) {
                     <div class="stat-value" id="statTotalSkips">-</div>
                     <div class="stat-label">Total Skips</div>
                 </div>
+                <div class="stat-box">
+                    <div class="stat-value" id="statPageViews">-</div>
+                    <div class="stat-label">Page Views</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value" id="statPeakViewers">-</div>
+                    <div class="stat-label">Peak Viewers</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value" id="statCurrentViewers">-</div>
+                    <div class="stat-label">Watching Now</div>
+                </div>
             </div>
 
             <!-- Row 2: Charts -->
@@ -3068,6 +3080,17 @@ if ($currentUser) {
                 document.getElementById('statTotalVotes').textContent = ov.total_votes.toLocaleString();
                 document.getElementById('statTotalPlays').textContent = ov.total_plays.toLocaleString();
                 document.getElementById('statTotalSkips').textContent = ov.total_skips.toLocaleString();
+                document.getElementById('statPageViews').textContent = ov.total_page_views.toLocaleString();
+                document.getElementById('statPageViews').title = `${ov.page_views_30d.toLocaleString()} in last 30 days`;
+                document.getElementById('statPeakViewers').textContent = ov.peak_viewers.toLocaleString();
+                if (ov.peak_at) {
+                    const peakDate = new Date(ov.peak_at + 'Z');
+                    document.getElementById('statPeakViewers').title = `Peak on ${peakDate.toLocaleDateString()}`;
+                }
+                document.getElementById('statCurrentViewers').textContent = ov.current_viewers.toLocaleString();
+                if (ov.current_viewers > 0) {
+                    document.getElementById('statCurrentViewers').style.color = '#22c55e';
+                }
 
                 // Hourly chart - store raw UTC data for timezone shifting
                 window._hourlyUtcData = data.hourly_activity;

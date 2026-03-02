@@ -806,6 +806,46 @@ switch ($action) {
             $stmt->execute([$login]);
             $voterCount = $stmt->fetch(PDO::FETCH_ASSOC);
 
+            // Page views
+            $totalPageViews = 0;
+            $pageViews30d = 0;
+            try {
+                $stmt = $pdo->prepare("SELECT COUNT(*) as total FROM page_views WHERE login = ?");
+                $stmt->execute([$login]);
+                $totalPageViews = (int)$stmt->fetchColumn();
+
+                $stmt = $pdo->prepare("SELECT COUNT(*) as total FROM page_views WHERE login = ? AND viewed_at >= CURRENT_DATE - INTERVAL '30 days'");
+                $stmt->execute([$login]);
+                $pageViews30d = (int)$stmt->fetchColumn();
+            } catch (PDOException $e) {
+                // Table may not exist yet
+            }
+
+            // Peak concurrent viewers
+            $peakViewers = 0;
+            $peakAt = null;
+            try {
+                $stmt = $pdo->prepare("SELECT peak_viewers, peak_at FROM viewer_peaks WHERE login = ?");
+                $stmt->execute([$login]);
+                $peakRow = $stmt->fetch(PDO::FETCH_ASSOC);
+                if ($peakRow) {
+                    $peakViewers = (int)$peakRow['peak_viewers'];
+                    $peakAt = $peakRow['peak_at'];
+                }
+            } catch (PDOException $e) {
+                // Table may not exist yet
+            }
+
+            // Current live viewers
+            $currentViewers = 0;
+            try {
+                $stmt = $pdo->prepare("SELECT COUNT(*) FROM cliptv_viewers WHERE login = ? AND last_seen > NOW() - INTERVAL '12 seconds'");
+                $stmt->execute([$login]);
+                $currentViewers = (int)$stmt->fetchColumn();
+            } catch (PDOException $e) {
+                // Table may not exist yet
+            }
+
             // Top 15 clips by score (up - down)
             $stmt = $pdo->prepare("
                 SELECT v.seq, v.title, v.up_votes, v.down_votes,
@@ -893,7 +933,12 @@ switch ($action) {
                     "total_down" => (int)$voteTotals['total_down'],
                     "total_plays" => (int)$playTotals['total_plays'],
                     "total_skips" => (int)$skipTotals['total_skips'],
-                    "unique_voters" => (int)$voterCount['unique_voters']
+                    "unique_voters" => (int)$voterCount['unique_voters'],
+                    "total_page_views" => $totalPageViews,
+                    "page_views_30d" => $pageViews30d,
+                    "peak_viewers" => $peakViewers,
+                    "peak_at" => $peakAt,
+                    "current_viewers" => $currentViewers
                 ],
                 "top_clips" => $topClips,
                 "most_played" => $mostPlayed,

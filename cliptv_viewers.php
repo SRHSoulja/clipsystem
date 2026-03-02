@@ -134,6 +134,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $skipNeeded = $viewerCount === 1 ? 1 : (int)floor($viewerCount / 2) + 1;
     $shouldSkip = $skipVotes >= $skipNeeded && $skipVotes > 0;
 
+    // Update peak viewer count if current exceeds stored peak
+    if ($viewerCount > 0) {
+      try {
+        $pdo->prepare("
+          INSERT INTO viewer_peaks (login, peak_viewers, peak_at, updated_at)
+          VALUES (?, ?, NOW(), NOW())
+          ON CONFLICT (login) DO UPDATE SET
+            peak_viewers = GREATEST(viewer_peaks.peak_viewers, EXCLUDED.peak_viewers),
+            peak_at = CASE WHEN EXCLUDED.peak_viewers > viewer_peaks.peak_viewers THEN NOW() ELSE viewer_peaks.peak_at END,
+            updated_at = NOW()
+        ")->execute([$login, $viewerCount]);
+      } catch (PDOException $e) {
+        // Non-critical, ignore - table may not exist yet
+      }
+    }
+
     // Get this viewer's skip vote status
     $stmt = $pdo->prepare("SELECT wants_skip FROM cliptv_viewers WHERE login = ? AND viewer_id = ?");
     $stmt->execute([$login, $viewerId]);

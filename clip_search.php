@@ -121,6 +121,15 @@ $liveError = "";
 $pdo = get_db_connection();
 if ($pdo) init_votes_tables($pdo);
 
+// Track page view for analytics
+if ($pdo && $login && $login !== 'default') {
+  try {
+    $pdo->prepare("INSERT INTO page_views (login, page) VALUES (?, 'search')")->execute([$login]);
+  } catch (PDOException $e) {
+    // Non-critical, ignore
+  }
+}
+
 // Check if current user can manage clips for this channel
 $canManageClips = checkClipManagePermission($login, $currentUser, $pdo);
 

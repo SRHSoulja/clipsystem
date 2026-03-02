@@ -2434,8 +2434,8 @@
         clipStartTime = Date.now(); // Start grace period
         debugLog(`Playing!`, "ok");
 
-        // Record play for analytics (controller only to avoid duplicates)
-        if (isController && currentClipId) {
+        // Record play for analytics (every viewer counts)
+        if (currentClipId) {
           fetch(`${API_BASE}/clip_played.php?login=${encodeURIComponent(login)}&clip_id=${encodeURIComponent(currentClipId)}`).catch(() => {});
         }
 

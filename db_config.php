@@ -185,6 +185,28 @@ function init_votes_tables($pdo) {
         $pdo->exec("CREATE INDEX IF NOT EXISTS idx_channel_mods_channel ON channel_mods(channel_login)");
         $pdo->exec("CREATE INDEX IF NOT EXISTS idx_channel_mods_mod ON channel_mods(mod_username)");
 
+        // Page views table - tracks visitors to search/browse pages
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS page_views (
+                id SERIAL PRIMARY KEY,
+                login VARCHAR(64) NOT NULL,
+                page VARCHAR(32) NOT NULL DEFAULT 'search',
+                viewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ");
+        $pdo->exec("CREATE INDEX IF NOT EXISTS idx_page_views_login ON page_views(login)");
+        $pdo->exec("CREATE INDEX IF NOT EXISTS idx_page_views_login_page ON page_views(login, page)");
+
+        // Viewer peaks table - tracks peak concurrent viewer counts per channel
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS viewer_peaks (
+                login VARCHAR(64) PRIMARY KEY,
+                peak_viewers INTEGER DEFAULT 0,
+                peak_at TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ");
+
         // Add silent_prefix column to channel_settings if it doesn't exist
         try {
             $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS silent_prefix BOOLEAN DEFAULT FALSE");
