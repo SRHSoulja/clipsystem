@@ -2117,11 +2117,25 @@ if (window.__discordResolve) window.__discordResolve();
     lastVideoTap = now;
   });
 
-  // Grace period - prevent skipping immediately after a clip starts
+  // Grace period - prevent skipping immediately after a clip starts or is loading
   let clipStartTime = 0;
   const MIN_PLAY_TIME = 3000; // Must play at least 3 seconds before allowing skip
+  let clipLoadStartTime = 0; // Set when a clip begins loading (before play)
+  const MIN_LOAD_GRACE = 8000; // Don't auto-skip for 8s after starting to load a clip
 
   function canSkipClip() {
+    // Block skips while a clip is actively loading
+    if (isSwitching) {
+      debugLog("Skip blocked - clip is loading", "warn");
+      return false;
+    }
+    // Block skips during the load grace period (covers slow CDN/GQL fetches)
+    const loadElapsed = Date.now() - clipLoadStartTime;
+    if (loadElapsed < MIN_LOAD_GRACE) {
+      debugLog(`Skip blocked - only ${loadElapsed}ms since load started (need ${MIN_LOAD_GRACE}ms)`, "warn");
+      return false;
+    }
+    // Block skips until clip has played for a minimum time
     const elapsed = Date.now() - clipStartTime;
     if (elapsed < MIN_PLAY_TIME) {
       debugLog(`Skip blocked - only ${elapsed}ms elapsed (need ${MIN_PLAY_TIME}ms)`, "warn");
@@ -2691,6 +2705,7 @@ if (window.__discordResolve) window.__discordResolve();
   async function playClipAtPosition(clipId, mp4Url, position, duration, clipData) {
     if (isSwitching && clipId === currentClipId) return;
     isSwitching = true;
+    clipLoadStartTime = Date.now(); // Start load grace period immediately
 
     debugLog(`Loading: ${clipId?.substring(0,20) || 'unknown'}...`);
     setSyncStatus("syncing", isSlowConnection ? "Buffering..." : "Loading...");
@@ -2911,6 +2926,10 @@ if (window.__discordResolve) window.__discordResolve();
   // Controller: pick next clip and broadcast
   async function controllerAdvance() {
     if (!isController) return;
+    if (isSwitching) {
+      debugLog("controllerAdvance blocked - clip is loading", "warn");
+      return;
+    }
     debugLog("Controller advancing to next clip...");
 
     const next = pickNextClip();
@@ -2966,6 +2985,9 @@ if (window.__discordResolve) window.__discordResolve();
 
   // Poll sync state
   async function pollSyncState() {
+    // Don't make decisions while a clip is actively loading
+    if (isSwitching) return;
+
     try {
       const res = await fetch(`${API_BASE}/sync_state.php?login=${encodeURIComponent(login)}`, { cache: "no-store" });
       const data = await res.json();
@@ -3861,6 +3883,8 @@ if (window.__discordResolve) window.__discordResolve();
     lastFailureTime = 0;
     consecutiveFreezeChecks = 0;
     stallRecoveryAttempts = 0;
+    clipLoadStartTime = 0;
+    clipStartTime = 0;
 
     // Hide player UI elements (use classList, not inline style, so show/hide classes work after)
     hideControls();
@@ -4290,10 +4314,15 @@ if (window.__discordResolve) window.__discordResolve();
   async function playSpecificClip(clip) {
     debugLog(`Playing specific clip: #${clip.seq || '?'}`, "ok");
 
+    // Lock immediately so sync poll and controllerAdvance don't race us
+    isSwitching = true;
+    clipLoadStartTime = Date.now();
+
     const clipId = clip.id || clip.clip_id;
     const mp4Url = await getMp4Url(clipId);
     if (!mp4Url) {
       debugLog("Failed to get MP4 URL for clip", "err");
+      isSwitching = false;
       return;
     }
 
