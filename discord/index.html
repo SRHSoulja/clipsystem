@@ -1856,7 +1856,7 @@ if (window.__discordResolve) window.__discordResolve();
   let lastPlaybackTime = 0;
   let lastPlaybackCheck = Date.now();
   let stallRecoveryAttempts = 0;
-  const MAX_STALL_RECOVERY = 5; // More attempts before skipping
+  const MAX_STALL_RECOVERY = 8; // Be very patient before giving up on a clip
 
   // Connection quality detection
   let isSlowConnection = false;
@@ -2509,9 +2509,15 @@ if (window.__discordResolve) window.__discordResolve();
       return clipData.mp4_url;
     }
 
+    const MAX_GQL_RETRIES = 2;
+    for (let attempt = 0; attempt <= MAX_GQL_RETRIES; attempt++) {
     try {
+      if (attempt > 0) {
+        debugLog(`GQL retry ${attempt}/${MAX_GQL_RETRIES} for ${clipId.substring(0,15)}`, "warn");
+        await new Promise(r => setTimeout(r, 800 * attempt)); // backoff
+      }
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), isSlowConnection ? 12000 : 8000);
+      const timeout = setTimeout(() => controller.abort(), isSlowConnection ? 15000 : 10000);
 
       const res = await fetch(GQL_URL, {
         method: "POST",
@@ -2525,10 +2531,10 @@ if (window.__discordResolve) window.__discordResolve();
       });
       clearTimeout(timeout);
 
-      if (!res.ok) return null;
+      if (!res.ok) { if (attempt < MAX_GQL_RETRIES) continue; return null; }
       const data = await res.json();
       const clip = data?.data?.clip;
-      if (!clip) return null;
+      if (!clip) { if (attempt < MAX_GQL_RETRIES) continue; return null; }
 
       const token = clip.playbackAccessToken?.value;
       const sig = clip.playbackAccessToken?.signature;
@@ -2562,8 +2568,11 @@ if (window.__discordResolve) window.__discordResolve();
       return videoUrl;
     } catch (e) {
       debugLog("GQL err: " + e.message, "err");
+      if (attempt < MAX_GQL_RETRIES) continue;
       return null;
     }
+    } // end retry loop
+    return null;
   }
 
   // Clean up preload video element fully (prevent memory leaks)
@@ -2883,17 +2892,38 @@ if (window.__discordResolve) window.__discordResolve();
       }
     };
 
-    player.onerror = (e) => {
+    let errorRetries = 0;
+    player.onerror = async (e) => {
       if (hasStarted) return;
-      hasStarted = true;
       const mediaErr = player.error;
       const errCode = mediaErr ? mediaErr.code : '?';
       const errMsg = mediaErr ? mediaErr.message : 'unknown';
       debugLog(`Video error (code=${errCode}): ${errMsg}`, "err");
+
+      // Retry with a fresh MP4 URL before giving up (CDN URLs expire, proxies hiccup)
+      if (errorRetries < 2) {
+        errorRetries++;
+        debugLog(`Retrying with fresh URL (attempt ${errorRetries}/2)...`, "warn");
+        setSyncStatus("syncing", "Retrying...");
+        try {
+          const freshUrl = await getMp4Url(clipId, errorRetries > 1);
+          if (freshUrl) {
+            const retryUrl = discordCdnUrl(freshUrl);
+            player.src = retryUrl;
+            player.load();
+            return; // Let the new load attempt trigger events
+          }
+        } catch (retryErr) {
+          debugLog("Retry fetch failed: " + retryErr.message, "err");
+        }
+      }
+
+      // All retries exhausted
+      hasStarted = true;
       debugLog(`Failed URL: ${mp4Url?.substring(0, 80)}...`, "err");
       setSyncStatus("error", "Error");
       isSwitching = false;
-      if (isController) setTimeout(controllerAdvance, 500);
+      if (isController) setTimeout(controllerAdvance, 1500);
     };
 
     // Rewrite CDN URLs for Discord's iframe proxy (only at player.src, never in sync_state)
@@ -2903,8 +2933,8 @@ if (window.__discordResolve) window.__discordResolve();
     player.load();
 
     // Timeout: force play or advance if loading stalls
-    // Give CDN enough time — Discord proxy adds latency on top of normal CDN delivery
-    const loadTimeout = isSlowConnection ? 18000 : (isMobile ? 14000 : 12000);
+    // Be generous - it's better to wait longer than to skip a perfectly good clip
+    const loadTimeout = isSlowConnection ? 25000 : (isMobile ? 20000 : 18000);
     setTimeout(() => {
       if (isSwitching && currentClipId === clipId && !hasStarted) {
         debugLog("Load timeout - forcing recovery", "warn");
