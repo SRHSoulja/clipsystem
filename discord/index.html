@@ -1491,8 +1491,14 @@ if (window.__discordResolve) window.__discordResolve();
     discordUser = { global_name: 'Auth error: ' + (e.message || e), id: '' };
   }
 
-  // Hide loading overlay (unless auto-resuming a saved channel - keep it visible for smooth transition)
-  const autoResumeChannel = sessionStorage.getItem('cliptv_last_channel') || new URLSearchParams(location.search).get("login");
+  // Auto-resume only if the Activity was recently alive (popout reload recovery).
+  // Fresh launches always show the channel picker, even if sessionStorage has a saved channel.
+  const RESUME_WINDOW_MS = 30000; // 30 seconds
+  const lastAlive = parseInt(sessionStorage.getItem('cliptv_alive_at') || '0', 10);
+  const isReloadRecovery = (Date.now() - lastAlive) < RESUME_WINDOW_MS;
+  const autoResumeChannel = isReloadRecovery
+    ? (sessionStorage.getItem('cliptv_last_channel') || new URLSearchParams(location.search).get("login"))
+    : new URLSearchParams(location.search).get("login"); // only honor explicit ?login= on fresh launch
   if (!autoResumeChannel) {
     document.getElementById('loadingOverlay').classList.add('hide');
   } else {
@@ -1739,6 +1745,9 @@ if (window.__discordResolve) window.__discordResolve();
   });
 
   sessionStorage.setItem('cliptv_last_channel', login);
+  sessionStorage.setItem('cliptv_alive_at', Date.now().toString());
+  // Keep alive timestamp fresh so popout reload recovery works
+  setInterval(() => sessionStorage.setItem('cliptv_alive_at', Date.now().toString()), 5000);
   document.title = login + " ClipTV";
   const API_BASE = "";
 
