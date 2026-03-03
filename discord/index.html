@@ -4482,27 +4482,66 @@ if (window.__discordResolve) window.__discordResolve();
         const modeNames = { 0: 'focused', 1: 'PiP', 2: 'grid' };
         debugLog(`Layout: ${modeNames[prevMode] || prevMode} -> ${modeNames[currentLayoutMode] || currentLayoutMode}`, "ok");
 
-        if (currentLayoutMode === 1) {
-          // Entering PiP - ensure video keeps playing and worker heartbeats are active
+        if (currentLayoutMode === 1 || currentLayoutMode === 2) {
+          // Entering PiP or Grid - keep video alive through the transition
           if (bgWorker) {
             bgWorker.postMessage({ action: 'start', id: 'controllerHeartbeat', interval: 5000 });
           }
-          // Force video to keep playing (browser may try to pause in small frame)
-          if (player.paused && !player.ended && currentClipId && !isSwitching) {
-            player.play().catch(() => {});
-          }
-        } else if (currentLayoutMode === 0 && prevMode === 1) {
-          // Returning from PiP to focused
+
+          // Save current state before the transition disrupts things
+          const savedSrc = player.src;
+          const savedTime = player.currentTime;
+          const savedClipId = currentClipId;
+
+          // Give the layout transition time to settle, then force recovery
+          setTimeout(() => {
+            try {
+              // Check if video survived the transition
+              if (player.paused && !player.ended && currentClipId && !isSwitching) {
+                debugLog("PiP: resuming after transition settle", "ok");
+                player.play().catch(() => {
+                  // Play failed - video element may be broken, try re-setting src
+                  debugLog("PiP: play failed, re-setting source", "warn");
+                  if (savedSrc && savedClipId === currentClipId) {
+                    player.src = savedSrc;
+                    player.currentTime = savedTime;
+                    player.play().catch(() => {
+                      debugLog("PiP: recovery failed", "err");
+                    });
+                  }
+                });
+              }
+            } catch (e) {
+              debugLog("PiP: transition recovery error: " + e.message, "err");
+            }
+          }, 500);
+
+          // Also retry at 1.5s in case mobile takes longer to settle
+          setTimeout(() => {
+            try {
+              if (player.paused && !player.ended && currentClipId && !isSwitching) {
+                debugLog("PiP: late recovery attempt", "ok");
+                player.play().catch(() => {});
+              }
+            } catch (e) {}
+          }, 1500);
+
+        } else if (currentLayoutMode === 0 && (prevMode === 1 || prevMode === 2)) {
+          // Returning from PiP/Grid to focused
           debugLog("Returned from PiP - recovering", "ok");
 
           // Resume video if browser paused it
-          if (player.paused && !player.ended && currentClipId && !isSwitching) {
-            player.play().catch(() => {});
-          }
+          setTimeout(() => {
+            try {
+              if (player.paused && !player.ended && currentClipId && !isSwitching) {
+                player.play().catch(() => {});
+              }
+            } catch (e) {}
+          }, 300);
 
           // Re-sync with server in case we drifted
           if (!isController) {
-            pollSyncState();
+            setTimeout(() => pollSyncState(), 500);
           }
 
           // Send fresh heartbeats
@@ -4520,6 +4559,24 @@ if (window.__discordResolve) window.__discordResolve();
       debugLog("Layout mode subscribe failed: " + e.message, "warn");
     }
   }
+
+  // === Resize handler (catches mobile popout when layout event doesn't fire) ===
+  let resizeRecoveryTimer = null;
+  window.addEventListener('resize', () => {
+    if (resizeRecoveryTimer) clearTimeout(resizeRecoveryTimer);
+    resizeRecoveryTimer = setTimeout(() => {
+      try {
+        if (player.paused && !player.ended && currentClipId && !isSwitching) {
+          debugLog("Resize: resuming paused video", "ok");
+          player.play().catch(() => {});
+        }
+        // Reset freeze detection after resize
+        lastPlaybackTime = player.currentTime;
+        lastPlaybackCheck = Date.now();
+        consecutiveFreezeChecks = 0;
+      } catch (e) {}
+    }, 600);
+  });
 
   // === Visibility change handling (minimize/tab switch recovery) ===
   let wasHiddenAt = 0;
