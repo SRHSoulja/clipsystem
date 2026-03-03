@@ -4561,6 +4561,119 @@ if (window.__discordResolve) window.__discordResolve();
   // === Discord Activity layout mode handling (PiP/popout/grid) ===
   let currentLayoutMode = 0; // 0=focused, 1=PiP, 2=grid
 
+  // --- PiP mode helpers: strip everything to bare video for survival ---
+  let pipModeActive = false;
+  let pipSavedSrc = null;
+  let pipSavedTime = 0;
+  let pipSavedClipId = null;
+  let pipRestoreTimer = null;
+
+  function enterPipMode() {
+    if (pipModeActive) return;
+    pipModeActive = true;
+    debugLog("Entering PiP mode - stripping UI", "ok");
+
+    // Strip ALL overlays immediately
+    document.body.classList.add('pip-mode');
+
+    // Save video state before anything can break it
+    pipSavedSrc = player.src;
+    pipSavedTime = player.currentTime;
+    pipSavedClipId = currentClipId;
+
+    // Kill non-essential polling to reduce load during transition
+    if (chatPollInterval) { clearInterval(chatPollInterval); chatPollInterval = null; }
+    if (chatBgPollInterval) { clearInterval(chatBgPollInterval); chatBgPollInterval = null; }
+
+    // Keep heartbeat alive via worker
+    if (bgWorker) {
+      bgWorker.postMessage({ action: 'start', id: 'controllerHeartbeat', interval: 5000 });
+    }
+
+    // Staged recovery attempts - just try to keep video playing
+    setTimeout(() => {
+      try {
+        if (player.paused && !player.ended && currentClipId && !isSwitching) {
+          debugLog("PiP: resume attempt 1 (500ms)", "ok");
+          player.play().catch(() => {
+            if (pipSavedSrc && pipSavedClipId === currentClipId) {
+              debugLog("PiP: re-setting source", "warn");
+              player.src = pipSavedSrc;
+              player.currentTime = pipSavedTime;
+              player.play().catch(() => {});
+            }
+          });
+        }
+      } catch (e) {}
+    }, 500);
+
+    setTimeout(() => {
+      try {
+        if (player.paused && !player.ended && currentClipId && !isSwitching) {
+          debugLog("PiP: resume attempt 2 (1.5s)", "ok");
+          player.play().catch(() => {});
+        }
+      } catch (e) {}
+    }, 1500);
+
+    // Third attempt at 3s for really slow mobile transitions
+    setTimeout(() => {
+      try {
+        if (player.paused && !player.ended && currentClipId && !isSwitching) {
+          debugLog("PiP: resume attempt 3 (3s)", "ok");
+          if (pipSavedSrc && pipSavedClipId === currentClipId) {
+            player.src = pipSavedSrc;
+            player.currentTime = pipSavedTime;
+            player.play().catch(() => {
+              debugLog("PiP: all recovery attempts failed", "err");
+            });
+          }
+        }
+      } catch (e) {}
+    }, 3000);
+  }
+
+  function exitPipMode() {
+    if (!pipModeActive) return;
+    pipModeActive = false;
+    debugLog("Exiting PiP mode - restoring UI", "ok");
+
+    // Don't restore UI immediately - wait for layout to fully settle
+    if (pipRestoreTimer) clearTimeout(pipRestoreTimer);
+    pipRestoreTimer = setTimeout(() => {
+      document.body.classList.remove('pip-mode');
+      debugLog("PiP: UI restored", "ok");
+
+      // Resume chat polling
+      if (!chatOpen && !chatBgPollInterval) {
+        chatBgPollInterval = setInterval(pollChat, 10000);
+      }
+
+      // Re-sync with server
+      if (!isController) {
+        setTimeout(() => pollSyncState(), 300);
+      }
+
+      // Send fresh heartbeats
+      sendHeartbeat();
+      if (isController) sendControllerHeartbeat();
+
+      // Reset freeze detection
+      lastPlaybackTime = player.currentTime;
+      lastPlaybackCheck = Date.now();
+      consecutiveFreezeChecks = 0;
+    }, 1000);
+
+    // Resume video if paused
+    setTimeout(() => {
+      try {
+        if (player.paused && !player.ended && currentClipId && !isSwitching) {
+          player.play().catch(() => {});
+        }
+      } catch (e) {}
+    }, 300);
+  }
+
   if (discordSdk) {
     // Make PiP mode interactive so users can still see and hear clips
     try {
@@ -4579,77 +4692,9 @@ if (window.__discordResolve) window.__discordResolve();
         debugLog(`Layout: ${modeNames[prevMode] || prevMode} -> ${modeNames[currentLayoutMode] || currentLayoutMode}`, "ok");
 
         if (currentLayoutMode === 1 || currentLayoutMode === 2) {
-          // Entering PiP or Grid - strip UI to help video survive transition
-          document.body.classList.add('pip-mode');
-          if (bgWorker) {
-            bgWorker.postMessage({ action: 'start', id: 'controllerHeartbeat', interval: 5000 });
-          }
-
-          // Save current state before the transition disrupts things
-          const savedSrc = player.src;
-          const savedTime = player.currentTime;
-          const savedClipId = currentClipId;
-
-          // Give the layout transition time to settle, then force recovery
-          setTimeout(() => {
-            try {
-              // Check if video survived the transition
-              if (player.paused && !player.ended && currentClipId && !isSwitching) {
-                debugLog("PiP: resuming after transition settle", "ok");
-                player.play().catch(() => {
-                  // Play failed - video element may be broken, try re-setting src
-                  debugLog("PiP: play failed, re-setting source", "warn");
-                  if (savedSrc && savedClipId === currentClipId) {
-                    player.src = savedSrc;
-                    player.currentTime = savedTime;
-                    player.play().catch(() => {
-                      debugLog("PiP: recovery failed", "err");
-                    });
-                  }
-                });
-              }
-            } catch (e) {
-              debugLog("PiP: transition recovery error: " + e.message, "err");
-            }
-          }, 500);
-
-          // Also retry at 1.5s in case mobile takes longer to settle
-          setTimeout(() => {
-            try {
-              if (player.paused && !player.ended && currentClipId && !isSwitching) {
-                debugLog("PiP: late recovery attempt", "ok");
-                player.play().catch(() => {});
-              }
-            } catch (e) {}
-          }, 1500);
-
+          enterPipMode();
         } else if (currentLayoutMode === 0 && (prevMode === 1 || prevMode === 2)) {
-          // Returning from PiP/Grid to focused - restore UI
-          document.body.classList.remove('pip-mode');
-          debugLog("Returned from PiP - recovering", "ok");
-
-          // Resume video if browser paused it
-          setTimeout(() => {
-            try {
-              if (player.paused && !player.ended && currentClipId && !isSwitching) {
-                player.play().catch(() => {});
-              }
-            } catch (e) {}
-          }, 300);
-
-          // Re-sync with server in case we drifted
-          if (!isController) {
-            setTimeout(() => pollSyncState(), 500);
-          }
-
-          // Send fresh heartbeats
-          sendHeartbeat();
-          if (isController) sendControllerHeartbeat();
-
-          // Reset freeze detection
-          lastPlaybackTime = player.currentTime;
-          lastPlaybackCheck = Date.now();
-          consecutiveFreezeChecks = 0;
+          exitPipMode();
         }
       });
       debugLog("Subscribed to layout mode updates", "ok");
@@ -4660,7 +4705,30 @@ if (window.__discordResolve) window.__discordResolve();
 
   // === Resize handler (catches mobile popout when layout event doesn't fire) ===
   let resizeRecoveryTimer = null;
+  let lastKnownWidth = window.innerWidth;
+  let lastKnownHeight = window.innerHeight;
+  const PIP_SIZE_THRESHOLD = 0.55; // If viewport shrinks to <55% of its size, treat as PiP
+
   window.addEventListener('resize', () => {
+    const newW = window.innerWidth;
+    const newH = window.innerHeight;
+    const widthRatio = lastKnownWidth > 0 ? newW / lastKnownWidth : 1;
+    const heightRatio = lastKnownHeight > 0 ? newH / lastKnownHeight : 1;
+
+    // Drastic shrink = likely mobile popout, trigger pip mode as safety net
+    if ((widthRatio < PIP_SIZE_THRESHOLD || heightRatio < PIP_SIZE_THRESHOLD) && !pipModeActive) {
+      debugLog(`Resize: drastic shrink (${Math.round(widthRatio*100)}%w, ${Math.round(heightRatio*100)}%h) - entering PiP`, "ok");
+      enterPipMode();
+    }
+    // Big grow back = likely returning from popout
+    else if (pipModeActive && widthRatio > (1 / PIP_SIZE_THRESHOLD) && heightRatio > (1 / PIP_SIZE_THRESHOLD)) {
+      debugLog(`Resize: grew back (${Math.round(widthRatio*100)}%w, ${Math.round(heightRatio*100)}%h) - exiting PiP`, "ok");
+      exitPipMode();
+    }
+
+    lastKnownWidth = newW;
+    lastKnownHeight = newH;
+
     if (resizeRecoveryTimer) clearTimeout(resizeRecoveryTimer);
     resizeRecoveryTimer = setTimeout(() => {
       try {
@@ -4668,7 +4736,6 @@ if (window.__discordResolve) window.__discordResolve();
           debugLog("Resize: resuming paused video", "ok");
           player.play().catch(() => {});
         }
-        // Reset freeze detection after resize
         lastPlaybackTime = player.currentTime;
         lastPlaybackCheck = Date.now();
         consecutiveFreezeChecks = 0;
