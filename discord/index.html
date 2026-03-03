@@ -5012,7 +5012,7 @@ if (window.__discordResolve) window.__discordResolve();
     if (syncData.has_state && !syncData.clip_ended && syncData.clip_id && !syncData.controller_stale) {
       // Join existing stream immediately (and controller is still active)
       debugLog("Joining stream...", "ok");
-      playClipAtPosition(
+      await playClipAtPosition(
         syncData.clip_id,
         syncData.clip_url,
         syncData.current_position,
@@ -5024,7 +5024,7 @@ if (window.__discordResolve) window.__discordResolve();
       isController = true;
       debugLog(`Taking over stale stream (${syncData.stale_seconds}s stale)`, "warn");
       startControllerHeartbeat();
-      playClipAtPosition(
+      await playClipAtPosition(
         syncData.clip_id,
         syncData.clip_url,
         syncData.current_position,
@@ -5036,10 +5036,10 @@ if (window.__discordResolve) window.__discordResolve();
       isController = true;
       debugLog("Starting new stream", "ok");
       startControllerHeartbeat();
-      controllerAdvance();
+      await controllerAdvance();
     }
 
-    // Start sync polling (slower on slow connections to save bandwidth)
+    // Start sync polling AFTER initial clip is loaded (prevents brief flash of wrong clip)
     const pollInterval = isSlowConnection ? 4000 : 2000;
     syncInterval = setInterval(pollSyncState, pollInterval);
     debugLog(`Sync poll: ${pollInterval}ms`);
