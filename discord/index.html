@@ -4794,20 +4794,34 @@ if (window.__discordResolve) window.__discordResolve();
   let lastKnownHeight = window.innerHeight;
   const PIP_SIZE_THRESHOLD = 0.55; // If viewport shrinks to <55% of its size, treat as PiP
 
+  let fullSizeWidth = window.innerWidth;
+  let fullSizeHeight = window.innerHeight;
+
   window.addEventListener('resize', () => {
     const newW = window.innerWidth;
     const newH = window.innerHeight;
-    const widthRatio = lastKnownWidth > 0 ? newW / lastKnownWidth : 1;
-    const heightRatio = lastKnownHeight > 0 ? newH / lastKnownHeight : 1;
+
+    // Ignore 0-size events (minimized/hidden windows)
+    if (newW === 0 || newH === 0) return;
+
+    // Track full size for comparison (only update when not in pip mode)
+    if (!pipModeActive && newW > 200 && newH > 200) {
+      fullSizeWidth = newW;
+      fullSizeHeight = newH;
+    }
+
+    // Compare against remembered full size, not last resize event
+    const widthRatio = fullSizeWidth > 0 ? newW / fullSizeWidth : 1;
+    const heightRatio = fullSizeHeight > 0 ? newH / fullSizeHeight : 1;
 
     // Drastic shrink = likely mobile popout, trigger pip mode as safety net
     if ((widthRatio < PIP_SIZE_THRESHOLD || heightRatio < PIP_SIZE_THRESHOLD) && !pipModeActive) {
       debugLog(`Resize: drastic shrink (${Math.round(widthRatio*100)}%w, ${Math.round(heightRatio*100)}%h) - entering PiP`, "ok");
       enterPipMode();
     }
-    // Big grow back = likely returning from popout
-    else if (pipModeActive && widthRatio > (1 / PIP_SIZE_THRESHOLD) && heightRatio > (1 / PIP_SIZE_THRESHOLD)) {
-      debugLog(`Resize: grew back (${Math.round(widthRatio*100)}%w, ${Math.round(heightRatio*100)}%h) - exiting PiP`, "ok");
+    // Grew back close to full size = returning from popout
+    else if (pipModeActive && widthRatio > 0.8 && heightRatio > 0.8) {
+      debugLog(`Resize: back to full size (${Math.round(widthRatio*100)}%w, ${Math.round(heightRatio*100)}%h) - exiting PiP`, "ok");
       exitPipMode();
     }
 
@@ -4849,9 +4863,29 @@ if (window.__discordResolve) window.__discordResolve();
       const hiddenDuration = Date.now() - wasHiddenAt;
       debugLog(`Page visible after ${(hiddenDuration / 1000).toFixed(1)}s`, "ok");
 
+      // Force-clear stale isSwitching lock (fetch may have failed while suspended)
+      if (isSwitching) {
+        const lockAge = Date.now() - clipLoadStartTime;
+        if (lockAge > 15000) {
+          debugLog(`Clearing stale isSwitching lock (${(lockAge/1000).toFixed(0)}s old)`, "warn");
+          isSwitching = false;
+        }
+      }
+
+      // Exit pip mode if we were in it (minimize may have triggered it)
+      if (pipModeActive) {
+        exitPipMode();
+      }
+
       // Send immediate heartbeats
       sendHeartbeat();
       if (isController) sendControllerHeartbeat();
+
+      // Restart sync polling if it died during suspend
+      if (!syncInterval && currentClipId) {
+        debugLog("Restarting sync poll after visibility restore", "ok");
+        syncInterval = setInterval(pollSyncState, 3000);
+      }
 
       // If video paused during hidden (browser suspended it), try to resume
       if (player.paused && !player.ended && currentClipId && !isSwitching) {
@@ -4859,10 +4893,16 @@ if (window.__discordResolve) window.__discordResolve();
         player.play().catch(() => {});
       }
 
-      // Re-sync with server if we were hidden for a while (>10s)
-      if (hiddenDuration > 10000 && !isController) {
-        debugLog("Re-syncing after long hidden period", "ok");
-        pollSyncState();
+      // Re-sync with server if we were hidden for a while (>5s)
+      if (hiddenDuration > 5000 && !isController) {
+        debugLog("Re-syncing after hidden period", "ok");
+        setTimeout(() => pollSyncState(), 300);
+      }
+
+      // If controller and clip seems to have ended while hidden, advance
+      if (isController && !isSwitching && currentClipId && player.ended) {
+        debugLog("Clip ended while hidden - advancing", "ok");
+        controllerAdvance();
       }
 
       // Reset freeze detection so we don't false-positive after wake
