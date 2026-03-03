@@ -1390,7 +1390,7 @@
   <div id="debugOverlay"></div>
   <div id="syncStatus"><span class="dot"></span><span id="syncText">Synced</span></div>
 
-  <button id="pipCloseBtn">✕ Close &amp; Relaunch</button>
+  <button id="pipCloseBtn">✕ Close Activity</button>
 
   <div id="unmuteOverlay">
     <div class="content">
@@ -4046,8 +4046,10 @@ if (window.__discordResolve) window.__discordResolve();
     clipStartTime = 0;
 
     // Save current chat position before switching
-    if (chatLastId > 0) sessionStorage.setItem('cliptv_chat_last_seen_' + login, chatLastId.toString());
-    if (chatLastIdGlobal > 0) sessionStorage.setItem('cliptv_chat_last_seen_global', chatLastIdGlobal.toString());
+    chatLastSeenId = chatLastId;
+    chatLastSeenIdGlobal = chatLastIdGlobal;
+    if (chatLastSeenId > 0) sessionStorage.setItem('cliptv_chat_last_seen_' + login, chatLastSeenId.toString());
+    if (chatLastSeenIdGlobal > 0) sessionStorage.setItem('cliptv_chat_last_seen_global', chatLastSeenIdGlobal.toString());
 
     // Hide player UI elements (use classList, not inline style, so show/hide classes work after)
     hideControls();
@@ -4060,7 +4062,10 @@ if (window.__discordResolve) window.__discordResolve();
       // Channel selected - hide picker and restart playback with new channel
       if (pickerOverlay) pickerOverlay.style.display = 'none';
       login = newLogin;
-      chatLastId = parseInt(sessionStorage.getItem('cliptv_chat_last_seen_' + newLogin) || '0', 10);
+      chatLastSeenId = parseInt(sessionStorage.getItem('cliptv_chat_last_seen_' + newLogin) || '0', 10);
+      chatLastId = 0; // Fetch full history for new channel
+      chatLastIdGlobal = 0;
+      chatRenderedIds.clear();
       chatScope = 'stream';
       chatUnread = 0;
       updateChatBadge();
@@ -4225,8 +4230,12 @@ if (window.__discordResolve) window.__discordResolve();
   let chatOpen = false;
   let chatLoggedIn = false;
   let chatScope = 'stream'; // 'stream' or 'global'
-  let chatLastId = parseInt(sessionStorage.getItem('cliptv_chat_last_seen_' + login) || '0', 10);
-  let chatLastIdGlobal = parseInt(sessionStorage.getItem('cliptv_chat_last_seen_global') || '0', 10);
+  // For badge tracking: use saved last-seen ID so old messages don't trigger badge
+  let chatLastSeenId = parseInt(sessionStorage.getItem('cliptv_chat_last_seen_' + login) || '0', 10);
+  let chatLastSeenIdGlobal = parseInt(sessionStorage.getItem('cliptv_chat_last_seen_global') || '0', 10);
+  // For message fetching: always start at 0 to load full history on open
+  let chatLastId = 0;
+  let chatLastIdGlobal = 0;
   let chatPollInterval = null;
   let chatUnread = 0;
   let chatSendCooldown = false;
@@ -4250,8 +4259,10 @@ if (window.__discordResolve) window.__discordResolve();
       chatUnread = 0;
       updateChatBadge();
       // Mark all current messages as seen
-      if (chatLastId > 0) sessionStorage.setItem('cliptv_chat_last_seen_' + login, chatLastId.toString());
-      if (chatLastIdGlobal > 0) sessionStorage.setItem('cliptv_chat_last_seen_global', chatLastIdGlobal.toString());
+      chatLastSeenId = chatLastId;
+      chatLastSeenIdGlobal = chatLastIdGlobal;
+      if (chatLastSeenId > 0) sessionStorage.setItem('cliptv_chat_last_seen_' + login, chatLastSeenId.toString());
+      if (chatLastSeenIdGlobal > 0) sessionStorage.setItem('cliptv_chat_last_seen_global', chatLastSeenIdGlobal.toString());
       pollChat(); // Fetch immediately
       startChatPoll();
       // Scroll to bottom
@@ -4272,8 +4283,10 @@ if (window.__discordResolve) window.__discordResolve();
     chatOpen = false;
     chatPanel.classList.remove('open');
     chatBtn.classList.remove('active');
-    if (chatLastId > 0) sessionStorage.setItem('cliptv_chat_last_seen_' + login, chatLastId.toString());
-    if (chatLastIdGlobal > 0) sessionStorage.setItem('cliptv_chat_last_seen_global', chatLastIdGlobal.toString());
+    chatLastSeenId = chatLastId;
+    chatLastSeenIdGlobal = chatLastIdGlobal;
+    if (chatLastSeenId > 0) sessionStorage.setItem('cliptv_chat_last_seen_' + login, chatLastSeenId.toString());
+    if (chatLastSeenIdGlobal > 0) sessionStorage.setItem('cliptv_chat_last_seen_global', chatLastSeenIdGlobal.toString());
     stopChatPoll();
   });
 
@@ -4526,20 +4539,22 @@ if (window.__discordResolve) window.__discordResolve();
   });
 
   // Background chat badge polling (when chat is closed, check count every 15s)
+  // Uses chatLastSeenId (persisted) so only truly new messages trigger the badge
   let chatBadgePollInterval = setInterval(async () => {
     if (chatOpen) return; // Already polling actively
     try {
-      const afterId = chatScope === 'global' ? chatLastIdGlobal : chatLastId;
+      const afterId = chatScope === 'global' ? chatLastSeenIdGlobal : chatLastSeenId;
       const res = await fetch(`${API_BASE}/cliptv_chat.php?login=${encodeURIComponent(login)}&after=${afterId}&scope=${chatScope}`, { cache: 'no-store', credentials: 'same-origin' });
       const data = await res.json();
       if (data.messages && data.messages.length > 0) {
         data.messages.forEach(msg => {
           if (msg.scope === 'global') {
+            if (msg.id > chatLastSeenIdGlobal) chatUnread++;
             if (msg.id > chatLastIdGlobal) chatLastIdGlobal = msg.id;
           } else {
+            if (msg.id > chatLastSeenId) chatUnread++;
             if (msg.id > chatLastId) chatLastId = msg.id;
           }
-          chatUnread++;
         });
         updateChatBadge();
       }
