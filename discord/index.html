@@ -4351,6 +4351,8 @@ if (window.__discordResolve) window.__discordResolve();
     // Send heartbeat every 5 seconds
     sendControllerHeartbeat();
     controllerHeartbeatInterval = setInterval(sendControllerHeartbeat, 5000);
+    // Also start in Web Worker (survives browser throttling in PiP/hidden)
+    if (bgWorker) bgWorker.postMessage({ action: 'start', id: 'controllerHeartbeat', interval: 5000 });
     debugLog("Controller heartbeat started", "ok");
   }
 
@@ -4359,6 +4361,7 @@ if (window.__discordResolve) window.__discordResolve();
       clearInterval(controllerHeartbeatInterval);
       controllerHeartbeatInterval = null;
     }
+    if (bgWorker) bgWorker.postMessage({ action: 'stop', id: 'controllerHeartbeat' });
   }
 
   // Stop heartbeat on page unload
@@ -4369,14 +4372,14 @@ if (window.__discordResolve) window.__discordResolve();
     if (chatBgPollInterval) clearInterval(chatBgPollInterval);
   });
 
-  // === Visibility change handling (minimize/popout recovery) ===
-  // Browsers throttle setInterval to ~1Hz or pause entirely when hidden.
+  // === Background heartbeat worker ===
+  // Browsers throttle setInterval to ~1Hz or pause entirely when hidden/PiP.
   // Use a Web Worker for heartbeats so the controller doesn't go stale.
+  // Worker runs ALWAYS (not just when hidden) because Discord PiP mode
+  // doesn't trigger visibilitychange but browsers still throttle timers.
   let bgWorker = null;
-  let wasHiddenAt = 0;
 
   function createBgWorker() {
-    // Inline Web Worker - timers inside Workers are NOT throttled when page is hidden
     const workerCode = `
       let timers = {};
       self.onmessage = function(e) {
@@ -4397,6 +4400,7 @@ if (window.__discordResolve) window.__discordResolve();
       worker.onmessage = (e) => {
         if (e.data.id === 'heartbeat') sendHeartbeat();
         if (e.data.id === 'controllerHeartbeat') sendControllerHeartbeat();
+        if (e.data.id === 'syncPoll') pollSyncState();
       };
       return worker;
     } catch (err) {
@@ -4405,31 +4409,94 @@ if (window.__discordResolve) window.__discordResolve();
     }
   }
 
+  // Start background worker immediately - it supplements the main intervals
+  // and takes over when the browser throttles them (PiP, hidden, minimized)
+  bgWorker = createBgWorker();
+  if (bgWorker) {
+    bgWorker.postMessage({ action: 'start', id: 'heartbeat', interval: 5000 });
+    bgWorker.postMessage({ action: 'start', id: 'syncPoll', interval: 3000 });
+    debugLog("Background worker started", "ok");
+  }
+
+  // === Discord Activity layout mode handling (PiP/popout/grid) ===
+  let currentLayoutMode = 0; // 0=focused, 1=PiP, 2=grid
+
+  if (discordSdk) {
+    // Make PiP mode interactive so users can still see and hear clips
+    try {
+      await discordSdk.commands.setConfig({ use_interactive_pip: true });
+      debugLog("PiP interactive mode enabled", "ok");
+    } catch (e) {
+      debugLog("setConfig PiP failed (may not be supported): " + e.message, "warn");
+    }
+
+    // Subscribe to layout mode changes
+    try {
+      await discordSdk.subscribe("ACTIVITY_LAYOUT_MODE_UPDATE", (data) => {
+        const prevMode = currentLayoutMode;
+        currentLayoutMode = data.layout_mode;
+        const modeNames = { 0: 'focused', 1: 'PiP', 2: 'grid' };
+        debugLog(`Layout: ${modeNames[prevMode] || prevMode} -> ${modeNames[currentLayoutMode] || currentLayoutMode}`, "ok");
+
+        if (currentLayoutMode === 1) {
+          // Entering PiP - ensure video keeps playing and worker heartbeats are active
+          if (bgWorker) {
+            bgWorker.postMessage({ action: 'start', id: 'controllerHeartbeat', interval: 5000 });
+          }
+          // Force video to keep playing (browser may try to pause in small frame)
+          if (player.paused && !player.ended && currentClipId && !isSwitching) {
+            player.play().catch(() => {});
+          }
+        } else if (currentLayoutMode === 0 && prevMode === 1) {
+          // Returning from PiP to focused
+          debugLog("Returned from PiP - recovering", "ok");
+
+          // Resume video if browser paused it
+          if (player.paused && !player.ended && currentClipId && !isSwitching) {
+            player.play().catch(() => {});
+          }
+
+          // Re-sync with server in case we drifted
+          if (!isController) {
+            pollSyncState();
+          }
+
+          // Send fresh heartbeats
+          sendHeartbeat();
+          if (isController) sendControllerHeartbeat();
+
+          // Reset freeze detection
+          lastPlaybackTime = player.currentTime;
+          lastPlaybackCheck = Date.now();
+          consecutiveFreezeChecks = 0;
+        }
+      });
+      debugLog("Subscribed to layout mode updates", "ok");
+    } catch (e) {
+      debugLog("Layout mode subscribe failed: " + e.message, "warn");
+    }
+  }
+
+  // === Visibility change handling (minimize/tab switch recovery) ===
+  let wasHiddenAt = 0;
+
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
-      // Page going hidden (minimized, switched away, mobile popout)
       wasHiddenAt = Date.now();
-      debugLog("Page hidden - starting background heartbeats", "warn");
+      debugLog("Page hidden", "warn");
 
       // Send immediate heartbeats to buy time
       sendHeartbeat();
       if (isController) sendControllerHeartbeat();
 
-      // Start Web Worker heartbeats (won't be throttled)
-      if (!bgWorker) bgWorker = createBgWorker();
-      if (bgWorker) {
-        bgWorker.postMessage({ action: 'start', id: 'heartbeat', interval: 5000 });
-        if (isController) {
-          bgWorker.postMessage({ action: 'start', id: 'controllerHeartbeat', interval: 5000 });
-        }
+      // Ensure controller heartbeat is running in worker
+      if (bgWorker && isController) {
+        bgWorker.postMessage({ action: 'start', id: 'controllerHeartbeat', interval: 5000 });
       }
     } else {
       // Page becoming visible again
       const hiddenDuration = Date.now() - wasHiddenAt;
       debugLog(`Page visible after ${(hiddenDuration / 1000).toFixed(1)}s`, "ok");
-
-      // Stop Web Worker heartbeats (normal intervals take over)
-      if (bgWorker) bgWorker.postMessage({ action: 'stopAll' });
 
       // Send immediate heartbeats
       sendHeartbeat();
