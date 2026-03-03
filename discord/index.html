@@ -2026,18 +2026,19 @@ if (window.__discordResolve) window.__discordResolve();
   detectConnectionQuality();
 
   // Volume control
-  const volumeKey = `clip_tv_volume_${login}`;
-  const muteKey = `clip_tv_unmuted_${login}`;
-  let savedVolume = parseFloat(localStorage.getItem(volumeKey) || "1");
+  // Use functions so keys stay current after channel switch
+  function getVolumeKey() { return `clip_tv_volume_${login}`; }
+  function getMuteKey() { return `clip_tv_unmuted_${login}`; }
+  let savedVolume = parseFloat(localStorage.getItem(getVolumeKey()) || "1");
   let isMuted = true; // Video starts muted (HTML attribute) - must match reality
-  let userHasUnmuted = localStorage.getItem(muteKey) === 'true';
+  let userHasUnmuted = localStorage.getItem(getMuteKey()) === 'true';
 
   player.volume = savedVolume;
   volumeSlider.value = savedVolume * 100;
   updateVolumeIcon();
 
   function saveUnmutedPref(unmuted) {
-    localStorage.setItem(muteKey, unmuted ? 'true' : 'false');
+    localStorage.setItem(getMuteKey(), unmuted ? 'true' : 'false');
     userHasUnmuted = unmuted;
   }
 
@@ -2093,7 +2094,7 @@ if (window.__discordResolve) window.__discordResolve();
     const vol = e.target.value / 100;
     player.volume = vol;
     savedVolume = vol;
-    localStorage.setItem(volumeKey, vol.toString());
+    localStorage.setItem(getVolumeKey(), vol.toString());
     isMuted = false;
     player.muted = false;
     saveUnmutedPref(true);
@@ -3043,6 +3044,8 @@ if (window.__discordResolve) window.__discordResolve();
       debugLog("controllerAdvance blocked - clip is loading", "warn");
       return;
     }
+    // Lock immediately to prevent race conditions during async getMp4Url
+    isSwitching = true;
     debugLog("Controller advancing to next clip...");
 
     const next = pickNextClip();
@@ -3051,6 +3054,7 @@ if (window.__discordResolve) window.__discordResolve();
       setSyncStatus("error", "No clips found");
       voteSeq.textContent = "No clips available";
       voteHud.classList.add("show");
+      isSwitching = false;
       return;
     }
 
@@ -3064,6 +3068,7 @@ if (window.__discordResolve) window.__discordResolve();
       consecutiveFailures++;
       lastFailureTime = Date.now();
       debugLog(`Failed to get MP4 (${consecutiveFailures}/${MAX_FAILURES})`, "err");
+      isSwitching = false;
       if (consecutiveFailures >= MAX_FAILURES) {
         setSyncStatus("error", "Clips won't load");
         voteSeq.textContent = "Clips failed to load";
@@ -3085,7 +3090,7 @@ if (window.__discordResolve) window.__discordResolve();
     // Update server state (this broadcasts to all viewers)
     await setServerState(next, mp4Url);
 
-    // Play locally
+    // Play locally (isSwitching is already true, playClipAtPosition will manage it)
     await playClipAtPosition(next.id, mp4Url, 0, next.duration || 30, {
       clip_title: next.title,
       clip_curator: next.creator_name,
@@ -3146,6 +3151,8 @@ if (window.__discordResolve) window.__discordResolve();
 
       // Check if we need to switch clips
       if (data.clip_id !== currentClipId) {
+        // Re-check isSwitching - may have changed during fetch
+        if (isSwitching) return;
         debugLog(`New clip from server: ${data.clip_id.substring(0,15)}`, "warn");
         // Clear request banner if showing
         hideRequestBanner();
@@ -3960,6 +3967,13 @@ if (window.__discordResolve) window.__discordResolve();
   document.getElementById('channelSwitchBtn').addEventListener('click', () => {
     sessionStorage.removeItem('cliptv_last_channel');
 
+    // Cancel any pending clip request
+    if (pendingRequest) {
+      clearTimeout(pendingRequest.timer);
+      pendingRequest = null;
+      hideRequestBanner();
+    }
+
     // Stop video playback
     player.pause();
     player.removeAttribute('src');
@@ -3971,6 +3985,7 @@ if (window.__discordResolve) window.__discordResolve();
     if (controllerHeartbeatInterval) { clearInterval(controllerHeartbeatInterval); controllerHeartbeatInterval = null; }
     if (chatPollInterval) { clearInterval(chatPollInterval); chatPollInterval = null; }
     if (chatBgPollInterval) { clearInterval(chatBgPollInterval); chatBgPollInterval = null; }
+    if (typeof chatBadgePollInterval !== 'undefined' && chatBadgePollInterval) { clearInterval(chatBadgePollInterval); chatBadgePollInterval = null; }
 
     // Clean up preloaded video and background worker
     cleanupPreloadVideo();
@@ -3989,6 +4004,8 @@ if (window.__discordResolve) window.__discordResolve();
     isSwitching = false;
     mySkipVote = false;
     skipVotes = 0;
+    skipTriggered = false;
+    skipResetAt = 0;
     upNextQueue = [];
     recentlyPlayedIds = [];
     activeCategoryFilter = '';
