@@ -4257,6 +4257,7 @@ if (window.__discordResolve) window.__discordResolve();
     document.querySelectorAll('.chat-scope-btn').forEach(b => b.classList.toggle('active', b.dataset.scope === chatScope));
     // Clear messages and reset afterId so we fetch full history for this scope
     chatMessages.innerHTML = '<div class="chat-empty">Loading...</div>';
+    chatRenderedIds.clear();
     if (chatScope === 'global') { chatLastIdGlobal = 0; } else { chatLastId = 0; }
     chatUnread = 0;
     updateChatBadge();
@@ -4291,7 +4292,12 @@ if (window.__discordResolve) window.__discordResolve();
   // Initial fetch after short delay (let init() complete first)
   setTimeout(pollChat, 2000);
 
+  let chatPolling = false; // Prevent concurrent polls
+  let chatRenderedIds = new Set(); // Track rendered message IDs to prevent duplicates
+
   async function pollChat() {
+    if (chatPolling) return;
+    chatPolling = true;
     try {
       const afterId = chatScope === 'global' ? chatLastIdGlobal : chatLastId;
       const url = `${API_BASE}/cliptv_chat.php?login=${encodeURIComponent(login)}&after=${afterId}&scope=${chatScope}`;
@@ -4329,9 +4335,12 @@ if (window.__discordResolve) window.__discordResolve();
           } else {
             if (msg.id > chatLastId) chatLastId = msg.id;
           }
+          // Skip already-rendered messages
+          if (chatRenderedIds.has(msg.id)) return;
+          chatRenderedIds.add(msg.id);
+
           const div = document.createElement('div');
           div.className = 'chat-msg';
-          // Add a subtle globe icon for global messages when viewing stream chat
           if (msg.scope === 'global' && chatScope !== 'global') {
             const globeSpan = document.createElement('span');
             globeSpan.textContent = '🌐 ';
@@ -4384,6 +4393,8 @@ if (window.__discordResolve) window.__discordResolve();
       if (loadingEl && loadingEl.textContent === 'Loading...') {
         loadingEl.textContent = 'Chat unavailable';
       }
+    } finally {
+      chatPolling = false;
     }
   }
 

@@ -3593,6 +3593,8 @@
   let chatScope = 'stream'; // 'stream' or 'global'
   let chatLastId = 0;
   let chatLastIdGlobal = 0;
+  let chatPolling = false;
+  let chatRenderedIds = new Set();
   let chatPollInterval = null;
   let chatUnread = 0;
   let chatSendCooldown = false;
@@ -3645,6 +3647,7 @@
     chatScope = btn.dataset.scope;
     document.querySelectorAll('.chat-scope-btn').forEach(b => b.classList.toggle('active', b.dataset.scope === chatScope));
     chatMessages.innerHTML = '<div class="chat-empty">Loading...</div>';
+    chatRenderedIds.clear();
     if (chatScope === 'global') { chatLastIdGlobal = 0; } else { chatLastId = 0; }
     chatUnread = 0;
     updateChatBadge();
@@ -3678,6 +3681,8 @@
   setTimeout(pollChat, 2000);
 
   async function pollChat() {
+    if (chatPolling) return;
+    chatPolling = true;
     try {
       const afterId = chatScope === 'global' ? chatLastIdGlobal : chatLastId;
       const url = `${API_BASE}/cliptv_chat.php?login=${encodeURIComponent(login)}&after=${afterId}&scope=${chatScope}`;
@@ -3710,6 +3715,8 @@
         if (emptyEl) emptyEl.remove();
 
         data.messages.forEach(msg => {
+          if (chatRenderedIds.has(msg.id)) return;
+          chatRenderedIds.add(msg.id);
           if (msg.scope === 'global') {
             if (msg.id > chatLastIdGlobal) chatLastIdGlobal = msg.id;
           } else {
@@ -3769,6 +3776,8 @@
       if (loadingEl && loadingEl.textContent === 'Loading...') {
         loadingEl.textContent = 'Chat unavailable';
       }
+    } finally {
+      chatPolling = false;
     }
   }
 
