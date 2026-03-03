@@ -3843,7 +3843,7 @@ if (window.__discordResolve) window.__discordResolve();
     preloadedClipId = null;
     if (bgWorker) bgWorker.postMessage({ action: 'stopAll' });
 
-    // Reset player state
+    // Reset all player state for clean channel switch
     clips = [];
     clipHistory = [];
     currentClipData = null;
@@ -3854,6 +3854,13 @@ if (window.__discordResolve) window.__discordResolve();
     isSwitching = false;
     mySkipVote = false;
     skipVotes = 0;
+    upNextQueue = [];
+    recentlyPlayedIds = [];
+    activeCategoryFilter = '';
+    consecutiveFailures = 0;
+    lastFailureTime = 0;
+    consecutiveFreezeChecks = 0;
+    stallRecoveryAttempts = 0;
 
     // Hide player UI elements (use classList, not inline style, so show/hide classes work after)
     hideControls();
@@ -4449,6 +4456,13 @@ if (window.__discordResolve) window.__discordResolve();
 
   async function init() {
     debugLog("Init...");
+
+    // Clear any existing sync interval (safe to call on re-init from channel switch)
+    if (syncInterval) { clearInterval(syncInterval); syncInterval = null; }
+
+    // Show loading state
+    loadingOverlay.querySelector('.text').textContent = 'Loading clips...';
+    loadingOverlay.classList.remove('hide');
 
     // Fetch clips AND sync state in parallel for faster startup
     const [clipsResult, syncResult] = await Promise.allSettled([
