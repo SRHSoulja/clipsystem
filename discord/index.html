@@ -1379,6 +1379,16 @@ if (window.__discordResolve) window.__discordResolve();
 </script>
 <script>
 (async () => {
+  // Global error handler - prevent uncaught errors from crashing the Activity
+  window.addEventListener('error', (e) => {
+    console.error('[ClipTV] Uncaught error:', e.error || e.message);
+    e.preventDefault(); // Prevent Discord from seeing it as a crash
+  });
+  window.addEventListener('unhandledrejection', (e) => {
+    console.error('[ClipTV] Unhandled rejection:', e.reason);
+    e.preventDefault(); // Prevent Discord from seeing it as a crash
+  });
+
   // ===== DISCORD ACTIVITY INIT =====
   window.__discordReady = new Promise(resolve => { window.__discordResolve = resolve; });
 
