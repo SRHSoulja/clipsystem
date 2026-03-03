@@ -1,16 +1,18 @@
 <?php
 /**
- * cliptv_chat.php - Communal chat for ClipTV
+ * cliptv_chat.php - Chat for ClipTV (stream-specific or global)
  *
  * Requires Twitch OAuth login to send messages.
  *
  * POST: Send a message
  *   - login: channel login
  *   - message: text (max 200 chars)
+ *   - scope: 'stream' (default) or 'global'
  *
  * GET: Fetch messages and chatter count
  *   - login: channel login
  *   - after: (optional) message ID to only fetch newer messages
+ *   - scope: 'stream' (default), 'global', or 'all' (both merged)
  */
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
@@ -29,7 +31,13 @@ function clean_login($s) {
   return $s ?: "default";
 }
 
+function clean_scope($s) {
+  $s = strtolower(trim((string)$s));
+  return in_array($s, ['global', 'all']) ? $s : 'stream';
+}
+
 $login = clean_login($_GET["login"] ?? $_POST["login"] ?? "");
+$scope = clean_scope($_GET["scope"] ?? $_POST["scope"] ?? "stream");
 
 $pdo = get_db_connection();
 if (!$pdo) {
@@ -47,19 +55,28 @@ try {
     username VARCHAR(64) NOT NULL,
     display_name VARCHAR(64) NOT NULL,
     message TEXT NOT NULL,
+    scope VARCHAR(10) NOT NULL DEFAULT 'stream',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   )");
   $pdo->exec("CREATE INDEX IF NOT EXISTS idx_cliptv_chat_login ON cliptv_chat(login, id)");
   $pdo->exec("CREATE INDEX IF NOT EXISTS idx_cliptv_chat_cleanup ON cliptv_chat(created_at)");
+  $pdo->exec("CREATE INDEX IF NOT EXISTS idx_cliptv_chat_scope ON cliptv_chat(scope, id)");
 } catch (PDOException $e) {
   // Table/index exists
+}
+
+// Add scope column if missing (migration for existing tables)
+try {
+  $pdo->exec("ALTER TABLE cliptv_chat ADD COLUMN IF NOT EXISTS scope VARCHAR(10) NOT NULL DEFAULT 'stream'");
+} catch (PDOException $e) {
+  // Column already exists
 }
 
 // Archive and cleanup old messages (older than 24 hours)
 try {
   // Fetch expired messages before deleting
   $expired = $pdo->query("
-    SELECT login, username, display_name, message, created_at
+    SELECT login, username, display_name, message, scope, created_at
     FROM cliptv_chat
     WHERE created_at < NOW() - INTERVAL '24 hours'
     ORDER BY created_at ASC
@@ -142,14 +159,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   // Strip HTML tags
   $message = strip_tags($message);
 
+  // For global messages, use 'global' as the login key
+  $msgScope = clean_scope($_POST['scope'] ?? 'stream');
+  $msgLogin = ($msgScope === 'global') ? '_global' : $login;
+
   // Rate limit: max 1 message per 2 seconds per user
   try {
     $stmt = $pdo->prepare("
       SELECT created_at FROM cliptv_chat
-      WHERE login = ? AND user_id = ?
+      WHERE user_id = ?
       ORDER BY created_at DESC LIMIT 1
     ");
-    $stmt->execute([$login, $currentUser['id']]);
+    $stmt->execute([$currentUser['id']]);
     $lastMsg = $stmt->fetch();
     if ($lastMsg) {
       $lastTime = strtotime($lastMsg['created_at']);
@@ -166,15 +187,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   // Insert message
   try {
     $stmt = $pdo->prepare("
-      INSERT INTO cliptv_chat (login, user_id, username, display_name, message, created_at)
-      VALUES (?, ?, ?, ?, ?, NOW())
+      INSERT INTO cliptv_chat (login, user_id, username, display_name, message, scope, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, NOW())
     ");
     $stmt->execute([
-      $login,
+      $msgLogin,
       $currentUser['id'],
       $currentUser['login'],
       $currentUser['display_name'],
-      $message
+      $message,
+      $msgScope
     ]);
 
     $messageId = $pdo->lastInsertId();
@@ -185,7 +207,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $logFile = $logDir . '/chat_log.jsonl';
     $logEntry = json_encode([
       'id' => intval($messageId),
-      'login' => $login,
+      'login' => $msgLogin,
+      'scope' => $msgScope,
       'username' => $currentUser['login'],
       'display_name' => $currentUser['display_name'],
       'message' => $message,
@@ -196,6 +219,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     echo json_encode([
       "ok" => true,
       "id" => intval($messageId),
+      "scope" => $msgScope,
       "display_name" => $currentUser['display_name']
     ]);
   } catch (PDOException $e) {
@@ -208,28 +232,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // GET - fetch messages and chatter count
 $afterId = intval($_GET['after'] ?? 0);
 
+// Build WHERE clause based on scope
+if ($scope === 'all') {
+  // Both stream-specific and global messages
+  $whereLogin = "(login = ? OR scope = 'global')";
+  $loginParam = $login;
+} elseif ($scope === 'global') {
+  $whereLogin = "scope = 'global'";
+  $loginParam = null;
+} else {
+  // Stream-specific only
+  $whereLogin = "login = ? AND scope = 'stream'";
+  $loginParam = $login;
+}
+
 try {
   // Fetch messages
   if ($afterId > 0) {
-    // Only new messages
-    $stmt = $pdo->prepare("
-      SELECT id, username, display_name, message, created_at
-      FROM cliptv_chat
-      WHERE login = ? AND id > ?
-      ORDER BY id ASC
-      LIMIT 50
-    ");
-    $stmt->execute([$login, $afterId]);
+    $sql = "SELECT id, username, display_name, message, scope, created_at
+            FROM cliptv_chat WHERE {$whereLogin} AND id > ? ORDER BY id ASC LIMIT 50";
+    $stmt = $pdo->prepare($sql);
+    $params = $loginParam !== null ? [$loginParam, $afterId] : [$afterId];
+    $stmt->execute($params);
   } else {
-    // Last 50 messages
-    $stmt = $pdo->prepare("
-      SELECT id, username, display_name, message, created_at
-      FROM cliptv_chat
-      WHERE login = ?
-      ORDER BY id DESC
-      LIMIT 50
-    ");
-    $stmt->execute([$login]);
+    $sql = "SELECT id, username, display_name, message, scope, created_at
+            FROM cliptv_chat WHERE {$whereLogin} ORDER BY id DESC LIMIT 50";
+    $stmt = $pdo->prepare($sql);
+    $params = $loginParam !== null ? [$loginParam] : [];
+    $stmt->execute($params);
   }
 
   $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -246,17 +276,25 @@ try {
       "username" => $m['username'],
       "display_name" => $m['display_name'],
       "message" => $m['message'],
+      "scope" => $m['scope'] ?? 'stream',
       "created_at" => $m['created_at']
     ];
   }, $messages);
 
-  // Count active chatters (sent message in last 5 minutes)
-  $stmt = $pdo->prepare("
-    SELECT COUNT(DISTINCT username) as chatter_count
-    FROM cliptv_chat
-    WHERE login = ? AND created_at > NOW() - INTERVAL '5 minutes'
-  ");
-  $stmt->execute([$login]);
+  // Count active chatters (sent message in last 5 minutes, matching scope)
+  if ($scope === 'all') {
+    $countSql = "SELECT COUNT(DISTINCT username) as chatter_count FROM cliptv_chat
+                 WHERE (login = ? OR scope = 'global') AND created_at > NOW() - INTERVAL '5 minutes'";
+    $stmt = $pdo->prepare($countSql);
+    $stmt->execute([$login]);
+  } elseif ($scope === 'global') {
+    $stmt = $pdo->query("SELECT COUNT(DISTINCT username) as chatter_count FROM cliptv_chat
+                         WHERE scope = 'global' AND created_at > NOW() - INTERVAL '5 minutes'");
+  } else {
+    $stmt = $pdo->prepare("SELECT COUNT(DISTINCT username) as chatter_count FROM cliptv_chat
+                           WHERE login = ? AND scope = 'stream' AND created_at > NOW() - INTERVAL '5 minutes'");
+    $stmt->execute([$login]);
+  }
   $chatterCount = intval($stmt->fetchColumn());
 
   // Check if user is logged in

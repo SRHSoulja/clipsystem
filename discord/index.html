@@ -739,6 +739,13 @@
     }
     .chat-header:active { cursor: grabbing; }
     .chat-header-title { font-weight: 700; font-size: 14px; }
+    .chat-scope-toggle { display: flex; gap: 2px; background: rgba(255,255,255,0.06); border-radius: 6px; padding: 2px; }
+    .chat-scope-btn {
+      padding: 2px 8px; border-radius: 4px; background: none; border: none;
+      color: #888; font: 600 11px system-ui, sans-serif; cursor: pointer; transition: all 150ms;
+    }
+    .chat-scope-btn:hover { color: #ccc; }
+    .chat-scope-btn.active { background: rgba(34, 197, 94, 0.25); color: #4ade80; }
     .chat-online { font-size: 12px; color: #4ade80; margin-left: auto; }
     .chat-close {
       padding: 4px 8px; border-radius: 6px; background: none;
@@ -1262,6 +1269,10 @@
   <div id="chatPanel">
     <div class="chat-header" id="chatHeader">
       <span class="chat-header-title">💬 Chat</span>
+      <div class="chat-scope-toggle" id="chatScopeToggle">
+        <button class="chat-scope-btn active" data-scope="stream">Stream</button>
+        <button class="chat-scope-btn" data-scope="global">Global</button>
+      </div>
       <span class="chat-online" id="chatOnline"></span>
       <button class="chat-close" id="chatClose">✕</button>
     </div>
@@ -3990,6 +4001,7 @@ if (window.__discordResolve) window.__discordResolve();
 
     // Save current chat position before switching
     if (chatLastId > 0) sessionStorage.setItem('cliptv_chat_last_seen_' + login, chatLastId.toString());
+    if (chatLastIdGlobal > 0) sessionStorage.setItem('cliptv_chat_last_seen_global', chatLastIdGlobal.toString());
 
     // Hide player UI elements (use classList, not inline style, so show/hide classes work after)
     hideControls();
@@ -4003,8 +4015,11 @@ if (window.__discordResolve) window.__discordResolve();
       if (pickerOverlay) pickerOverlay.style.display = 'none';
       login = newLogin;
       chatLastId = parseInt(sessionStorage.getItem('cliptv_chat_last_seen_' + newLogin) || '0', 10);
+      chatScope = 'stream';
       chatUnread = 0;
       updateChatBadge();
+      document.querySelectorAll('.chat-scope-btn').forEach(b => b.classList.toggle('active', b.dataset.scope === 'stream'));
+      chatInput.placeholder = 'Say something...';
       sessionStorage.setItem('cliptv_last_channel', newLogin);
       document.title = newLogin + " ClipTV";
       // Fetch new channel's profile image for favicon
@@ -4163,7 +4178,9 @@ if (window.__discordResolve) window.__discordResolve();
 
   let chatOpen = false;
   let chatLoggedIn = false;
+  let chatScope = 'stream'; // 'stream' or 'global'
   let chatLastId = parseInt(sessionStorage.getItem('cliptv_chat_last_seen_' + login) || '0', 10);
+  let chatLastIdGlobal = parseInt(sessionStorage.getItem('cliptv_chat_last_seen_global') || '0', 10);
   let chatPollInterval = null;
   let chatUnread = 0;
   let chatSendCooldown = false;
@@ -4188,6 +4205,7 @@ if (window.__discordResolve) window.__discordResolve();
       updateChatBadge();
       // Mark all current messages as seen
       if (chatLastId > 0) sessionStorage.setItem('cliptv_chat_last_seen_' + login, chatLastId.toString());
+      if (chatLastIdGlobal > 0) sessionStorage.setItem('cliptv_chat_last_seen_global', chatLastIdGlobal.toString());
       pollChat(); // Fetch immediately
       startChatPoll();
       // Scroll to bottom
@@ -4209,7 +4227,25 @@ if (window.__discordResolve) window.__discordResolve();
     chatPanel.classList.remove('open');
     chatBtn.classList.remove('active');
     if (chatLastId > 0) sessionStorage.setItem('cliptv_chat_last_seen_' + login, chatLastId.toString());
+    if (chatLastIdGlobal > 0) sessionStorage.setItem('cliptv_chat_last_seen_global', chatLastIdGlobal.toString());
     stopChatPoll();
+  });
+
+  // Chat scope toggle (Stream vs Global)
+  document.getElementById('chatScopeToggle').addEventListener('click', (e) => {
+    const btn = e.target.closest('.chat-scope-btn');
+    if (!btn || btn.dataset.scope === chatScope) return;
+    chatScope = btn.dataset.scope;
+    // Update toggle buttons
+    document.querySelectorAll('.chat-scope-btn').forEach(b => b.classList.toggle('active', b.dataset.scope === chatScope));
+    // Clear messages and reload for new scope
+    chatMessages.innerHTML = '<div class="chat-empty">Loading...</div>';
+    chatUnread = 0;
+    updateChatBadge();
+    // Update placeholder text
+    chatInput.placeholder = chatScope === 'global' ? 'Say something to everyone...' : 'Say something...';
+    // Fetch immediately with new scope
+    pollChat();
   });
 
   let chatBgPollInterval = null; // Slow background poll for badge updates
@@ -4239,7 +4275,8 @@ if (window.__discordResolve) window.__discordResolve();
 
   async function pollChat() {
     try {
-      const url = `${API_BASE}/cliptv_chat.php?login=${encodeURIComponent(login)}&after=${chatLastId}`;
+      const afterId = chatScope === 'global' ? chatLastIdGlobal : chatLastId;
+      const url = `${API_BASE}/cliptv_chat.php?login=${encodeURIComponent(login)}&after=${afterId}&scope=${chatScope}`;
       const res = await fetch(url, { cache: 'no-store', credentials: 'same-origin' });
       const data = await res.json();
 
@@ -4268,9 +4305,21 @@ if (window.__discordResolve) window.__discordResolve();
         if (emptyEl) emptyEl.remove();
 
         data.messages.forEach(msg => {
-          if (msg.id > chatLastId) chatLastId = msg.id;
+          // Track last ID per scope
+          if (msg.scope === 'global') {
+            if (msg.id > chatLastIdGlobal) chatLastIdGlobal = msg.id;
+          } else {
+            if (msg.id > chatLastId) chatLastId = msg.id;
+          }
           const div = document.createElement('div');
           div.className = 'chat-msg';
+          // Add a subtle globe icon for global messages when viewing stream chat
+          if (msg.scope === 'global' && chatScope !== 'global') {
+            const globeSpan = document.createElement('span');
+            globeSpan.textContent = '🌐 ';
+            globeSpan.style.fontSize = '10px';
+            div.appendChild(globeSpan);
+          }
           const nameSpan = document.createElement('span');
           nameSpan.className = 'chat-name';
           nameSpan.style.color = getChatColor(msg.username);
@@ -4331,6 +4380,7 @@ if (window.__discordResolve) window.__discordResolve();
       const formData = new FormData();
       formData.append('login', login);
       formData.append('message', text);
+      formData.append('scope', chatScope);
       // Include Discord auth for users without PHP sessions
       if (twitchUsername && voteToken) {
         formData.append('twitch_username', twitchUsername);
@@ -4409,11 +4459,16 @@ if (window.__discordResolve) window.__discordResolve();
   let chatBadgePollInterval = setInterval(async () => {
     if (chatOpen) return; // Already polling actively
     try {
-      const res = await fetch(`${API_BASE}/cliptv_chat.php?login=${encodeURIComponent(login)}&after=${chatLastId}`, { cache: 'no-store', credentials: 'same-origin' });
+      const afterId = chatScope === 'global' ? chatLastIdGlobal : chatLastId;
+      const res = await fetch(`${API_BASE}/cliptv_chat.php?login=${encodeURIComponent(login)}&after=${afterId}&scope=${chatScope}`, { cache: 'no-store', credentials: 'same-origin' });
       const data = await res.json();
       if (data.messages && data.messages.length > 0) {
         data.messages.forEach(msg => {
-          if (msg.id > chatLastId) chatLastId = msg.id;
+          if (msg.scope === 'global') {
+            if (msg.id > chatLastIdGlobal) chatLastIdGlobal = msg.id;
+          } else {
+            if (msg.id > chatLastId) chatLastId = msg.id;
+          }
           chatUnread++;
         });
         updateChatBadge();

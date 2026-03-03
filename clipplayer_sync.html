@@ -722,6 +722,13 @@
     }
     .chat-header:active { cursor: grabbing; }
     .chat-header-title { font-weight: 700; font-size: 14px; }
+    .chat-scope-toggle { display: flex; gap: 2px; background: rgba(255,255,255,0.06); border-radius: 6px; padding: 2px; }
+    .chat-scope-btn {
+      padding: 2px 8px; border-radius: 4px; background: none; border: none;
+      color: #888; font: 600 11px system-ui, sans-serif; cursor: pointer; transition: all 150ms;
+    }
+    .chat-scope-btn:hover { color: #ccc; }
+    .chat-scope-btn.active { background: rgba(34, 197, 94, 0.25); color: #4ade80; }
     .chat-online { font-size: 12px; color: #4ade80; margin-left: auto; }
     .chat-close {
       padding: 4px 8px; border-radius: 6px; background: none;
@@ -1250,6 +1257,10 @@
   <div id="chatPanel">
     <div class="chat-header" id="chatHeader">
       <span class="chat-header-title">💬 Chat</span>
+      <div class="chat-scope-toggle" id="chatScopeToggle">
+        <button class="chat-scope-btn active" data-scope="stream">Stream</button>
+        <button class="chat-scope-btn" data-scope="global">Global</button>
+      </div>
       <span class="chat-online" id="chatOnline"></span>
       <button class="chat-close" id="chatClose">✕</button>
     </div>
@@ -3579,7 +3590,9 @@
 
   let chatOpen = false;
   let chatLoggedIn = false;
+  let chatScope = 'stream'; // 'stream' or 'global'
   let chatLastId = 0;
+  let chatLastIdGlobal = 0;
   let chatPollInterval = null;
   let chatUnread = 0;
   let chatSendCooldown = false;
@@ -3625,6 +3638,19 @@
     stopChatPoll();
   });
 
+  // Chat scope toggle (Stream vs Global)
+  document.getElementById('chatScopeToggle').addEventListener('click', (e) => {
+    const btn = e.target.closest('.chat-scope-btn');
+    if (!btn || btn.dataset.scope === chatScope) return;
+    chatScope = btn.dataset.scope;
+    document.querySelectorAll('.chat-scope-btn').forEach(b => b.classList.toggle('active', b.dataset.scope === chatScope));
+    chatMessages.innerHTML = '<div class="chat-empty">Loading...</div>';
+    chatUnread = 0;
+    updateChatBadge();
+    chatInput.placeholder = chatScope === 'global' ? 'Say something to everyone...' : 'Say something...';
+    pollChat();
+  });
+
   let chatBgPollInterval = null; // Slow background poll for badge updates
 
   function startChatPoll() {
@@ -3652,7 +3678,8 @@
 
   async function pollChat() {
     try {
-      const url = `${API_BASE}/cliptv_chat.php?login=${encodeURIComponent(login)}&after=${chatLastId}`;
+      const afterId = chatScope === 'global' ? chatLastIdGlobal : chatLastId;
+      const url = `${API_BASE}/cliptv_chat.php?login=${encodeURIComponent(login)}&after=${afterId}&scope=${chatScope}`;
       const res = await fetch(url, { cache: 'no-store', credentials: 'same-origin' });
       const data = await res.json();
 
@@ -3682,9 +3709,19 @@
         if (emptyEl) emptyEl.remove();
 
         data.messages.forEach(msg => {
-          if (msg.id > chatLastId) chatLastId = msg.id;
+          if (msg.scope === 'global') {
+            if (msg.id > chatLastIdGlobal) chatLastIdGlobal = msg.id;
+          } else {
+            if (msg.id > chatLastId) chatLastId = msg.id;
+          }
           const div = document.createElement('div');
           div.className = 'chat-msg';
+          if (msg.scope === 'global' && chatScope !== 'global') {
+            const globeSpan = document.createElement('span');
+            globeSpan.textContent = '🌐 ';
+            globeSpan.style.fontSize = '10px';
+            div.appendChild(globeSpan);
+          }
           const nameSpan = document.createElement('span');
           nameSpan.className = 'chat-name';
           nameSpan.style.color = getChatColor(msg.username);
@@ -3745,6 +3782,7 @@
       const formData = new FormData();
       formData.append('login', login);
       formData.append('message', text);
+      formData.append('scope', chatScope);
       const res = await fetch(`${API_BASE}/cliptv_chat.php`, {
         method: 'POST',
         body: formData,
@@ -3817,11 +3855,16 @@
   let chatBadgePollInterval = setInterval(async () => {
     if (chatOpen) return; // Already polling actively
     try {
-      const res = await fetch(`${API_BASE}/cliptv_chat.php?login=${encodeURIComponent(login)}&after=${chatLastId}`, { cache: 'no-store', credentials: 'same-origin' });
+      const afterId = chatScope === 'global' ? chatLastIdGlobal : chatLastId;
+      const res = await fetch(`${API_BASE}/cliptv_chat.php?login=${encodeURIComponent(login)}&after=${afterId}&scope=${chatScope}`, { cache: 'no-store', credentials: 'same-origin' });
       const data = await res.json();
       if (data.messages && data.messages.length > 0) {
         data.messages.forEach(msg => {
-          if (msg.id > chatLastId) chatLastId = msg.id;
+          if (msg.scope === 'global') {
+            if (msg.id > chatLastIdGlobal) chatLastIdGlobal = msg.id;
+          } else {
+            if (msg.id > chatLastId) chatLastId = msg.id;
+          }
           chatUnread++;
         });
         updateChatBadge();
