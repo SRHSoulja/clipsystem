@@ -78,11 +78,69 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $clipCreator = $_POST['clip_creator'] ?? '';
   $clipDuration = floatval($_POST['clip_duration'] ?? 30);
   $requesterId = $_POST['requester_id'] ?? '';
+  $viewerCount = intval($_POST['viewer_count'] ?? 1);
 
   if (!$clipId) {
     http_response_code(400);
     echo json_encode(["error" => "clip_id required"]);
     exit;
+  }
+
+  // Multi-viewer protections (skip for solo viewers)
+  if ($viewerCount > 1) {
+    // Check if there's already an active request from someone else
+    try {
+      $stmt = $pdo->prepare("
+        SELECT requester_id, clip_id, EXTRACT(EPOCH FROM (NOW() - created_at)) as age_seconds
+        FROM cliptv_requests
+        WHERE login = ? AND played = FALSE
+          AND created_at > NOW() - INTERVAL '15 seconds'
+      ");
+      $stmt->execute([$login]);
+      $existing = $stmt->fetch(PDO::FETCH_ASSOC);
+
+      if ($existing && $existing['requester_id'] !== $requesterId) {
+        // Someone else has an active request -- reject
+        http_response_code(409);
+        echo json_encode([
+          "error" => "queue_busy",
+          "message" => "A clip is already queued",
+          "active_clip" => $existing['clip_id'],
+          "seconds_left" => max(0, 15 - floatval($existing['age_seconds']))
+        ]);
+        exit;
+      }
+    } catch (PDOException $e) {
+      // If check fails, proceed with the request
+    }
+
+    // Per-user cooldown: can't request again within 30s of your last played request
+    try {
+      $stmt = $pdo->prepare("
+        SELECT EXTRACT(EPOCH FROM (NOW() - created_at)) as age_seconds
+        FROM cliptv_requests
+        WHERE login = ? AND requester_id = ? AND played = TRUE
+          AND created_at > NOW() - INTERVAL '30 seconds'
+        ORDER BY created_at DESC LIMIT 1
+      ");
+      $stmt->execute([$login, $requesterId]);
+      $recent = $stmt->fetch(PDO::FETCH_ASSOC);
+
+      if ($recent) {
+        $cooldownLeft = max(0, 30 - floatval($recent['age_seconds']));
+        if ($cooldownLeft > 1) {
+          http_response_code(429);
+          echo json_encode([
+            "error" => "cooldown",
+            "message" => "Wait " . ceil($cooldownLeft) . "s before requesting another clip",
+            "seconds_left" => round($cooldownLeft)
+          ]);
+          exit;
+        }
+      }
+    } catch (PDOException $e) {
+      // If check fails, proceed
+    }
   }
 
   try {
