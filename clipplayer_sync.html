@@ -3615,6 +3615,7 @@
   let chatPollInterval = null;
   let chatUnread = 0;
   let chatSendCooldown = false;
+  let chatBadgeInitialized = false; // First background poll is silent (sets watermark only)
 
   const CHAT_COLORS = ['#ff6b6b', '#ffd93d', '#6bcb77', '#4d96ff', '#ff922b', '#a78bfa', '#f472b6', '#34d399', '#22d3ee', '#fb923c', '#e879f9', '#2dd4bf'];
 
@@ -3633,6 +3634,7 @@
     chatBtn.classList.toggle('active', chatOpen);
     if (chatOpen) {
       chatUnread = 0;
+      chatBadgeInitialized = true; // User has seen chat, future polls should count
       updateChatBadge();
       pollChat(); // Fetch immediately
       startChatPoll();
@@ -3900,12 +3902,12 @@
       if (data.messages && data.messages.length > 0) {
         data.messages.forEach(msg => {
           if (msg.scope === 'global') {
-            if (msg.id > chatLastIdGlobal) chatLastIdGlobal = msg.id;
+            if (msg.id > chatLastIdGlobal) { if (chatBadgeInitialized) chatUnread++; chatLastIdGlobal = msg.id; }
           } else {
-            if (msg.id > chatLastId) chatLastId = msg.id;
+            if (msg.id > chatLastId) { if (chatBadgeInitialized) chatUnread++; chatLastId = msg.id; }
           }
-          chatUnread++;
         });
+        if (!chatBadgeInitialized) chatBadgeInitialized = true;
         updateChatBadge();
       }
     } catch (e) {}

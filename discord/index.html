@@ -1193,16 +1193,24 @@
     body.pip-mode #discordBadge { display: none !important; }
     body.pip-mode video { object-fit: contain; }
     body.pip-mode #unmuteOverlay { font-size: 14px; }
-    body.pip-mode #pipCloseBtn { display: flex !important; }
-    #pipCloseBtn {
+    body.pip-mode #pipOverlay { display: flex !important; }
+    #pipOverlay {
       display: none;
-      position: fixed; bottom: 8px; left: 50%; transform: translateX(-50%);
-      background: rgba(220,38,38,0.85); color: #fff; font: 700 12px system-ui, sans-serif;
-      padding: 6px 14px; border-radius: 16px; z-index: 9999; border: none;
-      align-items: center; gap: 5px; cursor: pointer;
-      -webkit-tap-highlight-color: transparent;
+      position: fixed; bottom: 6px; left: 50%; transform: translateX(-50%);
+      flex-direction: column; align-items: center; gap: 4px;
+      z-index: 9999; pointer-events: none;
     }
-    #pipCloseBtn:active { background: rgba(220,38,38,1); transform: translateX(-50%) scale(0.95); }
+    #pipTip {
+      background: rgba(0,0,0,0.75); color: #aaa; font: 500 10px system-ui, sans-serif;
+      padding: 3px 10px; border-radius: 10px; white-space: nowrap; text-align: center;
+    }
+    #pipCloseBtn {
+      background: rgba(220,38,38,0.85); color: #fff; font: 700 12px system-ui, sans-serif;
+      padding: 6px 14px; border-radius: 16px; border: none;
+      display: flex; align-items: center; gap: 5px; cursor: pointer;
+      pointer-events: auto; -webkit-tap-highlight-color: transparent;
+    }
+    #pipCloseBtn:active { background: rgba(220,38,38,1); transform: scale(0.95); }
 
   </style>
 </head>
@@ -1390,7 +1398,10 @@
   <div id="debugOverlay"></div>
   <div id="syncStatus"><span class="dot"></span><span id="syncText">Synced</span></div>
 
-  <button id="pipCloseBtn">✕ Close Activity</button>
+  <div id="pipOverlay">
+    <div id="pipTip">Tip: Use Popout to avoid this</div>
+    <button id="pipCloseBtn">✕ Close & Reopen Full Size</button>
+  </div>
 
   <div id="unmuteOverlay">
     <div class="content">
