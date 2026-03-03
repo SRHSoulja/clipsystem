@@ -1442,12 +1442,26 @@ if (window.__discordResolve) window.__discordResolve();
 
   const statusText = document.querySelector('#loadingOverlay .text');
 
+  // Use cached auth data for instant UI while SDK re-authenticates in background
+  const cachedAuth = (() => {
+    try { return JSON.parse(sessionStorage.getItem('cliptv_auth_cache') || 'null'); } catch { return null; }
+  })();
+  if (cachedAuth) {
+    discordUser = cachedAuth.discord_user;
+    twitchUsername = cachedAuth.twitch_username;
+    voteToken = cachedAuth.vote_token;
+    discordToken = cachedAuth.discord_token;
+    discordAuthComplete = true;
+    debugConnections = cachedAuth.debug_connections;
+    statusText.textContent = 'Connecting...';
+  }
+
   try {
-    statusText.textContent = 'Initializing Discord SDK...';
+    if (!cachedAuth) statusText.textContent = 'Initializing Discord SDK...';
     discordSdk = new window.DiscordSDK(DISCORD_CLIENT_ID);
     await discordSdk.ready();
 
-    statusText.textContent = 'Authorizing...';
+    if (!cachedAuth) statusText.textContent = 'Authorizing...';
     // Authorize with Discord (no redirect_uri for RPC/Activity flow)
     const { code } = await discordSdk.commands.authorize({
       client_id: DISCORD_CLIENT_ID,
@@ -1457,7 +1471,7 @@ if (window.__discordResolve) window.__discordResolve();
       scope: ['identify', 'connections']
     });
 
-    statusText.textContent = 'Exchanging token...';
+    if (!cachedAuth) statusText.textContent = 'Exchanging token...';
     // Exchange code for token on our server
     const tokenRes = await fetch('/discord/token.php', {
       method: 'POST',
@@ -1467,7 +1481,7 @@ if (window.__discordResolve) window.__discordResolve();
     const tokenData = await tokenRes.json();
 
     if (tokenData.access_token) {
-      statusText.textContent = 'Authenticating...';
+      if (!cachedAuth) statusText.textContent = 'Authenticating...';
       await discordSdk.commands.authenticate({ access_token: tokenData.access_token });
       discordUser = tokenData.discord_user;
       twitchUsername = tokenData.twitch_username;
@@ -1475,6 +1489,14 @@ if (window.__discordResolve) window.__discordResolve();
       discordToken = tokenData.discord_token;
       discordAuthComplete = true;
       debugConnections = tokenData._debug_connections;
+      // Cache auth results for faster subsequent loads
+      sessionStorage.setItem('cliptv_auth_cache', JSON.stringify({
+        discord_user: discordUser,
+        twitch_username: twitchUsername,
+        vote_token: voteToken,
+        discord_token: discordToken,
+        debug_connections: debugConnections
+      }));
       console.log('[Discord] Auth result:', {
         discord_user: discordUser?.global_name,
         twitch_username: twitchUsername || '(none found)',
@@ -1483,12 +1505,16 @@ if (window.__discordResolve) window.__discordResolve();
       });
     } else {
       console.error('[Discord] Token exchange failed:', tokenData);
-      discordUser = { global_name: 'Token exchange failed', id: '' };
-      debugConnections = tokenData?._debug_connections || null;
+      if (!cachedAuth) {
+        discordUser = { global_name: 'Token exchange failed', id: '' };
+        debugConnections = tokenData?._debug_connections || null;
+      }
     }
   } catch (e) {
     console.error('[Discord] Auth error:', e);
-    discordUser = { global_name: 'Auth error: ' + (e.message || e), id: '' };
+    if (!cachedAuth) {
+      discordUser = { global_name: 'Auth error: ' + (e.message || e), id: '' };
+    }
   }
 
   // Auto-resume only if the Activity was recently alive (popout reload recovery).
@@ -3962,6 +3988,9 @@ if (window.__discordResolve) window.__discordResolve();
     clipLoadStartTime = 0;
     clipStartTime = 0;
 
+    // Save current chat position before switching
+    if (chatLastId > 0) sessionStorage.setItem('cliptv_chat_last_seen_' + login, chatLastId.toString());
+
     // Hide player UI elements (use classList, not inline style, so show/hide classes work after)
     hideControls();
     unmuteOverlay.classList.add('hide');
@@ -3973,6 +4002,9 @@ if (window.__discordResolve) window.__discordResolve();
       // Channel selected - hide picker and restart playback with new channel
       if (pickerOverlay) pickerOverlay.style.display = 'none';
       login = newLogin;
+      chatLastId = parseInt(sessionStorage.getItem('cliptv_chat_last_seen_' + newLogin) || '0', 10);
+      chatUnread = 0;
+      updateChatBadge();
       sessionStorage.setItem('cliptv_last_channel', newLogin);
       document.title = newLogin + " ClipTV";
       // Fetch new channel's profile image for favicon
@@ -4131,7 +4163,7 @@ if (window.__discordResolve) window.__discordResolve();
 
   let chatOpen = false;
   let chatLoggedIn = false;
-  let chatLastId = 0;
+  let chatLastId = parseInt(sessionStorage.getItem('cliptv_chat_last_seen_' + login) || '0', 10);
   let chatPollInterval = null;
   let chatUnread = 0;
   let chatSendCooldown = false;
@@ -4154,6 +4186,8 @@ if (window.__discordResolve) window.__discordResolve();
     if (chatOpen) {
       chatUnread = 0;
       updateChatBadge();
+      // Mark all current messages as seen
+      if (chatLastId > 0) sessionStorage.setItem('cliptv_chat_last_seen_' + login, chatLastId.toString());
       pollChat(); // Fetch immediately
       startChatPoll();
       // Scroll to bottom
@@ -4174,6 +4208,7 @@ if (window.__discordResolve) window.__discordResolve();
     chatOpen = false;
     chatPanel.classList.remove('open');
     chatBtn.classList.remove('active');
+    if (chatLastId > 0) sessionStorage.setItem('cliptv_chat_last_seen_' + login, chatLastId.toString());
     stopChatPoll();
   });
 
