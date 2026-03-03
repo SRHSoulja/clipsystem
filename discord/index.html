@@ -4549,10 +4549,10 @@ if (window.__discordResolve) window.__discordResolve();
       if (data.messages && data.messages.length > 0) {
         data.messages.forEach(msg => {
           if (msg.scope === 'global') {
-            if (msg.id > chatLastSeenIdGlobal) chatUnread++;
+            if (msg.id > chatLastSeenIdGlobal) { chatUnread++; chatLastSeenIdGlobal = msg.id; }
             if (msg.id > chatLastIdGlobal) chatLastIdGlobal = msg.id;
           } else {
-            if (msg.id > chatLastSeenId) chatUnread++;
+            if (msg.id > chatLastSeenId) { chatUnread++; chatLastSeenId = msg.id; }
             if (msg.id > chatLastId) chatLastId = msg.id;
           }
         });
