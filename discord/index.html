@@ -4832,7 +4832,7 @@ if (window.__discordResolve) window.__discordResolve();
   document.getElementById('pipCloseBtn').addEventListener('click', () => {
     debugLog("User requested close from PiP mode", "ok");
     try {
-      discordSdk.close(4000, "User closed from minimized mode");
+      discordSdk.close(1000, "Activity closed. Relaunch from the voice channel!");
     } catch (e) {
       debugLog("SDK close failed: " + e.message, "warn");
       // Fallback: just show a message
