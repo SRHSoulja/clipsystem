@@ -691,9 +691,12 @@
       left: 24px;
       width: 320px;
       height: 380px;
-      background: rgba(15, 15, 25, 0.95);
-      backdrop-filter: blur(20px);
-      border: 2px solid rgba(34, 197, 94, 0.4);
+      max-height: calc(100vh - 100px);
+      max-height: calc(100dvh - 100px);
+      background: rgba(10, 10, 20, 0.55);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(34, 197, 94, 0.25);
       border-radius: 16px;
       display: none;
       flex-direction: column;
@@ -711,8 +714,8 @@
       align-items: center;
       gap: 8px;
       padding: 10px 14px;
-      background: rgba(0,0,0,0.3);
-      border-bottom: 1px solid rgba(255,255,255,0.1);
+      background: rgba(0,0,0,0.2);
+      border-bottom: 1px solid rgba(255,255,255,0.08);
       cursor: grab;
       user-select: none;
       flex-shrink: 0;
@@ -742,23 +745,25 @@
       line-height: 1.35;
       word-wrap: break-word;
       overflow-wrap: break-word;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.8);
     }
     .chat-msg .chat-name { font-weight: 700; margin-right: 6px; }
-    .chat-msg .chat-text { color: #d1d5db; }
+    .chat-msg .chat-text { color: #f0f0f0; }
     .chat-msg.system { color: #6b7280; font-style: italic; font-size: 12px; }
     .chat-input-area {
       display: flex;
       gap: 6px;
       padding: 10px 14px;
-      border-top: 1px solid rgba(255,255,255,0.1);
+      border-top: 1px solid rgba(255,255,255,0.08);
+      background: rgba(0,0,0,0.15);
       flex-shrink: 0;
     }
     .chat-input-area input {
       flex: 1;
       padding: 8px 12px;
       border-radius: 10px;
-      background: rgba(255,255,255,0.08);
-      border: 1px solid rgba(255,255,255,0.15);
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.12);
       color: #fff;
       font: 13px system-ui, sans-serif;
       outline: none;
@@ -1111,7 +1116,7 @@
       #clipActions { bottom: max(12px, env(safe-area-inset-bottom)); }
       #clipActions .action-btn { padding: 6px 12px; font-size: 11px; }
       #clipActions .action-btn svg { width: 14px; height: 14px; }
-      #chatPanel { width: 280px; height: 340px; left: 12px; bottom: 70px; }
+      #chatPanel { width: 280px; height: 340px; max-height: calc(100dvh - 80px); left: 12px; bottom: 70px; }
     }
 
     /* Portrait mobile: stack bottom controls above phone's browser/gesture bar */
@@ -1136,7 +1141,7 @@
       #skipBtn, #remoteBtn, #backBtn, #chatBtn { padding: 8px 12px; font-size: 11px; min-height: 44px; }
       #clipActions .action-btn { padding: 6px 10px; font-size: 11px; }
       #clipActions .action-btn span { display: none; }
-      #chatPanel { width: calc(100vw - 24px); left: 12px; bottom: 65px; }
+      #chatPanel { width: calc(100vw - 24px); left: 12px; bottom: 65px; max-height: calc(100dvh - 75px); }
     }
 
     /* Override 480px bottom for portrait specifically (must come after 480px block) */
