@@ -4255,8 +4255,9 @@ if (window.__discordResolve) window.__discordResolve();
     chatScope = btn.dataset.scope;
     // Update toggle buttons
     document.querySelectorAll('.chat-scope-btn').forEach(b => b.classList.toggle('active', b.dataset.scope === chatScope));
-    // Clear messages and reload for new scope
+    // Clear messages and reset afterId so we fetch full history for this scope
     chatMessages.innerHTML = '<div class="chat-empty">Loading...</div>';
+    if (chatScope === 'global') { chatLastIdGlobal = 0; } else { chatLastId = 0; }
     chatUnread = 0;
     updateChatBadge();
     // Update placeholder text
@@ -4365,12 +4366,24 @@ if (window.__discordResolve) window.__discordResolve();
         }
       }
 
+      // Replace "Loading..." with empty state if no messages came back
+      if (!data.messages || data.messages.length === 0) {
+        const loadingEl = chatMessages.querySelector('.chat-empty');
+        if (loadingEl && loadingEl.textContent === 'Loading...') {
+          loadingEl.textContent = chatScope === 'global' ? 'No global messages yet - say something!' : 'No messages yet - say something!';
+        }
+      }
+
       // Update badge count even when no new messages
       if (!chatOpen && count > 0) {
         updateChatBadge();
       }
     } catch (e) {
-      // Silently fail
+      // Silently fail - also clear loading state on error
+      const loadingEl = chatMessages.querySelector('.chat-empty');
+      if (loadingEl && loadingEl.textContent === 'Loading...') {
+        loadingEl.textContent = 'Chat unavailable';
+      }
     }
   }
 
