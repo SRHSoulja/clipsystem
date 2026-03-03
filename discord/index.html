@@ -1542,7 +1542,7 @@ if (window.__discordResolve) window.__discordResolve();
 
   // Auto-resume only if the Activity was recently alive (popout reload recovery).
   // Fresh launches always show the channel picker, even if sessionStorage has a saved channel.
-  const RESUME_WINDOW_MS = 30000; // 30 seconds
+  const RESUME_WINDOW_MS = 8000; // 8 seconds (catches popout reloads, not manual relaunches)
   const lastAlive = parseInt(sessionStorage.getItem('cliptv_alive_at') || '0', 10);
   const isReloadRecovery = (Date.now() - lastAlive) < RESUME_WINDOW_MS;
   const autoResumeChannel = isReloadRecovery
