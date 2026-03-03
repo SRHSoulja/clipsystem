@@ -1193,19 +1193,16 @@
     body.pip-mode #discordBadge { display: none !important; }
     body.pip-mode video { object-fit: contain; }
     body.pip-mode #unmuteOverlay { font-size: 14px; }
-    body.pip-mode #pipExpandHint { display: flex !important; }
-    #pipExpandHint {
+    body.pip-mode #pipCloseBtn { display: flex !important; }
+    #pipCloseBtn {
       display: none;
-      position: fixed; bottom: 6px; left: 50%; transform: translateX(-50%);
-      background: rgba(0,0,0,0.7); color: #fff; font: 600 11px system-ui, sans-serif;
-      padding: 4px 10px; border-radius: 12px; z-index: 9999;
-      align-items: center; gap: 4px; pointer-events: none;
-      animation: pipHintPulse 2s ease-in-out infinite;
+      position: fixed; bottom: 8px; left: 50%; transform: translateX(-50%);
+      background: rgba(220,38,38,0.85); color: #fff; font: 700 12px system-ui, sans-serif;
+      padding: 6px 14px; border-radius: 16px; z-index: 9999; border: none;
+      align-items: center; gap: 5px; cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
     }
-    @keyframes pipHintPulse {
-      0%, 100% { opacity: 0.7; }
-      50% { opacity: 1; }
-    }
+    #pipCloseBtn:active { background: rgba(220,38,38,1); transform: translateX(-50%) scale(0.95); }
 
   </style>
 </head>
@@ -1393,7 +1390,7 @@
   <div id="debugOverlay"></div>
   <div id="syncStatus"><span class="dot"></span><span id="syncText">Synced</span></div>
 
-  <div id="pipExpandHint">Click activity to expand</div>
+  <button id="pipCloseBtn">✕ Close &amp; Relaunch</button>
 
   <div id="unmuteOverlay">
     <div class="content">
@@ -4830,6 +4827,18 @@ if (window.__discordResolve) window.__discordResolve();
       debugLog("Layout mode subscribe failed: " + e.message, "warn");
     }
   }
+
+  // PiP close button - only option since Discord has no "restore from minimize" API
+  document.getElementById('pipCloseBtn').addEventListener('click', () => {
+    debugLog("User requested close from PiP mode", "ok");
+    try {
+      discordSdk.close(4000, "User closed from minimized mode");
+    } catch (e) {
+      debugLog("SDK close failed: " + e.message, "warn");
+      // Fallback: just show a message
+      document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;color:#fff;font:600 16px system-ui;text-align:center;padding:20px;background:#1a1a2e">Relaunch the activity from the voice channel to continue</div>';
+    }
+  });
 
   // === Resize handler (catches mobile popout when layout event doesn't fire) ===
   let resizeRecoveryTimer = null;
