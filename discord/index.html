@@ -1170,6 +1170,23 @@
       #clipActions .action-btn span { display: none; }
     }
 
+    /* PiP/mini mode - strip everything, just show video */
+    body.pip-mode #voteHud,
+    body.pip-mode #viewerControls,
+    body.pip-mode #volumeControl,
+    body.pip-mode #syncStatus,
+    body.pip-mode #clipActions,
+    body.pip-mode #hudToggle,
+    body.pip-mode #chatPanel,
+    body.pip-mode #remoteSheet,
+    body.pip-mode #bufferingIndicator,
+    body.pip-mode #debugOverlay,
+    body.pip-mode #clipRequestBanner,
+    body.pip-mode #loginPrompt,
+    body.pip-mode #discordBadge { display: none !important; }
+    body.pip-mode video { object-fit: contain; }
+    body.pip-mode #unmuteOverlay { font-size: 14px; }
+
   </style>
 </head>
 <body>
@@ -1474,8 +1491,13 @@ if (window.__discordResolve) window.__discordResolve();
     discordUser = { global_name: 'Auth error: ' + (e.message || e), id: '' };
   }
 
-  // Hide loading overlay, show channel picker
-  document.getElementById('loadingOverlay').classList.add('hide');
+  // Hide loading overlay (unless auto-resuming a saved channel - keep it visible for smooth transition)
+  const autoResumeChannel = sessionStorage.getItem('cliptv_last_channel') || new URLSearchParams(location.search).get("login");
+  if (!autoResumeChannel) {
+    document.getElementById('loadingOverlay').classList.add('hide');
+  } else {
+    statusText.textContent = 'Resuming...';
+  }
 
   // Show Discord identity on channel picker screen (always visible for debug)
   const identityEl = document.getElementById('discordIdentity');
@@ -1505,8 +1527,8 @@ if (window.__discordResolve) window.__discordResolve();
     }
   }
 
-  // Show channel picker
-  if (pickerOverlay) pickerOverlay.style.display = 'flex';
+  // Only show channel picker if there's no saved channel to auto-resume
+  if (pickerOverlay && !autoResumeChannel) pickerOverlay.style.display = 'flex';
 
   // --- Channel picker helper functions ---
   function renderChannelCard(ch, isFavorited) {
@@ -4513,7 +4535,8 @@ if (window.__discordResolve) window.__discordResolve();
         debugLog(`Layout: ${modeNames[prevMode] || prevMode} -> ${modeNames[currentLayoutMode] || currentLayoutMode}`, "ok");
 
         if (currentLayoutMode === 1 || currentLayoutMode === 2) {
-          // Entering PiP or Grid - keep video alive through the transition
+          // Entering PiP or Grid - strip UI to help video survive transition
+          document.body.classList.add('pip-mode');
           if (bgWorker) {
             bgWorker.postMessage({ action: 'start', id: 'controllerHeartbeat', interval: 5000 });
           }
@@ -4557,7 +4580,8 @@ if (window.__discordResolve) window.__discordResolve();
           }, 1500);
 
         } else if (currentLayoutMode === 0 && (prevMode === 1 || prevMode === 2)) {
-          // Returning from PiP/Grid to focused
+          // Returning from PiP/Grid to focused - restore UI
+          document.body.classList.remove('pip-mode');
           debugLog("Returned from PiP - recovering", "ok");
 
           // Resume video if browser paused it
