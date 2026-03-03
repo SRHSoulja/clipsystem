@@ -4804,8 +4804,12 @@ if (window.__discordResolve) window.__discordResolve();
     // Ignore 0-size events (minimized/hidden windows)
     if (newW === 0 || newH === 0) return;
 
-    // Track full size for comparison (only update when not in pip mode)
-    if (!pipModeActive && newW > 200 && newH > 200) {
+    // Don't trigger pip mode when virtual keyboard opens (input is focused)
+    const activeEl = document.activeElement;
+    const isKeyboardOpen = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA');
+
+    // Track full size for comparison (only update when not in pip mode and keyboard isn't open)
+    if (!pipModeActive && !isKeyboardOpen && newW > 200 && newH > 200) {
       fullSizeWidth = newW;
       fullSizeHeight = newH;
     }
@@ -4815,7 +4819,8 @@ if (window.__discordResolve) window.__discordResolve();
     const heightRatio = fullSizeHeight > 0 ? newH / fullSizeHeight : 1;
 
     // Drastic shrink = likely mobile popout, trigger pip mode as safety net
-    if ((widthRatio < PIP_SIZE_THRESHOLD || heightRatio < PIP_SIZE_THRESHOLD) && !pipModeActive) {
+    // But NOT when virtual keyboard is open (causes height shrink on mobile)
+    if ((widthRatio < PIP_SIZE_THRESHOLD || heightRatio < PIP_SIZE_THRESHOLD) && !pipModeActive && !isKeyboardOpen) {
       debugLog(`Resize: drastic shrink (${Math.round(widthRatio*100)}%w, ${Math.round(heightRatio*100)}%h) - entering PiP`, "ok");
       enterPipMode();
     }
