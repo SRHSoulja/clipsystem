@@ -4773,10 +4773,10 @@ if (window.__discordResolve) window.__discordResolve();
   }
 
   if (discordSdk) {
-    // Make PiP mode interactive so users can still see and hear clips
+    // Non-interactive PiP: shows static preview, clicking restores to full size
     try {
-      await discordSdk.commands.setConfig({ use_interactive_pip: true });
-      debugLog("PiP interactive mode enabled", "ok");
+      await discordSdk.commands.setConfig({ use_interactive_pip: false });
+      debugLog("PiP non-interactive mode set", "ok");
     } catch (e) {
       debugLog("setConfig PiP failed (may not be supported): " + e.message, "warn");
     }
