@@ -3613,9 +3613,7 @@
   let chatPolling = false;
   let chatRenderedIds = new Set();
   let chatPollInterval = null;
-  let chatUnread = 0;
   let chatSendCooldown = false;
-  let chatBadgeInitialized = false; // First background poll is silent (sets watermark only)
 
   const CHAT_COLORS = ['#ff6b6b', '#ffd93d', '#6bcb77', '#4d96ff', '#ff922b', '#a78bfa', '#f472b6', '#34d399', '#22d3ee', '#fb923c', '#e879f9', '#2dd4bf'];
 
@@ -3633,8 +3631,6 @@
     chatPanel.classList.toggle('open', chatOpen);
     chatBtn.classList.toggle('active', chatOpen);
     if (chatOpen) {
-      chatUnread = 0;
-      chatBadgeInitialized = true; // User has seen chat, future polls should count
       updateChatBadge();
       pollChat(); // Fetch immediately
       startChatPoll();
@@ -3668,7 +3664,6 @@
     chatMessages.innerHTML = '<div class="chat-empty">Loading...</div>';
     chatRenderedIds.clear();
     if (chatScope === 'global') { chatLastIdGlobal = 0; } else { chatLastId = 0; }
-    chatUnread = 0;
     updateChatBadge();
     chatInput.placeholder = chatScope === 'global' ? 'Say something to everyone...' : 'Say something...';
     pollChat();
@@ -3761,7 +3756,6 @@
           chatMessages.appendChild(div);
 
           // Track unread if chat is closed
-          if (!chatOpen) chatUnread++;
         });
 
         // Auto-scroll if user was at bottom
@@ -3801,12 +3795,7 @@
   }
 
   function updateChatBadge() {
-    if (chatUnread > 0 && !chatOpen) {
-      chatBadge.textContent = chatUnread > 99 ? '99+' : chatUnread;
-      chatBadge.classList.add('show');
-    } else {
-      chatBadge.classList.remove('show');
-    }
+    chatBadge.classList.remove('show');
   }
 
   async function sendChatMessage() {
@@ -3892,26 +3881,6 @@
     }
   });
 
-  // Background chat badge polling (when chat is closed, check count every 15s)
-  let chatBadgePollInterval = setInterval(async () => {
-    if (chatOpen) return; // Already polling actively
-    try {
-      const afterId = chatScope === 'global' ? chatLastIdGlobal : chatLastId;
-      const res = await fetch(`${API_BASE}/cliptv_chat.php?login=${encodeURIComponent(login)}&after=${afterId}&scope=${chatScope}`, { cache: 'no-store', credentials: 'same-origin' });
-      const data = await res.json();
-      if (data.messages && data.messages.length > 0) {
-        data.messages.forEach(msg => {
-          if (msg.scope === 'global') {
-            if (msg.id > chatLastIdGlobal) { if (chatBadgeInitialized) chatUnread++; chatLastIdGlobal = msg.id; }
-          } else {
-            if (msg.id > chatLastId) { if (chatBadgeInitialized) chatUnread++; chatLastId = msg.id; }
-          }
-        });
-        if (!chatBadgeInitialized) chatBadgeInitialized = true;
-        updateChatBadge();
-      }
-    } catch (e) {}
-  }, 15000);
 
   // === Play specific clip ===
   async function playSpecificClip(clip) {
