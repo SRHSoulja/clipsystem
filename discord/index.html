@@ -3855,15 +3855,13 @@ if (window.__discordResolve) window.__discordResolve();
     mySkipVote = false;
     skipVotes = 0;
 
-    // Hide player UI elements
-    voteHud.classList.remove('show');
-    viewerControls.style.display = 'none';
-    unmuteOverlay.style.display = 'none';
-    document.getElementById('chatPanel').style.display = 'none';
-    loadingOverlay.classList.remove('hide');
+    // Hide player UI elements (use classList, not inline style, so show/hide classes work after)
+    hideControls();
+    unmuteOverlay.classList.add('hide');
+    document.getElementById('chatPanel').classList.remove('open');
 
     // Re-render and show channel picker
-    const resultsDiv = document.getElementById('channelResults');
+    const resultsDiv = document.getElementById('channelSearchResults');
     pickerResolve = (newLogin) => {
       // Channel selected - hide picker and restart playback with new channel
       if (pickerOverlay) pickerOverlay.style.display = 'none';
@@ -3879,7 +3877,6 @@ if (window.__discordResolve) window.__discordResolve();
       init();
     };
     renderPickerDefault(resultsDiv, pickerResolve);
-    attachPickerListeners(resultsDiv, pickerResolve);
     pickerOverlay.style.display = 'flex';
 
     // Clear and re-focus search input
