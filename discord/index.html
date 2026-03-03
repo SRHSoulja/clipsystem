@@ -1616,7 +1616,7 @@ if (window.__discordResolve) window.__discordResolve();
   }
 
   // Wait for channel selection
-  const login = await new Promise(resolve => {
+  let login = await new Promise(resolve => {
     const qs = new URLSearchParams(location.search);
     const preselected = qs.get("login") || sessionStorage.getItem('cliptv_last_channel');
     if (preselected) {
@@ -1635,16 +1635,18 @@ if (window.__discordResolve) window.__discordResolve();
     searchInput?.addEventListener('input', () => {
       clearTimeout(searchTimeout);
       const q = searchInput.value.trim();
-      if (q.length < 2) { renderPickerDefault(resultsDiv, resolve); return; }
+      const activeResolve = pickerResolve || resolve;
+      if (q.length < 2) { renderPickerDefault(resultsDiv, activeResolve); return; }
       searchTimeout = setTimeout(async () => {
         try {
+          const activeResolve2 = pickerResolve || resolve;
           const res = await fetch(`/channel_search.php?q=${encodeURIComponent(q)}`);
           const channels = await res.json();
           resultsDiv.innerHTML = channels.map(ch => {
             const isFav = userFavorites.some(f => f.login === ch.login);
             return renderChannelCard(ch, isFav);
           }).join('');
-          attachPickerListeners(resultsDiv, resolve);
+          attachPickerListeners(resultsDiv, activeResolve2);
         } catch (e) {
           resultsDiv.innerHTML = '<div style="color:#666;padding:12px;">Search failed</div>';
         }
@@ -1655,6 +1657,7 @@ if (window.__discordResolve) window.__discordResolve();
     async function trySelectChannel(name) {
       const q = name.trim().toLowerCase();
       if (!q) return;
+      const activeResolve = pickerResolve || resolve;
       const goBtn = document.getElementById('channelSearchBtn');
       goBtn.textContent = '...';
       goBtn.disabled = true;
@@ -1664,14 +1667,14 @@ if (window.__discordResolve) window.__discordResolve();
         const match = channels.find(ch => ch.login === q);
         if (match) {
           if (pickerOverlay) pickerOverlay.style.display = 'none';
-          resolve(q);
+          activeResolve(q);
         } else if (channels.length > 0) {
           // Show results instead - they typed something close
           resultsDiv.innerHTML = channels.map(ch => {
             const isFav = userFavorites.some(f => f.login === ch.login);
             return renderChannelCard(ch, isFav);
           }).join('');
-          attachPickerListeners(resultsDiv, resolve);
+          attachPickerListeners(resultsDiv, activeResolve);
         } else {
           resultsDiv.innerHTML = `<div style="padding:16px;text-align:center;">
             <div style="color:#ef4444;font-size:14px;margin-bottom:10px;">No streamer found with that name</div>
@@ -3821,7 +3824,67 @@ if (window.__discordResolve) window.__discordResolve();
   // === Channel Switch Button ===
   document.getElementById('channelSwitchBtn').addEventListener('click', () => {
     sessionStorage.removeItem('cliptv_last_channel');
-    location.reload();
+
+    // Stop video playback
+    player.pause();
+    player.removeAttribute('src');
+    player.load();
+
+    // Clear all polling intervals
+    if (syncInterval) { clearInterval(syncInterval); syncInterval = null; }
+    if (heartbeatInterval) { clearInterval(heartbeatInterval); heartbeatInterval = null; }
+    if (controllerHeartbeatInterval) { clearInterval(controllerHeartbeatInterval); controllerHeartbeatInterval = null; }
+    if (chatPollInterval) { clearInterval(chatPollInterval); chatPollInterval = null; }
+    if (chatBgPollInterval) { clearInterval(chatBgPollInterval); chatBgPollInterval = null; }
+
+    // Clean up preloaded video and background worker
+    cleanupPreloadVideo();
+    preloadedUrl = null;
+    preloadedClipId = null;
+    if (bgWorker) bgWorker.postMessage({ action: 'stopAll' });
+
+    // Reset player state
+    clips = [];
+    clipHistory = [];
+    currentClipData = null;
+    currentClipId = null;
+    currentSeq = null;
+    currentUserVote = null;
+    isController = false;
+    isSwitching = false;
+    mySkipVote = false;
+    skipVotes = 0;
+
+    // Hide player UI elements
+    voteHud.classList.remove('show');
+    viewerControls.style.display = 'none';
+    unmuteOverlay.style.display = 'none';
+    document.getElementById('chatPanel').style.display = 'none';
+    loadingOverlay.classList.remove('hide');
+
+    // Re-render and show channel picker
+    const resultsDiv = document.getElementById('channelResults');
+    pickerResolve = (newLogin) => {
+      // Channel selected - hide picker and restart playback with new channel
+      if (pickerOverlay) pickerOverlay.style.display = 'none';
+      login = newLogin;
+      sessionStorage.setItem('cliptv_last_channel', newLogin);
+      document.title = newLogin + " ClipTV";
+      // Fetch new channel's profile image for favicon
+      fetch(`/channel_info.php?login=${encodeURIComponent(newLogin)}`)
+        .then(r => r.json())
+        .then(data => { if (data.profile_image_url) document.getElementById('favicon').href = data.profile_image_url; })
+        .catch(() => {});
+      // Re-init playback with new channel
+      init();
+    };
+    renderPickerDefault(resultsDiv, pickerResolve);
+    attachPickerListeners(resultsDiv, pickerResolve);
+    pickerOverlay.style.display = 'flex';
+
+    // Clear and re-focus search input
+    const searchInput = document.getElementById('channelSearchInput');
+    if (searchInput) { searchInput.value = ''; searchInput.focus(); }
   });
 
   // === Back Button ===
@@ -4300,6 +4363,91 @@ if (window.__discordResolve) window.__discordResolve();
     if (controllerHeartbeatInterval) clearInterval(controllerHeartbeatInterval);
     if (chatPollInterval) clearInterval(chatPollInterval);
     if (chatBgPollInterval) clearInterval(chatBgPollInterval);
+  });
+
+  // === Visibility change handling (minimize/popout recovery) ===
+  // Browsers throttle setInterval to ~1Hz or pause entirely when hidden.
+  // Use a Web Worker for heartbeats so the controller doesn't go stale.
+  let bgWorker = null;
+  let wasHiddenAt = 0;
+
+  function createBgWorker() {
+    // Inline Web Worker - timers inside Workers are NOT throttled when page is hidden
+    const workerCode = `
+      let timers = {};
+      self.onmessage = function(e) {
+        if (e.data.action === 'start') {
+          if (timers[e.data.id]) clearInterval(timers[e.data.id]);
+          timers[e.data.id] = setInterval(() => self.postMessage({ id: e.data.id }), e.data.interval);
+        } else if (e.data.action === 'stop') {
+          if (timers[e.data.id]) { clearInterval(timers[e.data.id]); delete timers[e.data.id]; }
+        } else if (e.data.action === 'stopAll') {
+          Object.values(timers).forEach(t => clearInterval(t));
+          timers = {};
+        }
+      };
+    `;
+    try {
+      const blob = new Blob([workerCode], { type: 'application/javascript' });
+      const worker = new Worker(URL.createObjectURL(blob));
+      worker.onmessage = (e) => {
+        if (e.data.id === 'heartbeat') sendHeartbeat();
+        if (e.data.id === 'controllerHeartbeat') sendControllerHeartbeat();
+      };
+      return worker;
+    } catch (err) {
+      debugLog("Web Worker not available, bg timers may throttle", "warn");
+      return null;
+    }
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      // Page going hidden (minimized, switched away, mobile popout)
+      wasHiddenAt = Date.now();
+      debugLog("Page hidden - starting background heartbeats", "warn");
+
+      // Send immediate heartbeats to buy time
+      sendHeartbeat();
+      if (isController) sendControllerHeartbeat();
+
+      // Start Web Worker heartbeats (won't be throttled)
+      if (!bgWorker) bgWorker = createBgWorker();
+      if (bgWorker) {
+        bgWorker.postMessage({ action: 'start', id: 'heartbeat', interval: 5000 });
+        if (isController) {
+          bgWorker.postMessage({ action: 'start', id: 'controllerHeartbeat', interval: 5000 });
+        }
+      }
+    } else {
+      // Page becoming visible again
+      const hiddenDuration = Date.now() - wasHiddenAt;
+      debugLog(`Page visible after ${(hiddenDuration / 1000).toFixed(1)}s`, "ok");
+
+      // Stop Web Worker heartbeats (normal intervals take over)
+      if (bgWorker) bgWorker.postMessage({ action: 'stopAll' });
+
+      // Send immediate heartbeats
+      sendHeartbeat();
+      if (isController) sendControllerHeartbeat();
+
+      // If video paused during hidden (browser suspended it), try to resume
+      if (player.paused && !player.ended && currentClipId && !isSwitching) {
+        debugLog("Resuming paused video after visibility restore", "ok");
+        player.play().catch(() => {});
+      }
+
+      // Re-sync with server if we were hidden for a while (>10s)
+      if (hiddenDuration > 10000 && !isController) {
+        debugLog("Re-syncing after long hidden period", "ok");
+        pollSyncState();
+      }
+
+      // Reset freeze detection so we don't false-positive after wake
+      lastPlaybackTime = player.currentTime;
+      lastPlaybackCheck = Date.now();
+      consecutiveFreezeChecks = 0;
+    }
   });
 
   async function init() {
