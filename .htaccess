@@ -4,6 +4,9 @@
     RewriteCond %{HTTP:X-Forwarded-Proto} =http
     RewriteRule ^(.*)$ https://%{HTTP_HOST}/$1 [R=301,L]
 
+    # Clean URLs - /chat-admin -> chat_admin.php (super admin only)
+    RewriteRule ^chat-admin/?$ chat_admin.php [QSA,L]
+
     # Clean URLs - /search/username -> clip_search.php?login=username
     RewriteRule ^search/([a-zA-Z0-9_]+)/?$ clip_search.php?login=$1 [QSA,L]
 
