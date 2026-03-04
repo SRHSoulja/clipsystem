@@ -220,6 +220,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       "ok" => true,
       "id" => intval($messageId),
       "scope" => $msgScope,
+      "username" => $currentUser['login'],
       "display_name" => $currentUser['display_name']
     ]);
   } catch (PDOException $e) {

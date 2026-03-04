@@ -3863,8 +3863,30 @@
         debugLog("Chat error: " + data.error, "err");
         chatInput.value = text; // Restore message on error
       } else {
-        // Immediately poll for the new message
-        pollChat();
+        // Optimistically render the sent message immediately
+        if (data.id && !chatRenderedIds.has(data.id)) {
+          chatRenderedIds.add(data.id);
+          const emptyEl = chatMessages.querySelector('.chat-empty');
+          if (emptyEl) emptyEl.remove();
+          const div = document.createElement('div');
+          div.className = 'chat-msg';
+          const nameSpan = document.createElement('span');
+          nameSpan.className = 'chat-name';
+          nameSpan.style.color = getChatColor(data.username || 'you');
+          nameSpan.textContent = (data.display_name || 'You') + ':';
+          const textSpan = document.createElement('span');
+          textSpan.className = 'chat-text';
+          textSpan.textContent = ' ' + text;
+          div.appendChild(nameSpan);
+          div.appendChild(textSpan);
+          chatMessages.appendChild(div);
+          chatMessages.scrollTop = chatMessages.scrollHeight;
+          if (chatScope === 'global') {
+            if (data.id > chatLastIdGlobal) chatLastIdGlobal = data.id;
+          } else {
+            if (data.id > chatLastId) chatLastId = data.id;
+          }
+        }
       }
     } catch (e) {
       // Don't restore text - message may have been sent despite response error
