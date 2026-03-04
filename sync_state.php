@@ -111,17 +111,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // GET - return current sync state
 try {
-  $stmt = $pdo->prepare("SELECT * FROM sync_state WHERE login = ?");
+  $stmt = $pdo->prepare("SELECT *, EXTRACT(EPOCH FROM started_at) as started_epoch, EXTRACT(EPOCH FROM updated_at) as updated_epoch FROM sync_state WHERE login = ?");
   $stmt->execute([$login]);
   $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
   if ($row) {
     // Calculate current position with sub-second precision
-    $startedAt = strtotime($row['started_at']);
-    $updatedAt = strtotime($row['updated_at']);
+    // Use EXTRACT(EPOCH) from PostgreSQL for accurate float timestamps
+    // (strtotime() loses sub-second precision)
     $now = microtime(true);
-    $elapsed = $now - $startedAt;
-    $staleSeconds = $now - $updatedAt;
+    $startedEpoch = floatval($row['started_epoch'] ?? strtotime($row['started_at']));
+    $updatedEpoch = floatval($row['updated_epoch'] ?? strtotime($row['updated_at']));
+    $elapsed = $now - $startedEpoch;
+    $staleSeconds = $now - $updatedEpoch;
     $duration = floatval($row['clip_duration']);
 
     // Check if clip has ended

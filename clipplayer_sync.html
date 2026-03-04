@@ -1790,9 +1790,20 @@
 
   // Grace period - prevent skipping immediately after a clip starts
   let clipStartTime = 0;
+  let clipLoadStartTime = 0;
   const MIN_PLAY_TIME = 3000; // Must play at least 3 seconds before allowing skip
+  const MIN_LOAD_GRACE = 8000; // Don't skip during load phase
 
   function canSkipClip() {
+    if (isSwitching) {
+      debugLog("Skip blocked - clip is loading", "warn");
+      return false;
+    }
+    const loadElapsed = Date.now() - clipLoadStartTime;
+    if (loadElapsed < MIN_LOAD_GRACE) {
+      debugLog(`Skip blocked - only ${loadElapsed}ms since load started (need ${MIN_LOAD_GRACE}ms)`, "warn");
+      return false;
+    }
     const elapsed = Date.now() - clipStartTime;
     if (elapsed < MIN_PLAY_TIME) {
       debugLog(`Skip blocked - only ${elapsed}ms elapsed (need ${MIN_PLAY_TIME}ms)`, "warn");
@@ -2357,6 +2368,7 @@
   async function playClipAtPosition(clipId, mp4Url, position, duration, clipData) {
     if (isSwitching && clipId === currentClipId) return;
     isSwitching = true;
+    clipLoadStartTime = Date.now();
 
     debugLog(`Loading: ${clipId?.substring(0,20) || 'unknown'}...`);
     setSyncStatus("syncing", isSlowConnection ? "Buffering..." : "Loading...");
@@ -2420,6 +2432,7 @@
 
     // Track if we've started playing
     let hasStarted = false;
+    let errorRetries = 0;
 
     function startPlayback() {
       if (hasStarted) return;
@@ -2519,13 +2532,34 @@
       }
     };
 
-    player.onerror = () => {
+    player.onerror = async () => {
       if (hasStarted) return;
+      const mediaErr = player.error;
+      const errCode = mediaErr ? mediaErr.code : '?';
+      debugLog(`Video error (code=${errCode})`, "err");
+
+      // Retry with a fresh MP4 URL before giving up (CDN URLs expire)
+      if (errorRetries < 2) {
+        errorRetries++;
+        debugLog(`Retrying with fresh URL (attempt ${errorRetries}/2)...`, "warn");
+        setSyncStatus("syncing", "Retrying...");
+        try {
+          const freshUrl = await getMp4Url(clipId, errorRetries > 1);
+          if (freshUrl) {
+            player.src = freshUrl;
+            player.load();
+            return;
+          }
+        } catch (retryErr) {
+          debugLog("Retry fetch failed", "err");
+        }
+      }
+
+      // All retries exhausted
       hasStarted = true;
-      debugLog("Video error - trying next", "err");
       setSyncStatus("error", "Error");
       isSwitching = false;
-      if (isController) setTimeout(controllerAdvance, 500);
+      if (isController) setTimeout(controllerAdvance, 1500);
     };
 
     // Set source and explicitly load
@@ -2566,17 +2600,24 @@
   // Controller: pick next clip and broadcast
   async function controllerAdvance() {
     if (!isController) return;
+    if (isSwitching) {
+      debugLog("controllerAdvance blocked - clip is loading", "warn");
+      return;
+    }
+    isSwitching = true;
     debugLog("Controller advancing to next clip...");
 
     const next = pickNextClip();
     if (!next) {
       debugLog("No clips available", "err");
+      isSwitching = false;
       return;
     }
 
     const mp4Url = await getMp4Url(next.id);
     if (!mp4Url) {
       debugLog("Failed to get MP4 for next clip", "err");
+      isSwitching = false;
       // Try another clip
       setTimeout(controllerAdvance, 1000);
       return;
@@ -2629,15 +2670,14 @@
         return;
       }
 
-      // Check if clip ended (server-side)
+      // Server says clip ended based on wall-clock time.
+      // Controller ignores this -- it has its own player.onended event which
+      // is accurate. Server clip_ended fires too early because started_at is
+      // set before the video actually loads and plays (buffering delay).
       if (data.clip_ended) {
-        if (pendingRequest) return; // Let pending request handle clip change
-        if (isController && canSkipClip()) {
-          // Controller advances to next clip
-          debugLog("Server says clip ended, advancing");
-          controllerAdvance();
+        if (isController) {
+          debugLog("Server says clip ended (ignored - using local playback)", "dim");
         }
-        // Non-controller will get new state on next poll
         return;
       }
 

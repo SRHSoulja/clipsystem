@@ -3136,15 +3136,15 @@ if (window.__discordResolve) window.__discordResolve();
         return;
       }
 
-      // Check if clip ended (server-side)
+      // Server says clip ended based on wall-clock time.
+      // Controller ignores this -- it has its own player.onended event which
+      // is accurate. Server clip_ended fires too early because started_at is
+      // set before the video actually loads and plays (buffering delay).
+      // Non-controller viewers just wait for the controller to push new state.
       if (data.clip_ended) {
-        if (pendingRequest) return; // Let pending request handle clip change
-        if (isController && canSkipClip()) {
-          // Controller advances to next clip
-          debugLog("Server says clip ended, advancing");
-          controllerAdvance();
+        if (isController) {
+          debugLog("Server says clip ended (ignored - using local playback)", "dim");
         }
-        // Non-controller will get new state on next poll
         return;
       }
 
