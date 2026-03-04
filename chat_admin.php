@@ -39,10 +39,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['api'])) {
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   )");
 
+  // Ensure banned words table exists
+  $pdo->exec("CREATE TABLE IF NOT EXISTS cliptv_banned_words (
+    id SERIAL PRIMARY KEY,
+    word VARCHAR(100) NOT NULL UNIQUE,
+    added_by VARCHAR(64),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  )");
+
   $action = $_GET['action'] ?? $_POST['action'] ?? '';
 
   try {
     switch ($action) {
+      case 'banned_list':
+        $stmt = $pdo->query("SELECT id, word, added_by, created_at FROM cliptv_banned_words ORDER BY word ASC");
+        echo json_encode(['words' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
+        break;
+
+      case 'banned_add':
+        $word = strtolower(trim($_POST['word'] ?? ''));
+        if ($word === '' || mb_strlen($word) > 100) {
+          echo json_encode(['error' => 'Invalid word']);
+          break;
+        }
+        $stmt = $pdo->prepare("INSERT INTO cliptv_banned_words (word, added_by) VALUES (?, ?) ON CONFLICT (word) DO NOTHING");
+        $stmt->execute([$word, $currentUser['login']]);
+        echo json_encode(['ok' => true]);
+        break;
+
+      case 'banned_remove':
+        $id = intval($_POST['id'] ?? 0);
+        if ($id <= 0) { echo json_encode(['error' => 'Invalid ID']); break; }
+        $stmt = $pdo->prepare("DELETE FROM cliptv_banned_words WHERE id = ?");
+        $stmt->execute([$id]);
+        echo json_encode(['ok' => true]);
+        break;
+
       case 'list':
         $where = [];
         $params = [];
@@ -191,6 +223,30 @@ if (isset($_GET['logout'])) {
     .nav-links a { color: #9147ff; text-decoration: none; }
     .nav-links a:hover { text-decoration: underline; }
     .count { background: #333; color: #adadb8; font-size: 12px; padding: 2px 8px; border-radius: 10px; font-weight: 400; }
+    h2 { color: #bf94ff; margin-top: 40px; border-bottom: 1px solid #333; padding-bottom: 8px; }
+    .banned-section { margin-top: 16px; }
+    .banned-add { display: flex; gap: 8px; margin-bottom: 12px; }
+    .banned-add input {
+      background: #0e0e10; border: 1px solid #333; border-radius: 4px;
+      color: #efeff1; padding: 8px 12px; font-size: 14px; flex: 1; max-width: 300px;
+    }
+    .banned-add input:focus { outline: none; border-color: #9147ff; }
+    .banned-add button {
+      background: #9147ff; color: #fff; border: none; padding: 8px 16px;
+      border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600;
+    }
+    .banned-add button:hover { background: #772ce8; }
+    .word-list { display: flex; flex-wrap: wrap; gap: 8px; }
+    .word-tag {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: #1f1f23; border: 1px solid #333; border-radius: 16px;
+      padding: 4px 10px 4px 14px; font-size: 13px; color: #efeff1;
+    }
+    .word-tag .remove {
+      background: none; border: none; color: #ff4444; cursor: pointer;
+      font-size: 16px; padding: 0 2px; line-height: 1;
+    }
+    .word-tag .remove:hover { color: #ff6666; }
     @media (max-width: 700px) {
       .filters { flex-direction: column; }
       td.msg { max-width: 200px; }
@@ -259,6 +315,17 @@ if (isset($_GET['logout'])) {
       <tr><td colspan="7" class="empty">Loading...</td></tr>
     </tbody>
   </table>
+
+  <h2>Banned Words</h2>
+  <div class="banned-section">
+    <div class="banned-add">
+      <input type="text" id="newBannedWord" placeholder="Add a word or phrase...">
+      <button id="addBannedBtn">Add</button>
+    </div>
+    <div class="word-list" id="wordList">
+      <span style="color:#666">Loading...</span>
+    </div>
+  </div>
 
   <script>
     const chatBody = document.getElementById('chatBody');
@@ -406,8 +473,56 @@ if (isset($_GET['logout'])) {
     }
     autoRefreshBox.addEventListener('change', startAutoRefresh);
 
+    // === Banned Words ===
+    const wordList = document.getElementById('wordList');
+    const newBannedWord = document.getElementById('newBannedWord');
+
+    async function loadBannedWords() {
+      try {
+        const res = await fetch('/chat-admin?api=1&action=banned_list', { cache: 'no-store' });
+        const data = await res.json();
+        const words = data.words || [];
+        if (words.length === 0) {
+          wordList.innerHTML = '<span style="color:#666">No banned words yet</span>';
+        } else {
+          wordList.innerHTML = words.map(w =>
+            `<span class="word-tag">${escapeHtml(w.word)}<button class="remove" onclick="removeBannedWord(${w.id})">&times;</button></span>`
+          ).join('');
+        }
+      } catch (e) {
+        wordList.innerHTML = '<span style="color:#ff4444">Failed to load</span>';
+      }
+    }
+
+    async function addBannedWord() {
+      const word = newBannedWord.value.trim();
+      if (!word) return;
+      try {
+        const fd = new FormData();
+        fd.append('action', 'banned_add');
+        fd.append('word', word);
+        await fetch('/chat-admin', { method: 'POST', body: fd });
+        newBannedWord.value = '';
+        loadBannedWords();
+      } catch (e) { alert('Failed to add word'); }
+    }
+
+    async function removeBannedWord(id) {
+      try {
+        const fd = new FormData();
+        fd.append('action', 'banned_remove');
+        fd.append('id', id);
+        await fetch('/chat-admin', { method: 'POST', body: fd });
+        loadBannedWords();
+      } catch (e) { alert('Failed to remove word'); }
+    }
+
+    document.getElementById('addBannedBtn').addEventListener('click', addBannedWord);
+    newBannedWord.addEventListener('keydown', (e) => { if (e.key === 'Enter') addBannedWord(); });
+
     // Init
     loadMessages();
+    loadBannedWords();
     startAutoRefresh();
   </script>
 <?php endif; ?>

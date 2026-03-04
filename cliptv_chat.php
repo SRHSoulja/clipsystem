@@ -159,6 +159,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   // Strip HTML tags
   $message = strip_tags($message);
 
+  // Banned words filter
+  try {
+    $bannedStmt = $pdo->query("SELECT word FROM cliptv_banned_words");
+    $bannedWords = $bannedStmt->fetchAll(PDO::FETCH_COLUMN);
+    if ($bannedWords) {
+      $msgLower = strtolower($message);
+      foreach ($bannedWords as $word) {
+        if (strpos($msgLower, strtolower($word)) !== false) {
+          http_response_code(400);
+          echo json_encode(["error" => "Message contains a blocked word."]);
+          exit;
+        }
+      }
+    }
+  } catch (PDOException $e) {
+    // Don't block chat if banned words table doesn't exist yet
+  }
+
   // For global messages, use 'global' as the login key
   $msgScope = clean_scope($_POST['scope'] ?? 'stream');
   $msgLogin = ($msgScope === 'global') ? '_global' : $login;
