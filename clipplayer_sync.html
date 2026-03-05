@@ -1847,6 +1847,10 @@
       stallRecoveryAttempts = 0;
       if (isController) {
         controllerAdvance();
+      } else {
+        // Non-controller: reload from server state (controller may have moved on)
+        debugLog("Non-controller stuck - resyncing from server", "warn");
+        pollSyncState();
       }
       return;
     }
@@ -1932,26 +1936,40 @@
     }
   });
 
-  // Periodic playback health check - catch silent freezes
-  // Use longer intervals and higher thresholds to avoid premature skipping
+  // Periodic playback health check - catch silent freezes AND near-end stuck clips
   let consecutiveFreezeChecks = 0;
   setInterval(() => {
-    if (isSwitching || player.paused || player.ended || player.seeking) return;
-    if (!canSkipClip()) return; // Respect grace period
-    // Don't check if video is still loading
-    if (player.readyState < 3) return;
+    if (isSwitching || player.paused || player.seeking) return;
 
     const now = Date.now();
+    const duration = player.duration || 0;
+    const currentTime = player.currentTime || 0;
+
+    // CHECK 1: Video ended but onended didn't fire (or clip is past its duration)
+    // This catches the "short clip sits there" problem
+    if (player.ended || (duration > 0 && currentTime >= duration - 0.3)) {
+      debugLog(`Clip finished (${currentTime.toFixed(1)}s / ${duration.toFixed(1)}s) - advancing`, "warn");
+      consecutiveFreezeChecks = 0;
+      if (isController && !pendingRequest) {
+        controllerAdvance();
+      }
+      return;
+    }
+
+    // Skip remaining checks during grace period
+    if (!canSkipClip()) return;
+
     const timeSinceCheck = (now - lastPlaybackCheck) / 1000;
-    const actualProgress = player.currentTime - lastPlaybackTime;
+    const actualProgress = currentTime - lastPlaybackTime;
 
-    // Consider frozen if no progress for 8+ seconds with data available
-    if (timeSinceCheck > 8 && actualProgress < 0.3 && player.readyState >= 3) {
+    // CHECK 2: Frozen playback - no progress for 12+ seconds
+    // Works at any readyState (not just >= 3)
+    if (timeSinceCheck > 6 && actualProgress < 0.3) {
       consecutiveFreezeChecks++;
-      debugLog(`Freeze check ${consecutiveFreezeChecks}/3: no progress for ${timeSinceCheck.toFixed(1)}s`, "warn");
+      debugLog(`Freeze check ${consecutiveFreezeChecks}/2: no progress for ${timeSinceCheck.toFixed(1)}s (readyState=${player.readyState})`, "warn");
 
-      // Recover after 3 consecutive freeze detections (24+ seconds truly frozen)
-      if (consecutiveFreezeChecks >= 3) {
+      // Recover after 2 consecutive detections (12+ seconds truly frozen)
+      if (consecutiveFreezeChecks >= 2) {
         debugLog("Confirmed frozen - attempting recovery", "err");
         consecutiveFreezeChecks = 0;
         dropQuality();
@@ -1962,9 +1980,9 @@
       tryRecoverQuality();
     }
 
-    lastPlaybackTime = player.currentTime;
+    lastPlaybackTime = currentTime;
     lastPlaybackCheck = now;
-  }, 8000);
+  }, 6000);
 
   // HUD Position polling
   let currentHudPosition = null;
@@ -2400,8 +2418,8 @@
       if (!mp4Url) {
         debugLog("Failed to get MP4 URL", "err");
         isSwitching = false;
-        // Try next clip
         if (isController) setTimeout(controllerAdvance, 500);
+        else setTimeout(pollSyncState, 2000);
         return;
       }
     }
@@ -2571,6 +2589,7 @@
       setSyncStatus("error", "Error");
       isSwitching = false;
       if (isController) setTimeout(controllerAdvance, 1500);
+      else setTimeout(pollSyncState, 2000); // Non-controller: resync
     };
 
     // Set source and explicitly load
@@ -2581,13 +2600,13 @@
     // Give CDN enough time to deliver (real-world latency is 2-5s for first segment)
     const loadTimeout = isSlowConnection ? 15000 : (isMobile ? 12000 : 10000);
     setTimeout(() => {
-      if (isSwitching && currentClipId === clipId && !hasStarted) {
+      // If this clip is still the current one and hasn't started, recover
+      if (currentClipId === clipId && !hasStarted) {
         debugLog("Load timeout - forcing recovery", "warn");
         hasStarted = true;
         isSwitching = false;
 
         // Try to force play anyway - sometimes video is ready but events didn't fire
-        // readyState >= 2 means we have at least current frame data
         if (player.readyState >= 2) {
           debugLog(`readyState ${player.readyState}, forcing play`, "warn");
           player.play().then(() => {
@@ -2599,11 +2618,19 @@
           }).catch(() => {
             debugLog("Forced play failed, advancing", "err");
             if (isController) controllerAdvance();
+            else pollSyncState(); // Non-controller: resync from server
           });
         } else {
           debugLog(`readyState only ${player.readyState}, advancing`, "err");
           if (isController) controllerAdvance();
+          else pollSyncState(); // Non-controller: resync from server
         }
+      }
+      // Safety: if isSwitching is still true after timeout for ANY reason, reset it
+      // This prevents permanent stuck state from race conditions
+      if (isSwitching && (Date.now() - clipLoadStartTime) > loadTimeout) {
+        debugLog("Safety reset: isSwitching was stuck", "warn");
+        isSwitching = false;
       }
     }, loadTimeout);
   }
@@ -2753,22 +2780,19 @@
   player.onended = () => {
     debugLog("Video ended event fired");
 
-    // Verify the video actually played for a reasonable time
-    if (!canSkipClip()) {
-      debugLog("Ignoring premature ended event", "warn");
-      return;
-    }
-
-    // Also verify we're near the end of the video
+    // If the video is near the end of its duration, it legitimately ended
+    // regardless of grace periods (a 5-second clip shouldn't sit there)
     const duration = player.duration || 30;
     const currentTime = player.currentTime || 0;
-    if (currentTime < duration - 2 && currentTime < 5) {
+    const nearEnd = currentTime >= duration - 1.5 || (duration > 0 && currentTime / duration > 0.9);
+
+    if (!nearEnd && currentTime < 5) {
       // Ended too early and haven't played much - likely a glitch
       debugLog(`Ignoring ended at ${currentTime.toFixed(1)}s of ${duration.toFixed(1)}s`, "warn");
       return;
     }
 
-    debugLog("Video legitimately ended");
+    debugLog(`Video legitimately ended (${currentTime.toFixed(1)}s / ${duration.toFixed(1)}s)`);
     if (pendingRequest) return; // Let pending request handle clip change
     if (isController) {
       controllerAdvance();
