@@ -166,7 +166,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($bannedWords) {
       $msgLower = strtolower($message);
       foreach ($bannedWords as $word) {
-        if (strpos($msgLower, strtolower($word)) !== false) {
+        $wordLower = strtolower($word);
+        // Use word boundaries for single words to avoid false positives
+        // (e.g. banning "ass" shouldn't block "class")
+        // Multi-word phrases use substring match since boundaries don't apply
+        if (strpos($wordLower, ' ') !== false) {
+          $match = strpos($msgLower, $wordLower) !== false;
+        } else {
+          $match = preg_match('/\b' . preg_quote($wordLower, '/') . '\b/', $msgLower);
+        }
+        if ($match) {
           http_response_code(400);
           echo json_encode(["error" => "Message contains a blocked word."]);
           exit;
