@@ -1314,7 +1314,7 @@
         <div class="tab-panel" id="tabUpNext">
           <div class="queue-header">
             <span class="queue-label">Coming up next</span>
-            <button class="queue-reshuffle" id="queueReshuffle">🔀 Reshuffle</button>
+            <button class="queue-reshuffle" id="queueReshuffle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg> Reshuffle</button>
           </div>
           <div class="clip-list" id="queueList">
             <div class="clip-list-status">Loading queue...</div>
@@ -1332,9 +1332,9 @@
         <!-- Controls tab -->
         <div class="tab-panel" id="tabControls">
           <div class="controls-grid">
-            <button class="ctrl-btn ctrl-prev" id="ctrlPrev">⏮ Prev</button>
-            <button class="ctrl-btn ctrl-skip" id="ctrlSkip">⏭ Skip</button>
-            <button class="ctrl-btn ctrl-shuffle" id="ctrlShuffle">🔀 Shuffle</button>
+            <button class="ctrl-btn ctrl-prev" id="ctrlPrev"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-3px"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg> Prev</button>
+            <button class="ctrl-btn ctrl-skip" id="ctrlSkip"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-3px"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg> Skip</button>
+            <button class="ctrl-btn ctrl-shuffle" id="ctrlShuffle"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg> Shuffle</button>
           </div>
           <div class="category-section">
             <label>Only play clips from:</label>
@@ -2061,11 +2061,11 @@
 
     // Optimistic update
     const prevVote = currentUserVote;
-    const prevUpText = voteUp.textContent;
-    const prevDownText = voteDown.textContent;
+    const prevUpCount = voteUp.querySelector('span').textContent;
+    const prevDownCount = voteDown.querySelector('span').textContent;
 
-    let upCount = parseInt(voteUp.textContent.replace(/[^0-9]/g, '')) || 0;
-    let downCount = parseInt(voteDown.textContent.replace(/[^0-9]/g, '')) || 0;
+    let upCount = parseInt(prevUpCount) || 0;
+    let downCount = parseInt(prevDownCount) || 0;
     if (prevVote === 'like') upCount--;
     if (prevVote === 'dislike') downCount--;
     if (newVote === 'like') upCount++;
@@ -2085,15 +2085,15 @@
       const data = await res.json();
 
       if (data.success) {
-        voteUp.textContent = `👍 ${data.likes || 0}`;
-        voteDown.textContent = `👎 ${data.dislikes || 0}`;
+        voteUp.querySelector('span').textContent = data.likes || 0;
+        voteDown.querySelector('span').textContent = data.dislikes || 0;
         currentUserVote = data.user_vote || null;
         updateVoteButtonStates();
       } else {
         // Revert optimistic update
         currentUserVote = prevVote;
-        voteUp.textContent = prevUpText;
-        voteDown.textContent = prevDownText;
+        voteUp.querySelector('span').textContent = prevUpCount;
+        voteDown.querySelector('span').textContent = prevDownCount;
         updateVoteButtonStates();
         if (res.status === 401) {
           isLoggedIn = false;
@@ -2101,8 +2101,8 @@
       }
     } catch (e) {
       currentUserVote = prevVote;
-      voteUp.textContent = prevUpText;
-      voteDown.textContent = prevDownText;
+      voteUp.querySelector('span').textContent = prevUpCount;
+      voteDown.querySelector('span').textContent = prevDownCount;
       updateVoteButtonStates();
     } finally {
       voteInProgress = false;
@@ -2117,8 +2117,8 @@
 
     // Update sequence number and hints
     voteSeq.textContent = `Clip #${seq}`;
-    hintLike.textContent = `Tap 👍 to like`;
-    hintDislike.textContent = `Tap 👎 to dislike`;
+    hintLike.textContent = 'Like this clip';
+    hintDislike.textContent = 'Dislike this clip';
 
     // Show clip date
     clipDateHud.textContent = formatDate(clip.created_at) ? `• ${formatDate(clip.created_at)}` : "";
@@ -3223,7 +3223,7 @@
       const dur = c.duration ? (c.duration < 60 ? `${Math.round(c.duration)}s` : `${Math.floor(c.duration/60)}:${(Math.round(c.duration)%60).toString().padStart(2,'0')}`) : '';
       return `
         <div class="clip-row" data-history-idx="${i}" data-clip-id="${c.id}">
-          <span class="cr-pos" style="color:#60a5fa">${i === 0 ? '⏮' : i + 1}</span>
+          <span class="cr-pos" style="color:#60a5fa">${i === 0 ? 'Now' : i + 1}</span>
           <div class="cr-info">
             <div class="cr-title">#${c.seq || '?'} - ${escapeHtml(c.title || 'Untitled')}</div>
             <div class="cr-meta">
