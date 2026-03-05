@@ -1120,6 +1120,12 @@
       #skipBtn, #remoteBtn { padding: 10px 14px; }
       #clipActions .action-btn span { display: none; }
     }
+    @media (max-width: 640px) {
+      #clipActions { display: none !important; }
+      #viewerControls { gap: 6px; }
+      #viewerCount { padding: 6px 10px; font-size: 12px; }
+      #skipBtn, #remoteBtn, #backBtn, #chatBtn { padding: 8px 12px; }
+    }
 
     /* Mobile responsive for viewer controls */
     @media (max-width: 768px) {
