@@ -520,7 +520,8 @@
       opacity: 0;
       transform: translateY(10px);
       transition: opacity 300ms, transform 300ms;
-      /* No pointer-events:none - allow clicks even when faded out */
+      max-width: calc(100vw - 260px); /* prevent overlap with volume control */
+      flex-wrap: wrap;
     }
     #viewerControls.show { opacity: 1; transform: translateY(0); }
     #viewerControls button svg, #viewerControls > div svg { flex-shrink: 0; }
@@ -606,12 +607,12 @@
     #backBtn:hover { background: rgba(96, 165, 250, 0.2); border-color: #60a5fa; }
     #backBtn:active { transform: scale(0.95); }
 
-    /* Clip action buttons (bottom center) */
+    /* Clip action buttons (row above main controls) */
     #clipActions {
       position: absolute;
-      left: 55%;
+      left: 50%;
       transform: translateX(-50%) translateY(10px);
-      bottom: max(24px, env(safe-area-inset-bottom));
+      bottom: calc(max(24px, env(safe-area-inset-bottom)) + 54px);
       z-index: 11000;
       display: flex;
       align-items: center;
@@ -1118,7 +1119,6 @@
       #viewerControls .btn-label { display: none; }
       #skipBtn, #remoteBtn { padding: 10px 14px; }
       #clipActions .action-btn span { display: none; }
-      #clipActions { left: 50%; }
     }
 
     /* Mobile responsive for viewer controls */
@@ -1131,7 +1131,7 @@
       #viewerCount { padding: 6px 10px; font-size: 12px; }
       #viewerCount svg { width: 14px; height: 14px; }
       #skipBtn, #remoteBtn, #backBtn, #chatBtn { padding: 8px 14px; font-size: 12px; gap: 6px; }
-      #clipActions { bottom: max(12px, env(safe-area-inset-bottom)); }
+      #clipActions { bottom: calc(max(12px, env(safe-area-inset-bottom)) + 52px); }
       #clipActions .action-btn { padding: 6px 12px; font-size: 11px; }
       #clipActions .action-btn svg { width: 14px; height: 14px; }
       #chatPanel { width: 280px; height: 340px; max-height: calc(100dvh - 80px); left: 12px; bottom: 70px; }
