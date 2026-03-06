@@ -2317,15 +2317,17 @@
 
   // Weighted clip selection (for controller)
   const QUEUE_SIZE = 10;
-  const RECENT_HISTORY_SIZE = 50; // prevent repeats within last 50 clips
   let upNextQueue = [];
   let recentlyPlayedIds = []; // ring buffer of recently played clip IDs
   let activeCategoryFilter = ''; // game_id filter for playback
 
   function addToRecentlyPlayed(clipId) {
     if (!clipId) return;
+    if (recentlyPlayedIds.includes(clipId)) return; // Already tracked
     recentlyPlayedIds.push(clipId);
-    if (recentlyPlayedIds.length > RECENT_HISTORY_SIZE) {
+    // Keep history at 75% of total clips (so we cycle through most before repeating)
+    const maxHistory = Math.max(50, Math.floor(clips.length * 0.75));
+    if (recentlyPlayedIds.length > maxHistory) {
       recentlyPlayedIds.shift();
     }
   }
@@ -2404,6 +2406,15 @@
     if (isSwitching && clipId === currentClipId) return;
     isSwitching = true;
     clipLoadStartTime = Date.now();
+
+    // Track every clip that plays to prevent repeats
+    addToRecentlyPlayed(clipId);
+    // Remove from up-next queue if present (prevents duplicate plays)
+    const qIdx = upNextQueue.findIndex(c => c.id === clipId);
+    if (qIdx !== -1) {
+      upNextQueue.splice(qIdx, 1);
+      fillQueue();
+    }
 
     debugLog(`Loading: ${clipId?.substring(0,20) || 'unknown'}...`);
     setSyncStatus("syncing", isSlowConnection ? "Buffering..." : "Loading...");
