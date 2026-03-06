@@ -510,7 +510,7 @@
 
     /* Viewer count and skip controls */
     #viewerControls {
-      position: absolute;
+      position: fixed;
       left: max(24px, env(safe-area-inset-left));
       bottom: max(24px, env(safe-area-inset-bottom));
       z-index: 11000;
@@ -609,7 +609,7 @@
 
     /* Clip action buttons (row above main controls) */
     #clipActions {
-      position: absolute;
+      position: fixed;
       left: 50%;
       transform: translateX(-50%) translateY(10px);
       bottom: calc(max(24px, env(safe-area-inset-bottom)) + 54px);
@@ -2320,15 +2320,45 @@
   let upNextQueue = [];
   let recentlyPlayedIds = []; // ring buffer of recently played clip IDs
   let activeCategoryFilter = ''; // game_id filter for playback
+  let clipsSinceRefresh = 0; // counter for triggering pool refresh
+  const REFRESH_EVERY_N_CLIPS = 30; // refresh pool after this many clips played
 
   function addToRecentlyPlayed(clipId) {
     if (!clipId) return;
     if (recentlyPlayedIds.includes(clipId)) return; // Already tracked
     recentlyPlayedIds.push(clipId);
-    // Keep history at 75% of total clips (so we cycle through most before repeating)
-    const maxHistory = Math.max(50, Math.floor(clips.length * 0.75));
-    if (recentlyPlayedIds.length > maxHistory) {
-      recentlyPlayedIds.shift();
+    // Keep history uncapped — played clips stay tracked for the session
+    // The pool refresh brings in fresh unplayed clips from the server
+
+    // Trigger a pool refresh after N clips played (controller only)
+    clipsSinceRefresh++;
+    if (clipsSinceRefresh >= REFRESH_EVERY_N_CLIPS && isController) {
+      clipsSinceRefresh = 0;
+      refreshClipPool();
+    }
+  }
+
+  async function refreshClipPool() {
+    try {
+      debugLog("Refreshing clip pool...");
+      const res = await fetch(`${API_BASE}/twitch_reel_api.php?login=${encodeURIComponent(login)}&days=0&pool=500&rotate=1`, { cache: "no-store" });
+      const data = await res.json();
+      if (!data.clips || !data.clips.length) return;
+
+      // Merge fresh clips into the pool (add any we don't already have)
+      const currentIds = new Set(clips.map(c => c.id));
+      const newClips = data.clips.filter(c => !currentIds.has(c.id));
+      if (newClips.length > 0) {
+        clips.push(...newClips);
+        debugLog(`Pool refreshed: +${newClips.length} new clips (${clips.length} total in pool)`, "ok");
+      } else {
+        debugLog(`Pool refresh: no new unique clips`, "warn");
+      }
+
+      // Top up the queue with fresh clips
+      fillQueue();
+    } catch (e) {
+      debugLog("Pool refresh failed: " + e.message, "err");
     }
   }
 
@@ -2344,10 +2374,22 @@
       if (filtered.length) pool = filtered;
     }
     if (!pool.length) {
-      // All clips excluded — clear history and pick from full pool
-      recentlyPlayedIds = [];
-      pool = clips.filter(c => !new Set(exclude.map(e => e.id)).has(c.id));
-      if (!pool.length) pool = clips;
+      // All clips played this session — trim oldest half of history to let older clips back in
+      // This is the graceful fallback when we've exhausted even the refreshed pool
+      const trimCount = Math.max(1, Math.floor(recentlyPlayedIds.length / 2));
+      recentlyPlayedIds.splice(0, trimCount);
+      debugLog(`History trimmed by ${trimCount} — allowing older clips back`, "warn");
+      // Also trigger a refresh to bring in more fresh clips
+      if (isController) refreshClipPool();
+      // Rebuild pool
+      const freshExclude = new Set(exclude.map(c => c.id));
+      recentlyPlayedIds.forEach(id => freshExclude.add(id));
+      pool = clips.filter(c => !freshExclude.has(c.id));
+      if (activeCategoryFilter) {
+        const filtered = pool.filter(c => c.game_id === activeCategoryFilter);
+        if (filtered.length) pool = filtered;
+      }
+      if (!pool.length) pool = clips; // absolute fallback
     }
     return pool[Math.floor(Math.random() * pool.length)];
   }
@@ -4084,7 +4126,7 @@
 
     // Fetch clips AND sync state in parallel for faster startup
     const [clipsResult, syncResult] = await Promise.allSettled([
-      fetch(`${API_BASE}/twitch_reel_api.php?login=${encodeURIComponent(login)}&days=0&pool=100`, { cache: "no-store" })
+      fetch(`${API_BASE}/twitch_reel_api.php?login=${encodeURIComponent(login)}&days=0&pool=500&rotate=1`, { cache: "no-store" })
         .then(r => r.json())
         .catch(() => ({ clips: [] })),
       fetch(`${API_BASE}/sync_state.php?login=${encodeURIComponent(login)}`, { cache: "no-store" })

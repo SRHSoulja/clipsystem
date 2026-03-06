@@ -637,6 +637,7 @@ if ($hasArchivedClips && $pdo) {
     html {
       background: #0e0e10;
       min-height: 100%;
+      overflow-x: hidden;
     }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -1204,15 +1205,17 @@ if ($hasArchivedClips && $pdo) {
 
     /* Mobile adjustments */
     @media (max-width: 768px) {
-      body { padding: 12px; }
+      body { padding: 0; }
+      .page-body { padding: 12px; }
       header { flex-direction: column; align-items: flex-start; }
       .header-left { flex-wrap: wrap; }
       h1 { font-size: 20px; }
       .streamer-links { gap: 12px; }
       .streamer-links a { color: #9147ff; font-size: 14px; }
       .filters { flex-direction: column; }
+      .filter-group { width: 100%; }
       .filter-group input,
-      .filter-group select { min-width: 100%; }
+      .filter-group select { width: 100%; min-width: 0; }
       .results-grid { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
     }
   </style>
