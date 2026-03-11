@@ -68,7 +68,7 @@ function writeBroadcasterConfig(settings) {
 // Default panel settings
 const DEFAULT_SETTINGS = {
   ext_sort: 'recent',
-  ext_clip_count: 10,
   ext_autoplay: false,
-  ext_featured: false
+  ext_featured: false,
+  ext_preview_login: ''
 };

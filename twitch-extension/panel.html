@@ -14,6 +14,19 @@
   <div class="ext-header">
     <span class="ext-logo">📼</span>
     <span class="ext-channel-name" id="channelName">ClipTV</span>
+    <a class="ext-header-link" id="fullSiteBtn" href="#" target="_blank" title="Open full ClipTV">↗</a>
+  </div>
+
+  <!-- Video player -->
+  <div class="ext-player" id="player">
+    <video id="clipVideo" playsinline></video>
+    <div class="ext-player-overlay" id="playerOverlay">
+      <button class="ext-play-btn" id="playBtn">▶</button>
+    </div>
+    <div class="ext-player-info">
+      <div class="ext-player-title" id="playerTitle"></div>
+      <div class="ext-player-meta" id="playerMeta"></div>
+    </div>
   </div>
 
   <!-- Tab bar -->
@@ -30,17 +43,12 @@
     <button class="ext-search-close" id="searchClose" title="Close">✕</button>
   </div>
 
-  <!-- Clip list / status -->
+  <!-- Clip queue -->
   <div class="ext-clip-list" id="clipList"></div>
-
-  <!-- Footer -->
-  <div class="ext-footer">
-    <a class="ext-footer-btn" id="fullSiteBtn" href="#" target="_blank">Open full ClipTV →</a>
-  </div>
 
 </div>
 
-<!-- Loading state (shown before auth/data ready) -->
+<!-- Loading state -->
 <div class="ext-status" id="loadingState">
   <div class="ext-spinner"></div>
 </div>

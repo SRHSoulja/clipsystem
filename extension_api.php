@@ -138,7 +138,8 @@ if ($action === 'channel' && $method === 'GET') {
   $channel_id = $payload['channel_id'] ?? '';
   if (!$channel_id) json_err('channel_id missing from JWT', 400);
 
-  $login = resolve_login($pdo, $channel_id);
+  $preview = preg_replace('/[^a-z0-9_]/', '', strtolower(trim($_GET['preview_login'] ?? '')));
+  $login = $preview ?: resolve_login($pdo, $channel_id);
 
   if (!$login) {
     json_ok(['registered' => false]);
@@ -189,7 +190,8 @@ if ($action === 'clips' && $method === 'GET') {
   $channel_id = $payload['channel_id'] ?? '';
   if (!$channel_id) json_err('channel_id missing from JWT', 400);
 
-  $login = resolve_login($pdo, $channel_id);
+  $preview = preg_replace('/[^a-z0-9_]/', '', strtolower(trim($_GET['preview_login'] ?? '')));
+  $login = $preview ?: resolve_login($pdo, $channel_id);
   if (!$login) json_err('Channel not registered with ClipTV', 404);
 
   $sort  = in_array($_GET['sort'] ?? '', ['recent', 'top', 'random']) ? $_GET['sort'] : 'recent';
@@ -224,6 +226,7 @@ if ($action === 'clips' && $method === 'GET') {
       $c['clip_url'] = ($c['platform'] === 'kick' && !empty($c['mp4_url']))
         ? $c['mp4_url']
         : 'https://clips.twitch.tv/' . urlencode($c['id']);
+      $c['video_url'] = $c['mp4_url'] ?: null;
       unset($c['platform'], $c['mp4_url']);
     }
     unset($c);
@@ -243,7 +246,8 @@ if ($action === 'search' && $method === 'GET') {
   $channel_id = $payload['channel_id'] ?? '';
   if (!$channel_id) json_err('channel_id missing from JWT', 400);
 
-  $login = resolve_login($pdo, $channel_id);
+  $preview = preg_replace('/[^a-z0-9_]/', '', strtolower(trim($_GET['preview_login'] ?? '')));
+  $login = $preview ?: resolve_login($pdo, $channel_id);
   if (!$login) json_err('Channel not registered with ClipTV', 404);
 
   $q = trim($_GET['q'] ?? '');
@@ -274,6 +278,7 @@ if ($action === 'search' && $method === 'GET') {
       $c['clip_url'] = ($c['platform'] === 'kick' && !empty($c['mp4_url']))
         ? $c['mp4_url']
         : 'https://clips.twitch.tv/' . urlencode($c['id']);
+      $c['video_url'] = $c['mp4_url'] ?: null;
       unset($c['platform'], $c['mp4_url']);
     }
     unset($c);

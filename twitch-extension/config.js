@@ -11,7 +11,7 @@
   const linkBtn       = document.getElementById('linkBtn');
   const saveBtn       = document.getElementById('saveBtn');
   const saveStatus    = document.getElementById('saveStatus');
-  const clipCount     = document.getElementById('clipCount');
+  const previewLogin  = document.getElementById('previewLogin');
   const autoplay      = document.getElementById('autoplay');
   const featured      = document.getElementById('featured');
 
@@ -23,7 +23,7 @@
     const sortInput = document.querySelector(`input[name="sort"][value="${s.ext_sort}"]`);
     if (sortInput) sortInput.checked = true;
 
-    clipCount.value = s.ext_clip_count;
+    previewLogin.value = s.ext_preview_login || '';
     autoplay.checked = !!s.ext_autoplay;
     featured.checked = !!s.ext_featured;
   }
@@ -74,10 +74,10 @@
     const count = Math.max(5, Math.min(25, parseInt(clipCount.value) || 10));
 
     const settings = {
-      ext_sort:       sort,
-      ext_clip_count: count,
-      ext_autoplay:   autoplay.checked,
-      ext_featured:   featured.checked
+      ext_sort:           sort,
+      ext_autoplay:       autoplay.checked,
+      ext_featured:       featured.checked,
+      ext_preview_login:  previewLogin.value.trim().toLowerCase().replace(/[^a-z0-9_]/g, '')
     };
 
     writeBroadcasterConfig(settings);

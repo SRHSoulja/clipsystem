@@ -12,6 +12,7 @@
   --accent-h:  #772ce8;
   --thumb-bg:  #26262c;
   --card-h:    #26262c;
+  --card-active:#1f1f24;
 }
 
 [data-theme="light"] {
@@ -22,6 +23,7 @@
   --text-muted:#53535f;
   --thumb-bg:  #e8e8ea;
   --card-h:    #f0f0f2;
+  --card-active:#e8e8ed;
 }
 
 html, body {
@@ -34,28 +36,110 @@ html, body {
   overflow: hidden;
 }
 
+/* ── Layout shell ────────────────────────────────────────────────────────── */
+.ext-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
 /* ── Header ─────────────────────────────────────────────────────────────── */
 .ext-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 12px 8px;
+  padding: 8px 10px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 
-.ext-logo {
-  font-size: 16px;
-  line-height: 1;
-}
+.ext-logo { font-size: 15px; line-height: 1; }
 
 .ext-channel-name {
   font-weight: 600;
-  font-size: 13px;
+  font-size: 12px;
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.ext-header-link {
+  color: var(--text-muted);
+  font-size: 14px;
+  text-decoration: none;
+  line-height: 1;
+  padding: 2px;
+  transition: color 0.15s;
+}
+.ext-header-link:hover { color: var(--accent); }
+
+/* ── Video player ────────────────────────────────────────────────────────── */
+.ext-player {
+  flex-shrink: 0;
+  background: #000;
+  position: relative;
+}
+
+.ext-player video {
+  width: 318px;
+  height: 179px;
+  display: block;
+  object-fit: contain;
+  background: #000;
+}
+
+.ext-player-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 318px;
+  height: 179px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.3);
+  opacity: 0;
+  transition: opacity 0.2s;
+  cursor: pointer;
+}
+
+.ext-player:hover .ext-player-overlay { opacity: 1; }
+
+.ext-play-btn {
+  background: rgba(0,0,0,0.7);
+  border: none;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 20px;
+  width: 48px;
+  height: 48px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+.ext-play-btn:hover { background: var(--accent); }
+
+.ext-player-info {
+  padding: 6px 10px 7px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.ext-player-title {
+  font-size: 12px;
+  font-weight: 600;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.ext-player-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
 }
 
 /* ── Tabs ────────────────────────────────────────────────────────────────── */
@@ -73,10 +157,9 @@ html, body {
   color: var(--text-muted);
   font-size: 12px;
   font-weight: 500;
-  padding: 8px 4px;
+  padding: 7px 4px;
   cursor: pointer;
   transition: color 0.15s, border-color 0.15s;
-  letter-spacing: 0.02em;
 }
 
 .ext-tab:hover { color: var(--text); }
@@ -85,7 +168,7 @@ html, body {
   border-bottom-color: var(--accent);
 }
 
-/* ── Search bar (replaces tab bar in search mode) ────────────────────────── */
+/* ── Search bar ──────────────────────────────────────────────────────────── */
 .ext-search-bar {
   display: none;
   align-items: center;
@@ -107,7 +190,6 @@ html, body {
   padding: 5px 8px;
   outline: none;
 }
-
 .ext-search-input:focus { border-color: var(--accent); }
 
 .ext-search-close {
@@ -120,7 +202,7 @@ html, body {
   padding: 2px 4px;
 }
 
-/* ── Clip list ───────────────────────────────────────────────────────────── */
+/* ── Clip queue ──────────────────────────────────────────────────────────── */
 .ext-clip-list {
   flex: 1;
   overflow-y: auto;
@@ -134,19 +216,25 @@ html, body {
 .clip-card {
   display: flex;
   gap: 9px;
-  padding: 8px 12px;
+  padding: 7px 10px;
   cursor: pointer;
   border-bottom: 1px solid var(--border);
   transition: background 0.1s;
-  text-decoration: none;
+  background: none;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  width: 100%;
+  text-align: left;
   color: inherit;
 }
 
 .clip-card:hover { background: var(--card-h); }
+.clip-card.active { background: var(--card-active); border-left: 2px solid var(--accent); padding-left: 8px; }
 
 .clip-thumb {
-  width: 72px;
-  height: 40px;
+  width: 64px;
+  height: 36px;
   border-radius: 3px;
   object-fit: cover;
   background: var(--thumb-bg);
@@ -154,15 +242,15 @@ html, body {
 }
 
 .clip-thumb-placeholder {
-  width: 72px;
-  height: 40px;
+  width: 64px;
+  height: 36px;
   border-radius: 3px;
   background: var(--thumb-bg);
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  font-size: 16px;
 }
 
 .clip-info {
@@ -171,11 +259,11 @@ html, body {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 3px;
+  gap: 2px;
 }
 
 .clip-title {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
   line-height: 1.3;
   overflow: hidden;
@@ -185,11 +273,8 @@ html, body {
 }
 
 .clip-meta {
-  font-size: 11px;
+  font-size: 10px;
   color: var(--text-muted);
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
 }
 
 /* ── Status messages ─────────────────────────────────────────────────────── */
@@ -221,7 +306,6 @@ html, body {
   text-decoration: none;
   transition: background 0.15s;
 }
-
 .ext-btn:hover { background: var(--accent-h); }
 
 /* ── Spinner ─────────────────────────────────────────────────────────────── */
@@ -235,34 +319,3 @@ html, body {
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }
-
-/* ── Footer ──────────────────────────────────────────────────────────────── */
-.ext-footer {
-  border-top: 1px solid var(--border);
-  padding: 8px 12px;
-  flex-shrink: 0;
-}
-
-.ext-footer-btn {
-  display: block;
-  width: 100%;
-  text-align: center;
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--text-muted);
-  font-size: 12px;
-  padding: 6px;
-  cursor: pointer;
-  text-decoration: none;
-  transition: border-color 0.15s, color 0.15s;
-}
-
-.ext-footer-btn:hover { border-color: var(--accent); color: var(--accent); }
-
-/* ── Layout shell ────────────────────────────────────────────────────────── */
-.ext-shell {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-}
