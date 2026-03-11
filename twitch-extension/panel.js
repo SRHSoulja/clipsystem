@@ -80,38 +80,27 @@
   }
 
   // ── Copy clip URL to clipboard ─────────────────────────────────────────────
-  const urlReveal      = document.getElementById('urlReveal');
-  const urlRevealInput = document.getElementById('urlRevealInput');
-  let urlRevealTimer   = null;
-
   copyUrlBtn.addEventListener('click', () => {
     if (!currentClipUrl) return;
-
-    // Toggle: if already showing this URL, hide it
-    if (!urlReveal.classList.contains('visible')) {
-      urlRevealInput.value = currentClipUrl;
-      urlReveal.classList.add('visible');
-      // Try to select all so user can just Ctrl+C immediately
-      urlRevealInput.focus();
-      urlRevealInput.select();
-      copyUrlBtn.classList.add('copied');
-      clearTimeout(urlRevealTimer);
-      urlRevealTimer = setTimeout(() => {
-        urlReveal.classList.remove('visible');
-        copyUrlBtn.classList.remove('copied');
-      }, 6000);
-    } else {
-      urlReveal.classList.remove('visible');
+    const ta = document.createElement('textarea');
+    ta.value = currentClipUrl;
+    ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    copyUrlBtn.textContent = '\u2713';
+    copyUrlBtn.classList.add('copied');
+    setTimeout(() => {
+      copyUrlBtn.textContent = '\u29C9';
       copyUrlBtn.classList.remove('copied');
-      clearTimeout(urlRevealTimer);
-    }
+    }, 2000);
   });
 
-  // Hide URL reveal when a new clip loads
   function hideUrlReveal() {
-    urlReveal.classList.remove('visible');
     copyUrlBtn.classList.remove('copied');
-    clearTimeout(urlRevealTimer);
+    copyUrlBtn.textContent = '\u29C9';
   }
 
   // ── Fetch signed Twitch clip URL via GQL (same method as main ClipTV player)

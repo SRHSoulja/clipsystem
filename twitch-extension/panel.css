@@ -192,24 +192,6 @@ html, body {
   margin-top: 2px;
 }
 
-.ext-url-reveal {
-  display: none;
-  margin-top: 5px;
-}
-.ext-url-reveal.visible { display: block; }
-
-.ext-url-input {
-  width: 100%;
-  background: var(--surface);
-  border: 1px solid var(--accent);
-  border-radius: 3px;
-  color: var(--text);
-  font-size: 10px;
-  padding: 3px 6px;
-  outline: none;
-  cursor: text;
-  user-select: all;
-}
 
 /* ── Tabs ────────────────────────────────────────────────────────────────── */
 .ext-tabs {
