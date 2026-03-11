@@ -159,16 +159,20 @@
       return;
     }
 
-    // Show thumbnail as poster while fetching the signed Twitch URL
+    // Show thumbnail as poster while fetching — hide Watch on Twitch until we know it's needed
     noVideoThumb.src = clip.thumbnail_url || '';
     watchOnTwitchBtn.href = clip.clip_url || '#';
+    watchOnTwitchBtn.style.visibility = 'hidden';
     noVideoState.style.display = '';
     clipVideo.removeAttribute('src');
     clipVideo.load();
     playBtn.textContent = '\u25B6';
     playerEl.classList.add('awaiting-play');
 
-    if (!clip.id) return;
+    if (!clip.id) {
+      watchOnTwitchBtn.style.visibility = '';
+      return;
+    }
     const url = await getTwitchMp4Url(clip.id);
 
     // Bail if the user switched clips while we were fetching
@@ -176,14 +180,17 @@
 
     if (url) {
       noVideoState.style.display = 'none';
+      watchOnTwitchBtn.style.visibility = '';
       clipVideo.src = url;
       clipVideo.play().catch(() => {
         playBtn.textContent = '\u25B6';
         playerEl.classList.add('awaiting-play');
       });
       playBtn.textContent = '\u23F8';
+    } else {
+      // GQL failed — reveal Watch on Twitch fallback
+      watchOnTwitchBtn.style.visibility = '';
     }
-    // If URL fetch failed, noVideoState with "Watch on Twitch" remains visible
   }
 
   function playNext() {
