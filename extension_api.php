@@ -121,6 +121,7 @@ function resolve_login(PDO $pdo, string $channel_id): ?string {
 try {
   $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS twitch_id VARCHAR(64)");
   $pdo->exec("CREATE INDEX IF NOT EXISTS idx_channel_settings_twitch_id ON channel_settings(twitch_id)");
+  $pdo->exec("ALTER TABLE channel_settings ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP");
 } catch (PDOException $e) {
   error_log('extension_api migration error: ' . $e->getMessage());
 }
@@ -197,7 +198,7 @@ if ($action === 'clips' && $method === 'GET') {
   try {
     $base_sql = "
       SELECT c.clip_id as id, c.seq, c.title, c.duration, c.created_at,
-             c.view_count, c.creator_name, c.thumbnail_url, c.platform,
+             c.view_count, c.creator_name, c.thumbnail_url, c.mp4_url, c.platform,
              g.name as game_name
       FROM clips c
       LEFT JOIN games_cache g ON c.game_id = g.game_id
@@ -253,7 +254,7 @@ if ($action === 'search' && $method === 'GET') {
   try {
     $stmt = $pdo->prepare("
       SELECT c.clip_id as id, c.seq, c.title, c.duration, c.created_at,
-             c.view_count, c.creator_name, c.thumbnail_url, c.platform,
+             c.view_count, c.creator_name, c.thumbnail_url, c.mp4_url, c.platform,
              g.name as game_name
       FROM clips c
       LEFT JOIN games_cache g ON c.game_id = g.game_id
