@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ClipTV</title>
+  <link rel="stylesheet" href="panel.css">
+</head>
+<body data-theme="dark">
+
+<div class="ext-shell" id="shell" style="display:none">
+
+  <!-- Header -->
+  <div class="ext-header">
+    <span class="ext-logo">📼</span>
+    <span class="ext-channel-name" id="channelName">ClipTV</span>
+  </div>
+
+  <!-- Tab bar -->
+  <div class="ext-tabs" id="tabBar">
+    <button class="ext-tab active" data-sort="recent">Recent</button>
+    <button class="ext-tab"        data-sort="top">Top</button>
+    <button class="ext-tab"        data-sort="random">Random</button>
+    <button class="ext-tab"        data-sort="search" title="Search">🔍</button>
+  </div>
+
+  <!-- Search bar (hidden until search tab clicked) -->
+  <div class="ext-search-bar" id="searchBar">
+    <input class="ext-search-input" id="searchInput" type="text" placeholder="Search clips…" autocomplete="off">
+    <button class="ext-search-close" id="searchClose" title="Close">✕</button>
+  </div>
+
+  <!-- Clip list / status -->
+  <div class="ext-clip-list" id="clipList"></div>
+
+  <!-- Footer -->
+  <div class="ext-footer">
+    <a class="ext-footer-btn" id="fullSiteBtn" href="#" target="_blank">Open full ClipTV →</a>
+  </div>
+
+</div>
+
+<!-- Loading state (shown before auth/data ready) -->
+<div class="ext-status" id="loadingState">
+  <div class="ext-spinner"></div>
+</div>
+
+<!-- Not registered state -->
+<div class="ext-status" id="unregisteredState" style="display:none">
+  <div class="ext-status-icon">📼</div>
+  <div class="ext-status-title">ClipTV not set up</div>
+  <div class="ext-status-body">This streamer hasn't linked their ClipTV clip library yet.</div>
+  <a class="ext-btn" href="https://clips.gmgnrepeat.com" target="_blank">Learn about ClipTV</a>
+</div>
+
+<!-- Error state -->
+<div class="ext-status" id="errorState" style="display:none">
+  <div class="ext-status-icon">⚠️</div>
+  <div class="ext-status-title">Couldn't load clips</div>
+  <div class="ext-status-body" id="errorMsg">Something went wrong.</div>
+  <button class="ext-btn" id="retryBtn">Try again</button>
+</div>
+
+<script src="https://extension-files.twitch.tv/helper/v1/twitch-ext.min.js"></script>
+<script src="common.js"></script>
+<script src="panel.js"></script>
+</body>
+</html>
