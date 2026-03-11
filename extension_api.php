@@ -116,6 +116,11 @@ function resolve_login(PDO $pdo, string $channel_id): ?string {
   return null;
 }
 
+// ── Database connection ───────────────────────────────────────────────────────
+
+$pdo = get_db_connection();
+if (!$pdo) json_err('Database unavailable', 503);
+
 // ── Schema Migration (idempotent) ────────────────────────────────────────────
 
 try {
