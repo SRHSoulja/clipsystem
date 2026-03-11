@@ -41,6 +41,7 @@
       }
     } catch (e) {
       accountStatus.textContent = 'Could not check account status.';
+      linkRow.style.display = '';
     }
   }
 
