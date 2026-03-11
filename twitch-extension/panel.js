@@ -17,6 +17,7 @@
   let initInProgress = false;
   let playlist       = [];
   let currentIndex   = -1;
+  let playerActive   = false;  // true once a clip has been played; prevents auto-play on list refresh
 
   // ── Elements ───────────────────────────────────────────────────────────────
   const shell             = document.getElementById('shell');
@@ -110,6 +111,7 @@
     if (!clip) return;
 
     currentIndex = index;
+    playerActive = true;
 
     // Update info immediately
     playerTitle.textContent = clip.title || 'Untitled';
@@ -220,8 +222,10 @@
       });
     });
 
-    // Auto-play first clip
-    playClip(0);
+    // Auto-play first clip only on initial load — don't interrupt if already playing
+    if (!playerActive) {
+      playClip(0);
+    }
   }
 
   // ── Build API URL with optional preview_login ──────────────────────────────
@@ -394,6 +398,7 @@
   async function init() {
     if (initInProgress) return;
     initInProgress = true;
+    playerActive = false;
     showLoading();
 
     const saved = readBroadcasterConfig();
