@@ -133,6 +133,7 @@ html, body {
 }
 
 .ext-player:hover .ext-player-overlay { opacity: 1; }
+.ext-player.awaiting-play .ext-player-overlay { opacity: 1; }
 
 .ext-play-btn {
   background: rgba(0,0,0,0.7);

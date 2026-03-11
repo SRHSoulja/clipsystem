@@ -37,6 +37,7 @@
   const searchGame        = document.getElementById('searchGame');
   const searchClipper     = document.getElementById('searchClipper');
   const fullSiteBtn       = document.getElementById('fullSiteBtn');
+  const playerEl          = document.getElementById('player');
   const clipVideo         = document.getElementById('clipVideo');
   const playerOverlay     = document.getElementById('playerOverlay');
   const playBtn           = document.getElementById('playBtn');
@@ -131,7 +132,11 @@
     if (clip.video_url) {
       noVideoState.style.display = 'none';
       clipVideo.src = clip.video_url;
-      clipVideo.play().catch(() => {});
+      clipVideo.play().catch(() => {
+        // Autoplay blocked — show overlay so user knows to click
+        playBtn.textContent = '\u25B6';
+        playerEl.classList.add('awaiting-play');
+      });
       playBtn.textContent = '\u23F8';
       return;
     }
@@ -143,6 +148,7 @@
     clipVideo.removeAttribute('src');
     clipVideo.load();
     playBtn.textContent = '\u25B6';
+    playerEl.classList.add('awaiting-play');
 
     if (!clip.id) return;
     const url = await getTwitchMp4Url(clip.id);
@@ -153,7 +159,10 @@
     if (url) {
       noVideoState.style.display = 'none';
       clipVideo.src = url;
-      clipVideo.play().catch(() => {});
+      clipVideo.play().catch(() => {
+        playBtn.textContent = '\u25B6';
+        playerEl.classList.add('awaiting-play');
+      });
       playBtn.textContent = '\u23F8';
     }
     // If URL fetch failed, noVideoState with "Watch on Twitch" remains visible
@@ -176,7 +185,10 @@
     }
   });
 
-  clipVideo.addEventListener('play',  () => { playBtn.textContent = '\u23F8'; });
+  clipVideo.addEventListener('play',  () => {
+    playBtn.textContent = '\u23F8';
+    playerEl.classList.remove('awaiting-play');
+  });
   clipVideo.addEventListener('pause', () => { playBtn.textContent = '\u25B6'; });
 
   // ── Render clip queue ──────────────────────────────────────────────────────
