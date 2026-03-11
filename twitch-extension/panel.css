@@ -79,6 +79,7 @@ html, body {
   flex-shrink: 0;
   background: #000;
   position: relative;
+  overflow: hidden;
 }
 
 .ext-player video {
