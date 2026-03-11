@@ -235,4 +235,54 @@ if ($action === 'clips' && $method === 'GET') {
   }
 }
 
+// ── GET search ────────────────────────────────────────────────────────────────
+
+if ($action === 'search' && $method === 'GET') {
+  $payload = require_jwt();
+  $channel_id = $payload['channel_id'] ?? '';
+  if (!$channel_id) json_err('channel_id missing from JWT', 400);
+
+  $login = resolve_login($pdo, $channel_id);
+  if (!$login) json_err('Channel not registered with ClipTV', 404);
+
+  $q = trim($_GET['q'] ?? '');
+  if (strlen($q) < 2) json_err('Query too short', 400);
+
+  $limit = 20;
+
+  try {
+    $stmt = $pdo->prepare("
+      SELECT c.clip_id as id, c.seq, c.title, c.duration, c.created_at,
+             c.view_count, c.creator_name, c.thumbnail_url, c.platform,
+             g.name as game_name
+      FROM clips c
+      LEFT JOIN games_cache g ON c.game_id = g.game_id
+      WHERE c.login = ? AND c.blocked = FALSE
+        AND (c.title ILIKE ? OR c.creator_name ILIKE ? OR g.name ILIKE ?)
+      ORDER BY c.view_count DESC
+      LIMIT ?
+    ");
+    $like = '%' . $q . '%';
+    $stmt->execute([$login, $like, $like, $like, $limit]);
+    $clips = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    foreach ($clips as &$c) {
+      if ($c['created_at'] instanceof DateTime) {
+        $c['created_at'] = $c['created_at']->format('c');
+      }
+      $c['clip_url'] = ($c['platform'] === 'kick' && !empty($c['mp4_url']))
+        ? $c['mp4_url']
+        : 'https://clips.twitch.tv/' . urlencode($c['id']);
+      unset($c['platform'], $c['mp4_url']);
+    }
+    unset($c);
+
+    json_ok(['clips' => $clips, 'query' => $q]);
+
+  } catch (PDOException $e) {
+    error_log('extension_api search error: ' . $e->getMessage());
+    json_err('Database error', 500);
+  }
+}
+
 json_err('Unknown action', 400);
