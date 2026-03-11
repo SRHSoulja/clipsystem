@@ -9,6 +9,7 @@
   let settings    = { ...DEFAULT_SETTINGS };
   let currentSort = 'recent';
   let searchTimer = null;
+  let initInProgress = false;
 
   // ── Elements ───────────────────────────────────────────────────────────────
   const shell            = document.getElementById('shell');
@@ -164,6 +165,8 @@
 
   // ── Initialise ─────────────────────────────────────────────────────────────
   async function init() {
+    if (initInProgress) return;
+    initInProgress = true;
     showLoading();
 
     const saved = readBroadcasterConfig();
@@ -192,6 +195,8 @@
 
     } catch (e) {
       showError('Couldn\'t connect to ClipTV. Check back soon.');
+    } finally {
+      initInProgress = false;
     }
   }
 
