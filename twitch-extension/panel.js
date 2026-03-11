@@ -276,7 +276,7 @@
       loadClips(currentSort);
 
     } catch (e) {
-      showError('Couldn\u2019t connect to ClipTV. Check back soon.');
+      showError(e.message || 'Couldn\u2019t connect to ClipTV.');
     } finally {
       initInProgress = false;
     }

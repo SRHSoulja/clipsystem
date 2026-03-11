@@ -71,7 +71,6 @@
   // ── Save panel settings ───────────────────────────────────────────────────
   saveBtn.addEventListener('click', () => {
     const sort = document.querySelector('input[name="sort"]:checked')?.value || 'recent';
-    const count = Math.max(5, Math.min(25, parseInt(clipCount.value) || 10));
 
     const settings = {
       ext_sort:           sort,
