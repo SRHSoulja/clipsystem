@@ -80,16 +80,37 @@
   }
 
   // ── Copy clip URL to clipboard ─────────────────────────────────────────────
+  function copyText(text) {
+    // Try modern API first, fall back to execCommand for sandboxed iframes
+    if (navigator.clipboard?.writeText) {
+      return navigator.clipboard.writeText(text);
+    }
+    return new Promise((resolve, reject) => {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      ok ? resolve() : reject(new Error('execCommand failed'));
+    });
+  }
+
   copyUrlBtn.addEventListener('click', () => {
     if (!currentClipUrl) return;
-    navigator.clipboard.writeText(currentClipUrl).then(() => {
+    copyText(currentClipUrl).then(() => {
       copyUrlBtn.textContent = '\u2713';
       copyUrlBtn.classList.add('copied');
       setTimeout(() => {
         copyUrlBtn.textContent = '\u29C9';
         copyUrlBtn.classList.remove('copied');
       }, 2000);
-    }).catch(() => {});
+    }).catch(() => {
+      // Last resort: open the URL so they can copy from the address bar
+      window.open(currentClipUrl, '_blank');
+    });
   });
 
   // ── Fetch signed Twitch clip URL via GQL (same method as main ClipTV player)
