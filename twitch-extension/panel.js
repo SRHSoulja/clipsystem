@@ -80,36 +80,39 @@
   }
 
   // ── Copy clip URL to clipboard ─────────────────────────────────────────────
-  function copyText(text) {
-    // navigator.clipboard is permission-denied in Twitch extension sandboxed iframes,
-    // so use execCommand directly — it works on user-gesture clicks in sandboxed contexts.
-    return new Promise((resolve, reject) => {
-      const ta = document.createElement('textarea');
-      ta.value = text;
-      ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none';
-      document.body.appendChild(ta);
-      ta.focus();
-      ta.select();
-      const ok = document.execCommand('copy');
-      document.body.removeChild(ta);
-      ok ? resolve() : reject(new Error('execCommand failed'));
-    });
-  }
+  const urlReveal      = document.getElementById('urlReveal');
+  const urlRevealInput = document.getElementById('urlRevealInput');
+  let urlRevealTimer   = null;
 
   copyUrlBtn.addEventListener('click', () => {
     if (!currentClipUrl) return;
-    copyText(currentClipUrl).then(() => {
-      copyUrlBtn.textContent = '\u2713';
+
+    // Toggle: if already showing this URL, hide it
+    if (!urlReveal.classList.contains('visible')) {
+      urlRevealInput.value = currentClipUrl;
+      urlReveal.classList.add('visible');
+      // Try to select all so user can just Ctrl+C immediately
+      urlRevealInput.focus();
+      urlRevealInput.select();
       copyUrlBtn.classList.add('copied');
-      setTimeout(() => {
-        copyUrlBtn.textContent = '\u29C9';
+      clearTimeout(urlRevealTimer);
+      urlRevealTimer = setTimeout(() => {
+        urlReveal.classList.remove('visible');
         copyUrlBtn.classList.remove('copied');
-      }, 2000);
-    }).catch(() => {
-      // Last resort: open the URL so they can copy from the address bar
-      window.open(currentClipUrl, '_blank');
-    });
+      }, 6000);
+    } else {
+      urlReveal.classList.remove('visible');
+      copyUrlBtn.classList.remove('copied');
+      clearTimeout(urlRevealTimer);
+    }
   });
+
+  // Hide URL reveal when a new clip loads
+  function hideUrlReveal() {
+    urlReveal.classList.remove('visible');
+    copyUrlBtn.classList.remove('copied');
+    clearTimeout(urlRevealTimer);
+  }
 
   // ── Fetch signed Twitch clip URL via GQL (same method as main ClipTV player)
   async function getTwitchMp4Url(clipId) {
@@ -148,8 +151,7 @@
     currentIndex = index;
     playerActive = true;
     currentClipUrl = clip.clip_url || null;
-    copyUrlBtn.classList.remove('copied');
-    copyUrlBtn.textContent = '\u29C9';
+    hideUrlReveal();
 
     // Update info immediately
     playerTitle.textContent = clip.title || 'Untitled';
