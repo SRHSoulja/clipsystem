@@ -199,14 +199,25 @@ html, body {
 /* ── Search bar ──────────────────────────────────────────────────────────── */
 .ext-search-bar {
   display: none;
-  align-items: center;
-  gap: 6px;
+  flex-direction: column;
+  gap: 5px;
   padding: 7px 10px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 
 .ext-search-bar.visible { display: flex; }
+
+.ext-search-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ext-search-filters {
+  display: flex;
+  gap: 5px;
+}
 
 .ext-search-input {
   flex: 1;
@@ -217,21 +228,23 @@ html, body {
   font-size: 12px;
   padding: 5px 8px;
   outline: none;
+  min-width: 0;
 }
 .ext-search-input:focus { border-color: var(--accent); }
 
-.ext-search-sort {
+.ext-search-select {
+  flex: 1;
+  min-width: 0;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 4px;
   color: var(--text);
   font-size: 11px;
-  padding: 5px 4px;
+  padding: 4px 3px;
   outline: none;
   cursor: pointer;
-  flex-shrink: 0;
 }
-.ext-search-sort:focus { border-color: var(--accent); }
+.ext-search-select:focus { border-color: var(--accent); }
 
 .ext-search-close {
   background: none;
@@ -241,6 +254,7 @@ html, body {
   font-size: 16px;
   line-height: 1;
   padding: 2px 4px;
+  flex-shrink: 0;
 }
 
 /* ── Clip queue ──────────────────────────────────────────────────────────── */

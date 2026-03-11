@@ -8,7 +8,8 @@
  * Actions:
  *   GET  ?action=channel   — resolve broadcaster + fetch settings
  *   GET  ?action=clips     — fetch clips (sort=recent|top|random, limit=5-25)
- *   GET  ?action=search    — search clips (q=query)
+ *   GET  ?action=games     — list games/categories for the channel
+ *   GET  ?action=search    — search clips (q=query, sort, duration, game_id)
  *   POST ?action=settings  — save broadcaster settings (role=broadcaster required)
  */
 
@@ -244,6 +245,37 @@ if ($action === 'clips' && $method === 'GET') {
   }
 }
 
+// ── GET games ────────────────────────────────────────────────────────────────
+
+if ($action === 'games' && $method === 'GET') {
+  $payload = require_jwt();
+  $channel_id = $payload['channel_id'] ?? '';
+  if (!$channel_id) json_err('channel_id missing from JWT', 400);
+
+  $preview = preg_replace('/[^a-z0-9_]/', '', strtolower(trim($_GET['preview_login'] ?? '')));
+  $login = $preview ?: resolve_login($pdo, $channel_id);
+  if (!$login) json_err('Channel not registered with ClipTV', 404);
+
+  try {
+    $stmt = $pdo->prepare("
+      SELECT c.game_id, gc.name, COUNT(*) as clip_count
+      FROM clips c
+      LEFT JOIN games_cache gc ON c.game_id = gc.game_id
+      WHERE c.login = ? AND c.blocked = FALSE AND c.game_id IS NOT NULL AND c.game_id != ''
+      GROUP BY c.game_id, gc.name
+      HAVING gc.name IS NOT NULL
+      ORDER BY COUNT(*) DESC
+      LIMIT 30
+    ");
+    $stmt->execute([$login]);
+    $games = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    json_ok(['games' => $games]);
+  } catch (PDOException $e) {
+    error_log('extension_api games error: ' . $e->getMessage());
+    json_err('Database error', 500);
+  }
+}
+
 // ── GET search ────────────────────────────────────────────────────────────────
 
 if ($action === 'search' && $method === 'GET') {
@@ -255,13 +287,49 @@ if ($action === 'search' && $method === 'GET') {
   $login = $preview ?: resolve_login($pdo, $channel_id);
   if (!$login) json_err('Channel not registered with ClipTV', 404);
 
-  $q = trim($_GET['q'] ?? '');
+  $q        = trim($_GET['q'] ?? '');
   if (strlen($q) < 2) json_err('Query too short', 400);
 
-  $sort  = ($_GET['sort'] ?? '') === 'date' ? 'date' : 'views';
-  $limit = 20;
+  $sort     = in_array($_GET['sort'] ?? '', ['views', 'date', 'trending']) ? $_GET['sort'] : 'views';
+  $duration = in_array($_GET['duration'] ?? '', ['short', 'medium', 'long']) ? $_GET['duration'] : '';
+  $gameId   = preg_replace('/[^a-zA-Z0-9_]/', '', $_GET['game_id'] ?? '');
+  $limit    = 20;
 
-  $order = $sort === 'date' ? 'c.created_at DESC' : 'c.view_count DESC';
+  $wheres = ['c.login = ?', 'c.blocked = FALSE'];
+  $params = [$login];
+
+  // Text search across title, creator, game name
+  $like = '%' . $q . '%';
+  $wheres[] = '(c.title ILIKE ? OR c.creator_name ILIKE ? OR g.name ILIKE ?)';
+  $params[] = $like; $params[] = $like; $params[] = $like;
+
+  // Duration filter
+  if ($duration === 'short') {
+    $wheres[] = 'c.duration < 30';
+  } elseif ($duration === 'medium') {
+    $wheres[] = 'c.duration >= 30 AND c.duration <= 60';
+  } elseif ($duration === 'long') {
+    $wheres[] = 'c.duration > 60';
+  }
+
+  // Game filter
+  if ($gameId) {
+    $wheres[] = 'c.game_id = ?';
+    $params[] = $gameId;
+  }
+
+  // Trending: views-per-day ratio, limited to last 90 days
+  if ($sort === 'trending') {
+    $wheres[] = "c.created_at > NOW() - INTERVAL '90 days'";
+    $order = "c.view_count::float / GREATEST(1, EXTRACT(EPOCH FROM (NOW() - c.created_at)) / 86400) DESC";
+  } elseif ($sort === 'date') {
+    $order = 'c.created_at DESC';
+  } else {
+    $order = 'c.view_count DESC';
+  }
+
+  $params[] = $limit;
+  $where_sql = implode(' AND ', $wheres);
 
   try {
     $stmt = $pdo->prepare("
@@ -270,13 +338,11 @@ if ($action === 'search' && $method === 'GET') {
              g.name as game_name
       FROM clips c
       LEFT JOIN games_cache g ON c.game_id = g.game_id
-      WHERE c.login = ? AND c.blocked = FALSE
-        AND (c.title ILIKE ? OR c.creator_name ILIKE ? OR g.name ILIKE ?)
+      WHERE {$where_sql}
       ORDER BY {$order}
       LIMIT ?
     ");
-    $like = '%' . $q . '%';
-    $stmt->execute([$login, $like, $like, $like, $limit]);
+    $stmt->execute($params);
     $clips = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     foreach ($clips as &$c) {

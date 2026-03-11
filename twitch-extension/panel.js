@@ -3,6 +3,11 @@
 (function () {
   'use strict';
 
+  // ── Twitch GQL constants (same as main ClipTV player) ─────────────────────
+  const GQL_URL    = 'https://gql.twitch.tv/gql';
+  const CLIENT_ID  = 'kimne78kx3ncx6brgo4mv6wki5h1ko';
+  const QUERY_HASH = '36b89d2507fce29e5ca551df756d27c1cfe079e2609642b4390aa4c35796eb11';
+
   // ── State ──────────────────────────────────────────────────────────────────
   let authToken      = null;
   let channelInfo    = null;
@@ -27,6 +32,8 @@
   const searchInput       = document.getElementById('searchInput');
   const searchClose       = document.getElementById('searchClose');
   const searchSort        = document.getElementById('searchSort');
+  const searchDuration    = document.getElementById('searchDuration');
+  const searchGame        = document.getElementById('searchGame');
   const fullSiteBtn       = document.getElementById('fullSiteBtn');
   const clipVideo         = document.getElementById('clipVideo');
   const playerOverlay     = document.getElementById('playerOverlay');
@@ -67,30 +74,43 @@
     errorMsg.textContent = msg || 'Something went wrong.';
   }
 
+  // ── Fetch signed Twitch clip URL via GQL (same method as main ClipTV player)
+  async function getTwitchMp4Url(clipId) {
+    try {
+      const res = await fetch(GQL_URL, {
+        method: 'POST',
+        headers: { 'Client-ID': CLIENT_ID, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          operationName: 'VideoAccessToken_Clip',
+          variables: { slug: clipId },
+          extensions: { persistedQuery: { version: 1, sha256Hash: QUERY_HASH } }
+        })
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      const clip = data?.data?.clip;
+      if (!clip) return null;
+      const token    = clip.playbackAccessToken?.value;
+      const sig      = clip.playbackAccessToken?.signature;
+      const qualities = clip.videoQualities || [];
+      if (!token || !sig || !qualities.length) return null;
+      const best = qualities.sort((a, b) => (parseInt(b.quality) || 0) - (parseInt(a.quality) || 0))[0];
+      const sep  = best.sourceURL.includes('?') ? '&' : '?';
+      return `${best.sourceURL}${sep}sig=${encodeURIComponent(sig)}&token=${encodeURIComponent(token)}`;
+    } catch (e) {
+      return null;
+    }
+  }
+
   // ── Video player ───────────────────────────────────────────────────────────
-  function playClip(index) {
+  async function playClip(index) {
     if (!playlist.length) return;
     const clip = playlist[index];
     if (!clip) return;
 
     currentIndex = index;
 
-    // Update video source
-    if (clip.video_url) {
-      noVideoState.style.display = 'none';
-      clipVideo.src = clip.video_url;
-      clipVideo.play().catch(() => {});
-      playBtn.textContent = '⏸';
-    } else {
-      clipVideo.removeAttribute('src');
-      clipVideo.load();
-      playBtn.textContent = '▶';
-      noVideoThumb.src = clip.thumbnail_url || '';
-      watchOnTwitchBtn.href = clip.clip_url || '#';
-      noVideoState.style.display = '';
-    }
-
-    // Update info
+    // Update info immediately
     playerTitle.textContent = clip.title || 'Untitled';
     const meta = [
       clip.creator_name || null,
@@ -103,6 +123,37 @@
     clipList.querySelectorAll('.clip-card').forEach((card, i) => {
       card.classList.toggle('active', i === index);
     });
+
+    // Kick clips or pre-stored URLs play directly
+    if (clip.video_url) {
+      noVideoState.style.display = 'none';
+      clipVideo.src = clip.video_url;
+      clipVideo.play().catch(() => {});
+      playBtn.textContent = '\u23F8';
+      return;
+    }
+
+    // Show thumbnail as poster while fetching the signed Twitch URL
+    noVideoThumb.src = clip.thumbnail_url || '';
+    watchOnTwitchBtn.href = clip.clip_url || '#';
+    noVideoState.style.display = '';
+    clipVideo.removeAttribute('src');
+    clipVideo.load();
+    playBtn.textContent = '\u25B6';
+
+    if (!clip.id) return;
+    const url = await getTwitchMp4Url(clip.id);
+
+    // Bail if the user switched clips while we were fetching
+    if (currentIndex !== index) return;
+
+    if (url) {
+      noVideoState.style.display = 'none';
+      clipVideo.src = url;
+      clipVideo.play().catch(() => {});
+      playBtn.textContent = '\u23F8';
+    }
+    // If URL fetch failed, noVideoState with "Watch on Twitch" remains visible
   }
 
   function playNext() {
@@ -115,15 +166,15 @@
   playerOverlay.addEventListener('click', () => {
     if (clipVideo.paused) {
       clipVideo.play().catch(() => {});
-      playBtn.textContent = '⏸';
+      playBtn.textContent = '\u23F8';
     } else {
       clipVideo.pause();
-      playBtn.textContent = '▶';
+      playBtn.textContent = '\u25B6';
     }
   });
 
-  clipVideo.addEventListener('play',  () => { playBtn.textContent = '⏸'; });
-  clipVideo.addEventListener('pause', () => { playBtn.textContent = '▶'; });
+  clipVideo.addEventListener('play',  () => { playBtn.textContent = '\u23F8'; });
+  clipVideo.addEventListener('pause', () => { playBtn.textContent = '\u25B6'; });
 
   // ── Render clip queue ──────────────────────────────────────────────────────
   function renderClips(clips) {
@@ -198,6 +249,25 @@
     }
   }
 
+  // ── Load games for search filter dropdown ──────────────────────────────────
+  async function loadGames() {
+    try {
+      const data = await extFetch(apiUrl('/extension_api.php?action=games'), authToken);
+      const games = data.games || [];
+      searchGame.innerHTML = '<option value="">All games</option>';
+      games.forEach(g => {
+        if (!g.game_id || !g.name) return;
+        const opt = document.createElement('option');
+        opt.value = g.game_id;
+        opt.textContent = g.name;
+        searchGame.appendChild(opt);
+      });
+      searchGame.style.display = games.length ? '' : 'none';
+    } catch (e) {
+      searchGame.style.display = 'none';
+    }
+  }
+
   // ── Tabs ───────────────────────────────────────────────────────────────────
   tabBar.addEventListener('click', e => {
     const btn = e.target.closest('.ext-tab');
@@ -208,8 +278,13 @@
       tabBar.style.display = 'none';
       searchBar.classList.add('visible');
       searchInput.value = '';
+      searchSort.value = 'views';
+      searchDuration.value = '';
+      searchGame.value = '';
+      searchGame.style.display = '';
       searchInput.focus();
       clipList.innerHTML = '';
+      loadGames();
       return;
     }
 
@@ -224,20 +299,30 @@
     clearTimeout(searchTimer);
     const q = searchInput.value.trim();
     if (q.length < 2) { clipList.innerHTML = ''; return; }
-    searchTimer = setTimeout(() => runSearch(q, searchSort.value), 400);
+    searchTimer = setTimeout(() => runSearch(q), 400);
   });
 
   searchInput.addEventListener('keydown', e => {
     if (e.key === 'Enter') {
       clearTimeout(searchTimer);
       const q = searchInput.value.trim();
-      if (q.length >= 2) runSearch(q, searchSort.value);
+      if (q.length >= 2) runSearch(q);
     }
   });
 
   searchSort.addEventListener('change', () => {
     const q = searchInput.value.trim();
-    if (q.length >= 2) runSearch(q, searchSort.value);
+    if (q.length >= 2) runSearch(q);
+  });
+
+  searchDuration.addEventListener('change', () => {
+    const q = searchInput.value.trim();
+    if (q.length >= 2) runSearch(q);
+  });
+
+  searchGame.addEventListener('change', () => {
+    const q = searchInput.value.trim();
+    if (q.length >= 2) runSearch(q);
   });
 
   searchClose.addEventListener('click', () => {
@@ -248,13 +333,18 @@
     loadClips(currentSort);
   });
 
-  async function runSearch(q, sort = 'views') {
+  async function runSearch(q) {
+    const sort     = searchSort.value || 'views';
+    const duration = searchDuration.value;
+    const gameId   = searchGame.value;
+
+    let url = `/extension_api.php?action=search&q=${encodeURIComponent(q)}&sort=${encodeURIComponent(sort)}`;
+    if (duration) url += `&duration=${encodeURIComponent(duration)}`;
+    if (gameId)   url += `&game_id=${encodeURIComponent(gameId)}`;
+
     clipList.innerHTML = `<div class="ext-status" style="height:auto;padding:20px"><div class="ext-spinner"></div></div>`;
     try {
-      const data = await extFetch(
-        apiUrl(`/extension_api.php?action=search&q=${encodeURIComponent(q)}&sort=${encodeURIComponent(sort)}`),
-        authToken
-      );
+      const data = await extFetch(apiUrl(url), authToken);
       renderClips(data.clips);
     } catch (e) {
       clipList.innerHTML = `<div class="ext-status" style="height:auto;padding:20px"><div class="ext-status-body">Search failed</div></div>`;

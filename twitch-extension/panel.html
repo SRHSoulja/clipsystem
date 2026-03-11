@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ClipTV</title>
-  <link rel="stylesheet" href="panel.css?v=6">
+  <link rel="stylesheet" href="panel.css?v=7">
 </head>
 <body data-theme="dark">
 
@@ -43,12 +43,26 @@
 
   <!-- Search bar (hidden until search tab clicked) -->
   <div class="ext-search-bar" id="searchBar">
-    <input class="ext-search-input" id="searchInput" type="search" placeholder="Search clips…">
-    <select class="ext-search-sort" id="searchSort">
-      <option value="views">Top</option>
-      <option value="date">Recent</option>
-    </select>
-    <button class="ext-search-close" id="searchClose" title="Close">✕</button>
+    <div class="ext-search-row">
+      <input class="ext-search-input" id="searchInput" type="search" placeholder="Search clips…">
+      <button class="ext-search-close" id="searchClose" title="Close">✕</button>
+    </div>
+    <div class="ext-search-filters">
+      <select class="ext-search-select" id="searchSort">
+        <option value="views">Top</option>
+        <option value="date">Recent</option>
+        <option value="trending">Trending</option>
+      </select>
+      <select class="ext-search-select" id="searchDuration">
+        <option value="">Any length</option>
+        <option value="short">Short (&lt;30s)</option>
+        <option value="medium">Medium</option>
+        <option value="long">Long (&gt;1m)</option>
+      </select>
+      <select class="ext-search-select" id="searchGame">
+        <option value="">All games</option>
+      </select>
+    </div>
   </div>
 
   <!-- Clip queue -->
@@ -78,7 +92,7 @@
 </div>
 
 <script src="https://extension-files.twitch.tv/helper/v1/twitch-ext.min.js"></script>
-<script src="common.js?v=6"></script>
-<script src="panel.js?v=6"></script>
+<script src="common.js?v=7"></script>
+<script src="panel.js?v=7"></script>
 </body>
 </html>
