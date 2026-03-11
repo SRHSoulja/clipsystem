@@ -18,6 +18,7 @@
   let playlist       = [];
   let currentIndex   = -1;
   let playerActive   = false;  // true once a clip has been played; prevents auto-play on list refresh
+  let currentClipUrl = null;   // clip_url of the currently loaded clip (for copy button)
 
   // ── Elements ───────────────────────────────────────────────────────────────
   const shell             = document.getElementById('shell');
@@ -46,6 +47,7 @@
   const noVideoState      = document.getElementById('noVideoState');
   const noVideoThumb      = document.getElementById('noVideoThumb');
   const watchOnTwitchBtn  = document.getElementById('watchOnTwitchBtn');
+  const copyUrlBtn        = document.getElementById('copyUrlBtn');
 
   // ── Show/hide state panels ─────────────────────────────────────────────────
   function showLoading() {
@@ -76,6 +78,19 @@
     errorState.style.display = '';
     errorMsg.textContent = msg || 'Something went wrong.';
   }
+
+  // ── Copy clip URL to clipboard ─────────────────────────────────────────────
+  copyUrlBtn.addEventListener('click', () => {
+    if (!currentClipUrl) return;
+    navigator.clipboard.writeText(currentClipUrl).then(() => {
+      copyUrlBtn.textContent = '\u2713';
+      copyUrlBtn.classList.add('copied');
+      setTimeout(() => {
+        copyUrlBtn.textContent = '\u29C9';
+        copyUrlBtn.classList.remove('copied');
+      }, 2000);
+    }).catch(() => {});
+  });
 
   // ── Fetch signed Twitch clip URL via GQL (same method as main ClipTV player)
   async function getTwitchMp4Url(clipId) {
@@ -113,6 +128,9 @@
 
     currentIndex = index;
     playerActive = true;
+    currentClipUrl = clip.clip_url || null;
+    copyUrlBtn.classList.remove('copied');
+    copyUrlBtn.textContent = '\u29C9';
 
     // Update info immediately
     playerTitle.textContent = clip.title || 'Untitled';

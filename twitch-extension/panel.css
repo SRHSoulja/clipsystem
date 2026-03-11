@@ -157,13 +157,34 @@ html, body {
   border-bottom: 1px solid var(--border);
 }
 
+.ext-player-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .ext-player-title {
   font-size: 12px;
   font-weight: 600;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+  flex: 1;
 }
+
+.ext-copy-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 3px;
+  flex-shrink: 0;
+  transition: color 0.15s;
+}
+.ext-copy-btn:hover { color: var(--accent); }
+.ext-copy-btn.copied { color: #1db954; }
 
 .ext-player-meta {
   font-size: 11px;

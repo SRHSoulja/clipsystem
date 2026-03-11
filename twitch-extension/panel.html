@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ClipTV</title>
-  <link rel="stylesheet" href="panel.css?v=11">
+  <link rel="stylesheet" href="panel.css?v=12">
 </head>
 <body data-theme="dark">
 
@@ -28,7 +28,10 @@
       <a class="ext-btn ext-player-novideo-btn" id="watchOnTwitchBtn" href="#" target="_blank">Watch on Twitch ↗</a>
     </div>
     <div class="ext-player-info">
-      <div class="ext-player-title" id="playerTitle"></div>
+      <div class="ext-player-title-row">
+        <div class="ext-player-title" id="playerTitle"></div>
+        <button class="ext-copy-btn" id="copyUrlBtn" title="Copy clip URL">⧉</button>
+      </div>
       <div class="ext-player-meta" id="playerMeta"></div>
     </div>
   </div>
@@ -94,7 +97,7 @@
 </div>
 
 <script src="https://extension-files.twitch.tv/helper/v1/twitch-ext.min.js"></script>
-<script src="common.js?v=11"></script>
-<script src="panel.js?v=11"></script>
+<script src="common.js?v=12"></script>
+<script src="panel.js?v=12"></script>
 </body>
 </html>
