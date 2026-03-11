@@ -285,4 +285,45 @@ if ($action === 'search' && $method === 'GET') {
   }
 }
 
+// ── POST settings ─────────────────────────────────────────────────────────────
+
+if ($action === 'settings' && $method === 'POST') {
+  $payload = require_jwt();
+  $channel_id = $payload['channel_id'] ?? '';
+  $role       = $payload['role'] ?? '';
+
+  if ($role !== 'broadcaster') json_err('Broadcaster role required', 403);
+  if (!$channel_id) json_err('channel_id missing from JWT', 400);
+
+  $body = json_decode(file_get_contents('php://input'), true) ?? [];
+
+  $login = trim(strtolower($body['login'] ?? ''));
+  $login = preg_replace('/[^a-z0-9_]/', '', $login);
+
+  if (!$login) json_err('login required', 400);
+
+  try {
+    // Verify this login actually exists and has clips
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM clips WHERE login = ? AND blocked = FALSE");
+    $stmt->execute([$login]);
+    if ((int)$stmt->fetchColumn() === 0) {
+      json_err('No ClipTV library found for that login', 404);
+    }
+
+    // Link twitch_id to this login in channel_settings
+    $stmt = $pdo->prepare("
+      INSERT INTO channel_settings (login, twitch_id, updated_at)
+      VALUES (?, ?, NOW())
+      ON CONFLICT (login) DO UPDATE SET twitch_id = EXCLUDED.twitch_id, updated_at = NOW()
+    ");
+    $stmt->execute([$login, $channel_id]);
+
+    json_ok(['success' => true, 'login' => $login, 'linked' => true]);
+
+  } catch (PDOException $e) {
+    error_log('extension_api settings error: ' . $e->getMessage());
+    json_err('Database error', 500);
+  }
+}
+
 json_err('Unknown action', 400);
