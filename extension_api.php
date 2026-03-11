@@ -318,7 +318,7 @@ if ($action === 'settings' && $method === 'POST') {
     $stmt = $pdo->prepare("SELECT COUNT(*) FROM clips WHERE login = ? AND blocked = FALSE");
     $stmt->execute([$login]);
     if ((int)$stmt->fetchColumn() === 0) {
-      json_err('No ClipTV library found for that login', 404);
+      json_err('No ClipTV library found for that login. Make sure your clips are archived on ClipTV first.', 422);
     }
 
     // Link twitch_id to this login in channel_settings

@@ -32,6 +32,9 @@
   const playBtn           = document.getElementById('playBtn');
   const playerTitle       = document.getElementById('playerTitle');
   const playerMeta        = document.getElementById('playerMeta');
+  const noVideoState      = document.getElementById('noVideoState');
+  const noVideoThumb      = document.getElementById('noVideoThumb');
+  const watchOnTwitchBtn  = document.getElementById('watchOnTwitchBtn');
 
   // ── Show/hide state panels ─────────────────────────────────────────────────
   function showLoading() {
@@ -73,6 +76,7 @@
 
     // Update video source
     if (clip.video_url) {
+      noVideoState.style.display = 'none';
       clipVideo.src = clip.video_url;
       clipVideo.play().catch(() => {});
       playBtn.textContent = '⏸';
@@ -80,6 +84,9 @@
       clipVideo.removeAttribute('src');
       clipVideo.load();
       playBtn.textContent = '▶';
+      noVideoThumb.src = clip.thumbnail_url || '';
+      watchOnTwitchBtn.href = clip.clip_url || '#';
+      noVideoState.style.display = '';
     }
 
     // Update info

@@ -104,6 +104,33 @@ html, body {
   cursor: pointer;
 }
 
+.ext-player-novideo {
+  position: absolute;
+  top: 0; left: 0;
+  width: 318px; height: 179px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.ext-player-novideo-thumb {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  opacity: 0.5;
+}
+
+.ext-player-novideo-btn {
+  position: relative;
+  font-size: 12px;
+  padding: 7px 14px;
+  text-decoration: none;
+  z-index: 1;
+}
+
 .ext-player:hover .ext-player-overlay { opacity: 1; }
 
 .ext-play-btn {
