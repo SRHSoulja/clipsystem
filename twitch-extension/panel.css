@@ -232,6 +232,8 @@ html, body {
 }
 .ext-search-input:focus { border-color: var(--accent); }
 
+.ext-search-clipper { font-size: 11px; padding: 4px 8px; }
+
 .ext-search-select {
   flex: 1;
   min-width: 0;

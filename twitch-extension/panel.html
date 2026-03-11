@@ -49,9 +49,10 @@
     </div>
     <div class="ext-search-filters">
       <select class="ext-search-select" id="searchSort">
-        <option value="views">Top</option>
-        <option value="date">Recent</option>
+        <option value="views">Most Viewed</option>
         <option value="trending">Trending</option>
+        <option value="date">Newest</option>
+        <option value="oldest">Oldest</option>
       </select>
       <select class="ext-search-select" id="searchDuration">
         <option value="">Any length</option>
@@ -63,6 +64,7 @@
         <option value="">All games</option>
       </select>
     </div>
+    <input class="ext-search-input ext-search-clipper" id="searchClipper" type="text" placeholder="Clipped by…">
   </div>
 
   <!-- Clip queue -->
@@ -92,7 +94,7 @@
 </div>
 
 <script src="https://extension-files.twitch.tv/helper/v1/twitch-ext.min.js"></script>
-<script src="common.js?v=8"></script>
-<script src="panel.js?v=8"></script>
+<script src="common.js?v=9"></script>
+<script src="panel.js?v=9"></script>
 </body>
 </html>

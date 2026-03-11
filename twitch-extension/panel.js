@@ -34,6 +34,7 @@
   const searchSort        = document.getElementById('searchSort');
   const searchDuration    = document.getElementById('searchDuration');
   const searchGame        = document.getElementById('searchGame');
+  const searchClipper     = document.getElementById('searchClipper');
   const fullSiteBtn       = document.getElementById('fullSiteBtn');
   const clipVideo         = document.getElementById('clipVideo');
   const playerOverlay     = document.getElementById('playerOverlay');
@@ -282,6 +283,7 @@
       searchDuration.value = '';
       searchGame.value = '';
       searchGame.style.display = '';
+      searchClipper.value = '';
       searchInput.focus();
       showSearchPrompt();
       loadGames();
@@ -298,10 +300,11 @@
 
   // Returns true if enough input is present to run a filtered query
   function hasSearchInput() {
-    const q      = searchInput.value.trim();
-    const gameId = searchGame.value;
-    const dur    = searchDuration.value;
-    return q.length >= 2 || gameId !== '' || dur !== '';
+    const q       = searchInput.value.trim();
+    const gameId  = searchGame.value;
+    const dur     = searchDuration.value;
+    const clipper = searchClipper.value.trim();
+    return q.length >= 2 || gameId !== '' || dur !== '' || clipper.length >= 2;
   }
 
   function showSearchPrompt() {
@@ -341,6 +344,19 @@
     else if (!searchInput.value.trim() && !searchDuration.value) showSearchPrompt();
   });
 
+  searchClipper.addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    if (!hasSearchInput()) { showSearchPrompt(); return; }
+    searchTimer = setTimeout(() => runSearch(), 500);
+  });
+
+  searchClipper.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      clearTimeout(searchTimer);
+      if (hasSearchInput()) runSearch();
+    }
+  });
+
   searchClose.addEventListener('click', () => {
     searchBar.classList.remove('visible');
     tabBar.style.display = '';
@@ -354,11 +370,13 @@
     const sort     = searchSort.value || 'views';
     const duration = searchDuration.value;
     const gameId   = searchGame.value;
+    const clipper  = searchClipper.value.trim();
 
     let url = `/extension_api.php?action=search&sort=${encodeURIComponent(sort)}`;
-    if (q.length >= 2) url += `&q=${encodeURIComponent(q)}`;
-    if (duration)      url += `&duration=${encodeURIComponent(duration)}`;
-    if (gameId)        url += `&game_id=${encodeURIComponent(gameId)}`;
+    if (q.length >= 2)      url += `&q=${encodeURIComponent(q)}`;
+    if (duration)           url += `&duration=${encodeURIComponent(duration)}`;
+    if (gameId)             url += `&game_id=${encodeURIComponent(gameId)}`;
+    if (clipper.length >= 2) url += `&clipper=${encodeURIComponent(clipper)}`;
 
     clipList.innerHTML = `<div class="ext-status" style="height:auto;padding:20px"><div class="ext-spinner"></div></div>`;
     try {

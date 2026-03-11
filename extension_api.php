@@ -288,17 +288,20 @@ if ($action === 'search' && $method === 'GET') {
   if (!$login) json_err('Channel not registered with ClipTV', 404);
 
   $q        = trim($_GET['q'] ?? '');
-  $sort     = in_array($_GET['sort'] ?? '', ['views', 'date', 'trending']) ? $_GET['sort'] : 'views';
+  $sort     = in_array($_GET['sort'] ?? '', ['views', 'date', 'oldest', 'trending']) ? $_GET['sort'] : 'views';
   $duration = in_array($_GET['duration'] ?? '', ['short', 'medium', 'long']) ? $_GET['duration'] : '';
   $gameId   = preg_replace('/[^a-zA-Z0-9_]/', '', $_GET['game_id'] ?? '');
+  $clipper  = trim($_GET['clipper'] ?? '');
   $limit    = 20;
 
   // Require at least a query or a filter — no open-ended unfiltered browse
-  if (strlen($q) < 2 && !$gameId && !$duration) {
+  if (strlen($q) < 2 && !$gameId && !$duration && !$clipper) {
     json_err('Provide a search term or select a filter', 400);
   }
-  // Short query only invalid when no filter is helping narrow results
-  if (strlen($q) === 1) json_err('Query too short', 400);
+  // Single-char query only valid when paired with another filter
+  if (strlen($q) === 1 && !$gameId && !$duration && !$clipper) {
+    json_err('Query too short', 400);
+  }
 
   $wheres = ['c.login = ?', 'c.blocked = FALSE'];
   $params = [$login];
@@ -308,6 +311,12 @@ if ($action === 'search' && $method === 'GET') {
     $like = '%' . $q . '%';
     $wheres[] = '(c.title ILIKE ? OR c.creator_name ILIKE ? OR g.name ILIKE ?)';
     $params[] = $like; $params[] = $like; $params[] = $like;
+  }
+
+  // Clipper filter — who created/clipped the clip
+  if ($clipper) {
+    $wheres[] = 'c.creator_name ILIKE ?';
+    $params[] = '%' . $clipper . '%';
   }
 
   // Duration filter
@@ -325,12 +334,14 @@ if ($action === 'search' && $method === 'GET') {
     $params[] = $gameId;
   }
 
-  // Trending: views-per-day ratio, limited to last 90 days
+  // Sort order
   if ($sort === 'trending') {
     $wheres[] = "c.created_at > NOW() - INTERVAL '90 days'";
     $order = "c.view_count::float / GREATEST(1, EXTRACT(EPOCH FROM (NOW() - c.created_at)) / 86400) DESC";
   } elseif ($sort === 'date') {
     $order = 'c.created_at DESC';
+  } elseif ($sort === 'oldest') {
+    $order = 'c.created_at ASC';
   } else {
     $order = 'c.view_count DESC';
   }
