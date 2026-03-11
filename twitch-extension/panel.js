@@ -298,6 +298,9 @@
     if (channelInfo) {
       currentSort = settings.ext_sort || currentSort;
       loadClips(currentSort);
+    } else if (authToken) {
+      // Config loaded after onAuthorized — retry init with correct settings
+      init();
     }
   });
 
