@@ -1,0 +1,268 @@
+/* panel.css — ClipTV Twitch Panel Extension */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #0e0e10;
+  --surface:   #18181b;
+  --border:    #2a2a2d;
+  --text:      #efeff1;
+  --text-muted:#adadb8;
+  --accent:    #9147ff;
+  --accent-h:  #772ce8;
+  --thumb-bg:  #26262c;
+  --card-h:    #26262c;
+}
+
+[data-theme="light"] {
+  --bg:        #f7f7f8;
+  --surface:   #ffffff;
+  --border:    #dedee3;
+  --text:      #0e0e10;
+  --text-muted:#53535f;
+  --thumb-bg:  #e8e8ea;
+  --card-h:    #f0f0f2;
+}
+
+html, body {
+  width: 318px;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+  overflow: hidden;
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+.ext-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px 8px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.ext-logo {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.ext-channel-name {
+  font-weight: 600;
+  font-size: 13px;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Tabs ────────────────────────────────────────────────────────────────── */
+.ext-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.ext-tab {
+  flex: 1;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 8px 4px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  letter-spacing: 0.02em;
+}
+
+.ext-tab:hover { color: var(--text); }
+.ext-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* ── Search bar (replaces tab bar in search mode) ────────────────────────── */
+.ext-search-bar {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.ext-search-bar.visible { display: flex; }
+
+.ext-search-input {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 12px;
+  padding: 5px 8px;
+  outline: none;
+}
+
+.ext-search-input:focus { border-color: var(--accent); }
+
+.ext-search-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 2px 4px;
+}
+
+/* ── Clip list ───────────────────────────────────────────────────────────── */
+.ext-clip-list {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.ext-clip-list::-webkit-scrollbar { width: 4px; }
+.ext-clip-list::-webkit-scrollbar-track { background: transparent; }
+.ext-clip-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.clip-card {
+  display: flex;
+  gap: 9px;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.1s;
+  text-decoration: none;
+  color: inherit;
+}
+
+.clip-card:hover { background: var(--card-h); }
+
+.clip-thumb {
+  width: 72px;
+  height: 40px;
+  border-radius: 3px;
+  object-fit: cover;
+  background: var(--thumb-bg);
+  flex-shrink: 0;
+}
+
+.clip-thumb-placeholder {
+  width: 72px;
+  height: 40px;
+  border-radius: 3px;
+  background: var(--thumb-bg);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+
+.clip-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+}
+
+.clip-title {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.3;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.clip-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* ── Status messages ─────────────────────────────────────────────────────── */
+.ext-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 10px;
+  padding: 20px;
+  text-align: center;
+}
+
+.ext-status-icon { font-size: 32px; }
+.ext-status-title { font-weight: 600; font-size: 13px; }
+.ext-status-body { color: var(--text-muted); font-size: 12px; line-height: 1.5; }
+
+.ext-btn {
+  display: inline-block;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px 14px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.15s;
+}
+
+.ext-btn:hover { background: var(--accent-h); }
+
+/* ── Spinner ─────────────────────────────────────────────────────────────── */
+.ext-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Footer ──────────────────────────────────────────────────────────────── */
+.ext-footer {
+  border-top: 1px solid var(--border);
+  padding: 8px 12px;
+  flex-shrink: 0;
+}
+
+.ext-footer-btn {
+  display: block;
+  width: 100%;
+  text-align: center;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+  padding: 6px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.ext-footer-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── Layout shell ────────────────────────────────────────────────────────── */
+.ext-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
