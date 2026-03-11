@@ -19,13 +19,10 @@ TWITCH_EXT_SECRET=<your base64 extension secret from Twitch dev console>
 
 ### 3. Local Test
 
-1. Run `ngrok http 8000` (or expose your local server another way).
-2. Run `php -S localhost:8000` from the clipsystem root.
-3. In the Twitch dev console → **Extension Settings** → **Testing Base URI**, set it to your ngrok URL (e.g. `https://abc123.ngrok.io/twitch-extension/`).
-4. Enable **Local Test** mode in the developer console.
-5. Install the extension on a test channel via **Extension Manager**.
-
-Panel files are served from `twitch-extension/` relative to the Testing Base URI.
+1. Run `php -S localhost:8080 -t twitch-extension/` from the clipsystem root.
+   - This serves the `twitch-extension/` folder as root at port 8080, matching the Base URI Twitch has configured (`https://localhost:8080/`).
+2. Enable **Local Test** mode in the Twitch developer console.
+3. Install the extension on your test channel via **Extension Manager** → **View on Twitch and Install**.
 
 ### 4. Hosted Test
 
