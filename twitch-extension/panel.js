@@ -283,7 +283,7 @@
       searchGame.value = '';
       searchGame.style.display = '';
       searchInput.focus();
-      clipList.innerHTML = '';
+      showSearchPrompt();
       loadGames();
       return;
     }
@@ -295,34 +295,50 @@
   });
 
   // ── Search ─────────────────────────────────────────────────────────────────
+
+  // Returns true if enough input is present to run a filtered query
+  function hasSearchInput() {
+    const q      = searchInput.value.trim();
+    const gameId = searchGame.value;
+    const dur    = searchDuration.value;
+    return q.length >= 2 || gameId !== '' || dur !== '';
+  }
+
+  function showSearchPrompt() {
+    clipList.innerHTML = `<div class="ext-status" style="height:auto;padding:20px">
+      <div class="ext-status-body" style="color:var(--text-muted)">Type to search or pick a category</div>
+    </div>`;
+  }
+
   searchInput.addEventListener('input', () => {
     clearTimeout(searchTimer);
     const q = searchInput.value.trim();
-    if (q.length < 2) { clipList.innerHTML = ''; return; }
-    searchTimer = setTimeout(() => runSearch(q), 400);
+    if (q.length === 1 && !searchGame.value && !searchDuration.value) {
+      clipList.innerHTML = ''; return;
+    }
+    if (!hasSearchInput()) { showSearchPrompt(); return; }
+    searchTimer = setTimeout(() => runSearch(), 400);
   });
 
   searchInput.addEventListener('keydown', e => {
     if (e.key === 'Enter') {
       clearTimeout(searchTimer);
-      const q = searchInput.value.trim();
-      if (q.length >= 2) runSearch(q);
+      if (hasSearchInput()) runSearch();
     }
   });
 
   searchSort.addEventListener('change', () => {
-    const q = searchInput.value.trim();
-    if (q.length >= 2) runSearch(q);
+    if (hasSearchInput()) runSearch();
   });
 
   searchDuration.addEventListener('change', () => {
-    const q = searchInput.value.trim();
-    if (q.length >= 2) runSearch(q);
+    if (hasSearchInput()) runSearch();
+    else if (!searchInput.value.trim() && !searchGame.value) showSearchPrompt();
   });
 
   searchGame.addEventListener('change', () => {
-    const q = searchInput.value.trim();
-    if (q.length >= 2) runSearch(q);
+    if (hasSearchInput()) runSearch();
+    else if (!searchInput.value.trim() && !searchDuration.value) showSearchPrompt();
   });
 
   searchClose.addEventListener('click', () => {
@@ -333,14 +349,16 @@
     loadClips(currentSort);
   });
 
-  async function runSearch(q) {
+  async function runSearch() {
+    const q        = searchInput.value.trim();
     const sort     = searchSort.value || 'views';
     const duration = searchDuration.value;
     const gameId   = searchGame.value;
 
-    let url = `/extension_api.php?action=search&q=${encodeURIComponent(q)}&sort=${encodeURIComponent(sort)}`;
-    if (duration) url += `&duration=${encodeURIComponent(duration)}`;
-    if (gameId)   url += `&game_id=${encodeURIComponent(gameId)}`;
+    let url = `/extension_api.php?action=search&sort=${encodeURIComponent(sort)}`;
+    if (q.length >= 2) url += `&q=${encodeURIComponent(q)}`;
+    if (duration)      url += `&duration=${encodeURIComponent(duration)}`;
+    if (gameId)        url += `&game_id=${encodeURIComponent(gameId)}`;
 
     clipList.innerHTML = `<div class="ext-status" style="height:auto;padding:20px"><div class="ext-spinner"></div></div>`;
     try {

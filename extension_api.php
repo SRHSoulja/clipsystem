@@ -288,20 +288,27 @@ if ($action === 'search' && $method === 'GET') {
   if (!$login) json_err('Channel not registered with ClipTV', 404);
 
   $q        = trim($_GET['q'] ?? '');
-  if (strlen($q) < 2) json_err('Query too short', 400);
-
   $sort     = in_array($_GET['sort'] ?? '', ['views', 'date', 'trending']) ? $_GET['sort'] : 'views';
   $duration = in_array($_GET['duration'] ?? '', ['short', 'medium', 'long']) ? $_GET['duration'] : '';
   $gameId   = preg_replace('/[^a-zA-Z0-9_]/', '', $_GET['game_id'] ?? '');
   $limit    = 20;
 
+  // Require at least a query or a filter — no open-ended unfiltered browse
+  if (strlen($q) < 2 && !$gameId && !$duration) {
+    json_err('Provide a search term or select a filter', 400);
+  }
+  // Short query only invalid when no filter is helping narrow results
+  if (strlen($q) === 1) json_err('Query too short', 400);
+
   $wheres = ['c.login = ?', 'c.blocked = FALSE'];
   $params = [$login];
 
-  // Text search across title, creator, game name
-  $like = '%' . $q . '%';
-  $wheres[] = '(c.title ILIKE ? OR c.creator_name ILIKE ? OR g.name ILIKE ?)';
-  $params[] = $like; $params[] = $like; $params[] = $like;
+  // Text search across title, creator, game name (optional — filters alone are enough)
+  if (strlen($q) >= 2) {
+    $like = '%' . $q . '%';
+    $wheres[] = '(c.title ILIKE ? OR c.creator_name ILIKE ? OR g.name ILIKE ?)';
+    $params[] = $like; $params[] = $like; $params[] = $like;
+  }
 
   // Duration filter
   if ($duration === 'short') {
