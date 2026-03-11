@@ -46,7 +46,10 @@ function verify_twitch_jwt(string $token): array {
   if (!$secret_b64) {
     throw new Exception('TWITCH_EXT_SECRET not configured');
   }
-  $secret = base64_decode($secret_b64);
+  $secret = base64_decode($secret_b64, true);
+  if ($secret === false) {
+    throw new Exception('Invalid TWITCH_EXT_SECRET encoding');
+  }
 
   $parts = explode('.', $token);
   if (count($parts) !== 3) {
@@ -57,21 +60,21 @@ function verify_twitch_jwt(string $token): array {
 
   // Verify signature
   $expected_sig = hash_hmac('sha256', "$header_b64.$payload_b64", $secret, true);
-  $provided_sig = base64_decode(strtr($sig_b64, '-_', '+/') . str_repeat('=', (4 - strlen($sig_b64) % 4) % 4));
+  $provided_sig = base64_decode(strtr($sig_b64, '-_', '+/') . str_repeat('=', (4 - strlen($sig_b64) % 4) % 4), true);
 
   if (!hash_equals($expected_sig, $provided_sig)) {
     throw new Exception('Invalid JWT signature');
   }
 
   // Decode payload
-  $payload_json = base64_decode(strtr($payload_b64, '-_', '+/') . str_repeat('=', (4 - strlen($payload_b64) % 4) % 4));
+  $payload_json = base64_decode(strtr($payload_b64, '-_', '+/') . str_repeat('=', (4 - strlen($payload_b64) % 4) % 4), true);
   $payload = json_decode($payload_json, true);
-  if (!$payload) {
+  if (!is_array($payload)) {
     throw new Exception('Could not decode JWT payload');
   }
 
   // Check expiry
-  if (isset($payload['exp']) && $payload['exp'] < time()) {
+  if (!isset($payload['exp']) || $payload['exp'] < time()) {
     throw new Exception('JWT expired');
   }
 
@@ -141,16 +144,17 @@ if ($action === 'channel' && $method === 'GET') {
   }
 
   // Verify they actually have clips
-  $count = 0;
+  $count = null;
   try {
     $stmt = $pdo->prepare("SELECT COUNT(*) FROM clips WHERE login = ? AND blocked = FALSE");
     $stmt->execute([$login]);
     $count = (int)$stmt->fetchColumn();
-    if ($count === 0) {
-      json_ok(['registered' => false, 'reason' => 'no_clips']);
-    }
   } catch (PDOException $e) {
     error_log('extension_api clip count error: ' . $e->getMessage());
+    json_err('Database error', 500);
+  }
+  if ($count === 0) {
+    json_ok(['registered' => false, 'reason' => 'no_clips']);
   }
 
   // Fetch display info
