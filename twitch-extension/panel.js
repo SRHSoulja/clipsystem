@@ -81,10 +81,8 @@
 
   // ── Copy clip URL to clipboard ─────────────────────────────────────────────
   function copyText(text) {
-    // Try modern API first, fall back to execCommand for sandboxed iframes
-    if (navigator.clipboard?.writeText) {
-      return navigator.clipboard.writeText(text);
-    }
+    // navigator.clipboard is permission-denied in Twitch extension sandboxed iframes,
+    // so use execCommand directly — it works on user-gesture clicks in sandboxed contexts.
     return new Promise((resolve, reject) => {
       const ta = document.createElement('textarea');
       ta.value = text;
