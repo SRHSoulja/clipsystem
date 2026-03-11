@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ClipTV Panel Settings</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0e0e10; --surface: #18181b; --border: #2a2a2d;
+      --text: #efeff1; --text-muted: #adadb8;
+      --accent: #9147ff; --accent-h: #772ce8;
+    }
+    [data-theme="light"] {
+      --bg: #f7f7f8; --surface: #fff; --border: #dedee3;
+      --text: #0e0e10; --text-muted: #53535f;
+    }
+
+    body {
+      background: var(--bg); color: var(--text);
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 13px; padding: 16px; min-height: 100vh;
+    }
+
+    h1 { font-size: 15px; font-weight: 700; margin-bottom: 16px; }
+
+    .field { margin-bottom: 16px; }
+    .field label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 12px; color: var(--text-muted); letter-spacing: 0.05em; text-transform: uppercase; }
+
+    .radio-group { display: flex; gap: 8px; flex-wrap: wrap; }
+    .radio-opt { display: flex; align-items: center; gap: 5px; cursor: pointer; font-size: 13px; }
+    .radio-opt input { accent-color: var(--accent); }
+
+    select, input[type="number"] {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 4px; color: var(--text); font-size: 13px;
+      padding: 6px 10px; width: 100%; outline: none;
+    }
+    select:focus, input[type="number"]:focus { border-color: var(--accent); }
+
+    .toggle-row { display: flex; align-items: center; justify-content: space-between; }
+    .toggle { position: relative; width: 36px; height: 20px; }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider {
+      position: absolute; inset: 0; background: var(--border);
+      border-radius: 20px; cursor: pointer; transition: background 0.2s;
+    }
+    .toggle-slider::before {
+      content: ''; position: absolute; width: 14px; height: 14px;
+      left: 3px; top: 3px; background: white; border-radius: 50%;
+      transition: transform 0.2s;
+    }
+    .toggle input:checked + .toggle-slider { background: var(--accent); }
+    .toggle input:checked + .toggle-slider::before { transform: translateX(16px); }
+
+    .account-box {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 6px; padding: 12px; margin-bottom: 16px;
+    }
+    .account-status { font-size: 12px; margin-bottom: 8px; }
+    .account-input-row { display: flex; gap: 6px; }
+    .account-input-row input {
+      flex: 1; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 4px; color: var(--text); font-size: 12px;
+      padding: 5px 8px; outline: none;
+    }
+    .account-input-row input:focus { border-color: var(--accent); }
+
+    .btn {
+      background: var(--accent); color: #fff; border: none;
+      border-radius: 4px; font-size: 12px; font-weight: 600;
+      padding: 7px 14px; cursor: pointer; transition: background 0.15s;
+    }
+    .btn:hover { background: var(--accent-h); }
+
+    .divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+
+    #saveStatus { font-size: 12px; color: var(--text-muted); margin-top: 8px; min-height: 18px; }
+    .status-ok { color: #00c896; }
+    .status-err { color: #f04747; }
+  </style>
+</head>
+<body data-theme="dark">
+
+  <h1>📼 ClipTV Panel Settings</h1>
+
+  <div class="account-box">
+    <div class="account-status" id="accountStatus">Checking account link…</div>
+    <div class="account-input-row" id="linkRow" style="display:none">
+      <input id="loginInput" type="text" placeholder="Your Twitch username" autocomplete="off">
+      <button class="btn" id="linkBtn">Link</button>
+    </div>
+  </div>
+
+  <div class="field">
+    <label>Default sort</label>
+    <div class="radio-group">
+      <label class="radio-opt"><input type="radio" name="sort" value="recent" checked> Recent</label>
+      <label class="radio-opt"><input type="radio" name="sort" value="top"> Top</label>
+      <label class="radio-opt"><input type="radio" name="sort" value="random"> Random</label>
+    </div>
+  </div>
+
+  <div class="field">
+    <label>Clips shown</label>
+    <input type="number" id="clipCount" min="5" max="25" value="10">
+  </div>
+
+  <div class="field">
+    <div class="toggle-row">
+      <span>Autoplay</span>
+      <label class="toggle">
+        <input type="checkbox" id="autoplay">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+  </div>
+
+  <div class="field">
+    <div class="toggle-row">
+      <span>Featured clips</span>
+      <label class="toggle">
+        <input type="checkbox" id="featured">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <button class="btn" id="saveBtn">Save Settings</button>
+  <div id="saveStatus"></div>
+
+  <script src="https://extension-files.twitch.tv/helper/v1/twitch-ext.min.js"></script>
+  <script src="common.js"></script>
+  <script src="config.js"></script>
+</body>
+</html>
