@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ClipTV</title>
-  <link rel="stylesheet" href="panel.css?v=5">
+  <link rel="stylesheet" href="panel.css?v=6">
 </head>
 <body data-theme="dark">
 
@@ -43,7 +43,11 @@
 
   <!-- Search bar (hidden until search tab clicked) -->
   <div class="ext-search-bar" id="searchBar">
-    <input class="ext-search-input" id="searchInput" type="text" placeholder="Search clips…" autocomplete="off">
+    <input class="ext-search-input" id="searchInput" type="search" placeholder="Search clips…">
+    <select class="ext-search-sort" id="searchSort">
+      <option value="views">Top</option>
+      <option value="date">Recent</option>
+    </select>
     <button class="ext-search-close" id="searchClose" title="Close">✕</button>
   </div>
 
@@ -74,7 +78,7 @@
 </div>
 
 <script src="https://extension-files.twitch.tv/helper/v1/twitch-ext.min.js"></script>
-<script src="common.js?v=5"></script>
-<script src="panel.js?v=5"></script>
+<script src="common.js?v=6"></script>
+<script src="panel.js?v=6"></script>
 </body>
 </html>

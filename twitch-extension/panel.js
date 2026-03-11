@@ -26,6 +26,7 @@
   const searchBar         = document.getElementById('searchBar');
   const searchInput       = document.getElementById('searchInput');
   const searchClose       = document.getElementById('searchClose');
+  const searchSort        = document.getElementById('searchSort');
   const fullSiteBtn       = document.getElementById('fullSiteBtn');
   const clipVideo         = document.getElementById('clipVideo');
   const playerOverlay     = document.getElementById('playerOverlay');
@@ -223,7 +224,20 @@
     clearTimeout(searchTimer);
     const q = searchInput.value.trim();
     if (q.length < 2) { clipList.innerHTML = ''; return; }
-    searchTimer = setTimeout(() => runSearch(q), 400);
+    searchTimer = setTimeout(() => runSearch(q, searchSort.value), 400);
+  });
+
+  searchInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      clearTimeout(searchTimer);
+      const q = searchInput.value.trim();
+      if (q.length >= 2) runSearch(q, searchSort.value);
+    }
+  });
+
+  searchSort.addEventListener('change', () => {
+    const q = searchInput.value.trim();
+    if (q.length >= 2) runSearch(q, searchSort.value);
   });
 
   searchClose.addEventListener('click', () => {
@@ -234,11 +248,11 @@
     loadClips(currentSort);
   });
 
-  async function runSearch(q) {
+  async function runSearch(q, sort = 'views') {
     clipList.innerHTML = `<div class="ext-status" style="height:auto;padding:20px"><div class="ext-spinner"></div></div>`;
     try {
       const data = await extFetch(
-        apiUrl(`/extension_api.php?action=search&q=${encodeURIComponent(q)}`),
+        apiUrl(`/extension_api.php?action=search&q=${encodeURIComponent(q)}&sort=${encodeURIComponent(sort)}`),
         authToken
       );
       renderClips(data.clips);
@@ -278,6 +292,10 @@
       tabBar.querySelectorAll('.ext-tab').forEach(t => {
         t.classList.toggle('active', t.dataset.sort === currentSort);
       });
+
+      // Reset search state in case init() re-ran while search was open
+      tabBar.style.display = '';
+      searchBar.classList.remove('visible');
 
       showShell();
       loadClips(currentSort);

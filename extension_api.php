@@ -258,7 +258,10 @@ if ($action === 'search' && $method === 'GET') {
   $q = trim($_GET['q'] ?? '');
   if (strlen($q) < 2) json_err('Query too short', 400);
 
+  $sort  = ($_GET['sort'] ?? '') === 'date' ? 'date' : 'views';
   $limit = 20;
+
+  $order = $sort === 'date' ? 'c.created_at DESC' : 'c.view_count DESC';
 
   try {
     $stmt = $pdo->prepare("
@@ -269,7 +272,7 @@ if ($action === 'search' && $method === 'GET') {
       LEFT JOIN games_cache g ON c.game_id = g.game_id
       WHERE c.login = ? AND c.blocked = FALSE
         AND (c.title ILIKE ? OR c.creator_name ILIKE ? OR g.name ILIKE ?)
-      ORDER BY c.view_count DESC
+      ORDER BY {$order}
       LIMIT ?
     ");
     $like = '%' . $q . '%';
