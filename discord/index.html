@@ -654,7 +654,6 @@
     #clipActions .action-btn:hover { background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.5); color: #fff; }
     #clipActions .action-btn:active { transform: scale(0.95); }
     #clipActions .action-btn svg { width: 16px; height: 16px; flex-shrink: 0; }
-    #clipActions .action-btn.downloading { border-color: rgba(34, 197, 94, 0.6); color: #4ade80; }
     #clipActions .action-btn.copied { border-color: rgba(34, 197, 94, 0.6); color: #4ade80; }
     @keyframes clipActionCopied {
       0% { transform: scale(1); }
@@ -1247,10 +1246,6 @@
   </div>
 
   <div id="clipActions">
-    <button class="action-btn" id="dlBtn" title="Download this clip">
-      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
-      <span>Download</span>
-    </button>
     <button class="action-btn" id="shareClipTVBtn" title="Share this ClipTV channel">
       <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>
       <span>Share ClipTV</span>
@@ -2165,7 +2160,7 @@ if (window.__discordResolve) window.__discordResolve();
     // If HUD is locked, don't show controls
     if (hudLocked) return;
     // Ignore taps on interactive elements - let them handle their own events
-    if (e.target.closest('#volumeControl, #volumeBtn, #volumeSlider, #unmuteOverlay, #skipBtn, #remoteBtn, #remoteSheet, #viewerControls, #voteUp, #voteDown, #loginPrompt, #clipRequestBanner, #chatPanel, #chatBtn, #backBtn, #channelSwitchBtn, #clipActions, #dlBtn, #copyLinkBtn, #shareClipTVBtn, #bugReportBtn')) {
+    if (e.target.closest('#volumeControl, #volumeBtn, #volumeSlider, #unmuteOverlay, #skipBtn, #remoteBtn, #remoteSheet, #viewerControls, #voteUp, #voteDown, #loginPrompt, #clipRequestBanner, #chatPanel, #chatBtn, #backBtn, #channelSwitchBtn, #clipActions, #copyLinkBtn, #shareClipTVBtn, #bugReportBtn')) {
       // But still reset the hide timeout so controls stay visible while interacting
       if (controlsVisible && hideTimeout) {
         clearTimeout(hideTimeout);
@@ -4077,25 +4072,6 @@ if (window.__discordResolve) window.__discordResolve();
     }
     const prevClip = clipHistory.pop();
     requestClip(prevClip);
-  });
-
-  // === Download Button ===
-  // Discord Activities can't trigger downloads, so open the clip URL externally
-  document.getElementById('dlBtn').addEventListener('click', async (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const clipId = currentClipData?.clip_id;
-    if (!clipId) return;
-    const clipUrl = `https://clips.twitch.tv/${clipId}`;
-    try {
-      if (discordSdk) {
-        await discordSdk.commands.openExternalLink({ url: clipUrl });
-      } else {
-        window.open(clipUrl, '_blank');
-      }
-    } catch (err) {
-      debugLog("openExternalLink failed: " + err, "warn");
-    }
   });
 
   // === Copy Link Button ===
