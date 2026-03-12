@@ -2335,7 +2335,12 @@ if (window.__discordResolve) window.__discordResolve();
   // Use longer intervals and higher thresholds — Discord proxy adds latency
   let consecutiveFreezeChecks = 0;
   setInterval(() => {
-    if (isSwitching || player.paused || player.ended || player.seeking) return;
+    // Check ended FIRST — ended video is always paused, so must come before paused bail-out
+    if (player.ended) {
+      if (isController && !pendingRequest) controllerAdvance();
+      return;
+    }
+    if (isSwitching || player.paused || player.seeking) return;
     if (!canSkipClip()) return; // Respect grace period
     if (player.readyState < 3) return;
 
@@ -3215,8 +3220,8 @@ if (window.__discordResolve) window.__discordResolve();
     // Also verify we're near the end of the video
     const duration = player.duration || 30;
     const currentTime = player.currentTime || 0;
-    if (currentTime < duration - 2 && currentTime < 5) {
-      // Ended too early and haven't played much - likely a glitch
+    if (currentTime < duration - 2 && currentTime < 1) {
+      // Only ignore if we've barely started (< 1s) — avoids false-positive at t=0
       debugLog(`Ignoring ended at ${currentTime.toFixed(1)}s of ${duration.toFixed(1)}s`, "warn");
       return;
     }

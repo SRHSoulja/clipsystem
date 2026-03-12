@@ -1940,15 +1940,19 @@
   // Periodic playback health check - catch silent freezes AND near-end stuck clips
   let consecutiveFreezeChecks = 0;
   setInterval(() => {
+    // Check ended FIRST — ended video is always paused, so must come before paused bail-out
+    if (player.ended) {
+      if (isController && !pendingRequest) controllerAdvance();
+      return;
+    }
     if (isSwitching || player.paused || player.seeking) return;
 
     const now = Date.now();
     const duration = player.duration || 0;
     const currentTime = player.currentTime || 0;
 
-    // CHECK 1: Video ended but onended didn't fire (or clip is past its duration)
-    // This catches the "short clip sits there" problem
-    if (player.ended || (duration > 0 && currentTime >= duration - 0.3)) {
+    // CHECK 1: Clip is past its duration but ended event didn't fire
+    if (duration > 0 && currentTime >= duration - 0.3) {
       debugLog(`Clip finished (${currentTime.toFixed(1)}s / ${duration.toFixed(1)}s) - advancing`, "warn");
       consecutiveFreezeChecks = 0;
       if (isController && !pendingRequest) {
@@ -2840,8 +2844,8 @@
     const currentTime = player.currentTime || 0;
     const nearEnd = currentTime >= duration - 1.5 || (duration > 0 && currentTime / duration > 0.9);
 
-    if (!nearEnd && currentTime < 5) {
-      // Ended too early and haven't played much - likely a glitch
+    if (!nearEnd && currentTime < 1) {
+      // Only ignore if we've barely started (< 1s) — avoids false-positive at t=0
       debugLog(`Ignoring ended at ${currentTime.toFixed(1)}s of ${duration.toFixed(1)}s`, "warn");
       return;
     }
