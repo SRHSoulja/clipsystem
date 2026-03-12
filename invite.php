@@ -307,7 +307,7 @@ header("Content-Type: text/html; charset=utf-8");
         <div class="feature-emoji">🔍</div>
         <div class="feature-text">
           <h3>Clip Browser</h3>
-          <p>Every clip, organized and searchable through our custom browser. Filter by game, date, clipper, or title. Download clips, share them, find the moment you're looking for.<?php if ($isArchived): ?> <a href="/search/<?= htmlspecialchars($login) ?>">Browse clips</a><?php endif; ?></p>
+          <p>Every clip, organized and searchable through our custom browser. Filter by game, date, clipper, or title. Share clips, find the moment you're looking for in seconds.<?php if ($isArchived): ?> <a href="/search/<?= htmlspecialchars($login) ?>">Browse clips</a><?php endif; ?></p>
         </div>
       </div>
 
@@ -332,6 +332,14 @@ header("Content-Type: text/html; charset=utf-8");
         <div class="feature-text">
           <h3>OBS Source &amp; Playlists</h3>
           <p>A custom OBS browser source that auto-plays your clips on stream. Curate playlists for BRB screens, pre-stream, or highlight reels, and let your mods manage them.</p>
+        </div>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-emoji">📌</div>
+        <div class="feature-text">
+          <h3>Twitch Panel Extension</h3>
+          <p>ClipTV lives right on your Twitch channel page. Viewers can browse and watch your clips without ever leaving Twitch. Sort by recent, top, or random. Search by game, duration, or clipper. Currently in testing — <a href="mailto:contact@gmgnrepeat.com">reach out to get access</a>.</p>
         </div>
       </div>
     </div>
