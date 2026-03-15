@@ -2,6 +2,8 @@
 /**
  * about.php - About the Clip System
  */
+require_once __DIR__ . '/includes/analytics.php';
+track_event('page_load', ['page' => 'about']);
 
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/includes/twitch_oauth.php';

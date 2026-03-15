@@ -8,6 +8,8 @@
 
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/includes/dashboard_auth.php';
+require_once __DIR__ . '/includes/analytics.php';
+track_event('dashboard_visit', ['page' => 'admin']);
 require_once __DIR__ . '/includes/twitch_oauth.php';
 
 header("Content-Type: text/html; charset=utf-8");

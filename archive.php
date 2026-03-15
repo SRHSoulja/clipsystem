@@ -1,11 +1,13 @@
 <?php
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/includes/twitch_oauth.php';
+require_once __DIR__ . '/includes/analytics.php';
 
 $currentUser = getCurrentUser();
 $pdo = get_db_connection();
 $prefillLogin = strtolower(trim($_GET['login'] ?? ''));
 $prefillLogin = preg_replace("/[^a-z0-9_]/", "", $prefillLogin);
+track_event('archive_browse', ['channel' => $prefillLogin ?: 'none']);
 
 header("Content-Type: text/html; charset=utf-8");
 ?>

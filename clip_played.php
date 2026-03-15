@@ -14,6 +14,7 @@ header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { exit(0); }
 
 require_once __DIR__ . '/db_config.php';
+require_once __DIR__ . '/includes/analytics.php';
 
 function clean_login($s){
   $s = strtolower(trim((string)$s));
@@ -70,6 +71,9 @@ try {
       last_played_at = CURRENT_TIMESTAMP
   ");
   $stmt->execute([$login, $clipId]);
+
+  // Track analytics event
+  track_event('clip_play', ['channel' => $login, 'clip_id' => $clipId, 'skipped' => $skipped ? 'yes' : 'no']);
 
   // Record skip event if this was a manual skip (vote-to-skip or mod skip)
   if ($skipped) {

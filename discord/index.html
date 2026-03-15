@@ -1468,6 +1468,13 @@ if (window.__discordResolve) window.__discordResolve();
     discordSdk = new window.DiscordSDK(DISCORD_CLIENT_ID);
     await discordSdk.ready();
 
+    // Track Discord activity launch (fire-and-forget, no PII)
+    fetch('/analytics_track.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event_type: 'discord_launch', metadata: {} })
+    }).catch(() => {});
+
     if (!cachedAuth) statusText.textContent = 'Authorizing...';
     // Authorize with Discord (no redirect_uri for RPC/Activity flow)
     const { code } = await discordSdk.commands.authorize({

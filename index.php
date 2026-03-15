@@ -9,6 +9,8 @@ if (isset($_GET['frame_id']) && isset($_GET['instance_id'])) {
 @include_once __DIR__ . '/bot_launcher.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/includes/twitch_oauth.php';
+require_once __DIR__ . '/includes/analytics.php';
+track_event('page_load', ['page' => 'player']);
 
 // Get current user
 $currentUser = getCurrentUser();
