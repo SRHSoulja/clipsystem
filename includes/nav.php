@@ -96,6 +96,9 @@ $navCurrentPath = $_SERVER['REQUEST_URI'] ?? '/';
             </a>
             <div class="nav-links">
                 <a href="/" class="nav-link <?= $navCurrentPage === 'index' ? 'active' : '' ?>">Home</a>
+                <?php if ($navUser): ?>
+                <a href="/archive" class="nav-link <?= $navCurrentPage === 'archive' ? 'active' : '' ?>">Archive</a>
+                <?php endif; ?>
                 <?php if ($navHasAccess): ?>
                 <a href="/channels" class="nav-link <?= $navCurrentPage === 'my_channels' ? 'active' : '' ?>">Dashboard</a>
                 <?php endif; ?>
@@ -190,6 +193,9 @@ $navCurrentPath = $_SERVER['REQUEST_URI'] ?? '/';
 
     <div class="nav-mobile-menu" id="navMobileMenu">
         <a href="/">Home</a>
+        <?php if ($navUser): ?>
+        <a href="/archive">Archive</a>
+        <?php endif; ?>
         <?php if ($navHasAccess): ?>
         <a href="/channels">Dashboard</a>
         <?php endif; ?>

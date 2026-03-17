@@ -192,76 +192,6 @@ header("Content-Type: text/html; charset=utf-8");
       color: #fff !important;
     }
 
-    /* ── Split CTA ── */
-    .hero-cta {
-      display: flex;
-      gap: 16px;
-      justify-content: center;
-      margin-bottom: 24px;
-    }
-
-    .hero-cta-btn {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 8px;
-      padding: 20px 32px;
-      border-radius: 14px;
-      text-decoration: none;
-      font-size: 16px;
-      font-weight: 600;
-      transition: all 0.2s;
-      min-width: 200px;
-    }
-
-    .hero-cta-btn .cta-label {
-      font-size: 11px;
-      font-weight: 500;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      opacity: 0.7;
-    }
-
-    .hero-cta-primary {
-      background: #9147ff;
-      color: white;
-      border: 2px solid #9147ff;
-    }
-
-    .hero-cta-primary:hover {
-      background: #772ce8;
-      border-color: #772ce8;
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(145,71,255,0.35);
-    }
-
-    .hero-cta-secondary {
-      background: rgba(145,71,255,0.08);
-      color: #bf94ff;
-      border: 2px solid rgba(145,71,255,0.4);
-    }
-
-    .hero-cta-secondary:hover {
-      background: rgba(145,71,255,0.15);
-      border-color: #9147ff;
-      color: #fff;
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(145,71,255,0.2);
-    }
-
-    .hero-divider {
-      color: #3a3a3d;
-      font-size: 13px;
-      display: flex;
-      align-items: center;
-    }
-
-    @media (max-width: 520px) {
-      .hero-cta { flex-direction: column; align-items: center; }
-      .hero-cta-btn { min-width: 260px; }
-      .hero-divider { display: none; }
-    }
-
     .hero-hint {
       font-size: 14px;
       color: #53535f;
@@ -491,25 +421,13 @@ header("Content-Type: text/html; charset=utf-8");
         BRB overlays, chat bot playback, voting, playlists. All built in.
       </p>
 
-      <div class="hero-cta">
-        <a href="#browse" onclick="document.getElementById('streamer').focus();return false;" class="hero-cta-btn hero-cta-primary">
-          <span class="cta-label">Viewer</span>
-          Browse Clips
-        </a>
-        <span class="hero-divider">or</span>
-        <a href="/auth/login.php?return=<?= urlencode('/channels') ?>" class="hero-cta-btn hero-cta-secondary">
-          <span class="cta-label">Streamer</span>
-          Set Up Your Channel
-        </a>
-      </div>
-
       <form class="search-box" onsubmit="goToSearch(event)">
         <input type="text" id="streamer" placeholder="Search a streamer's clips..." autofocus>
-        <button type="submit">Search</button>
+        <button type="submit">Browse Clips</button>
       </form>
 
       <p class="hero-hint">
-        <a href="/about.php">How it works</a> &middot; <a href="/chelp.php">Bot commands</a>
+        Want to add a channel? <a href="/archive">Archive a Channel</a> &middot; <a href="/about.php">How it works</a>
       </p>
 
       <?php if ($totalStreamers > 0): ?>

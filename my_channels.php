@@ -357,7 +357,7 @@ $notArchivedRedirect = isset($_GET['not_archived']) && $_GET['not_archived'] ===
     <?php if ($notArchivedRedirect): ?>
     <div class="warning-banner">
         <p><strong>Channel Not Archived</strong>
-        Your channel doesn't have any clips archived yet. <a href="/apply.php" style="color: white; text-decoration: underline;">Apply for archiving</a> to get started.</p>
+        Your channel doesn't have any clips archived yet. <a href="/archive?login=<?= urlencode(strtolower($currentUser['login'] ?? '')) ?>" style="color: white; text-decoration: underline;">Archive your channel now</a> — it only takes a few minutes.</p>
     </div>
     <?php endif; ?>
 
