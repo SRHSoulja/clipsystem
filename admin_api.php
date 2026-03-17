@@ -8,6 +8,7 @@
 
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/includes/twitch_oauth.php';
+require_once __DIR__ . '/includes/analytics.php';
 
 header("Content-Type: application/json; charset=utf-8");
 header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
@@ -90,6 +91,17 @@ switch ($action) {
                 WHERE id = ?
             ");
             $stmt->execute([$currentUser['login'], $id]);
+
+            // Track streamer setup completion for growth experiment analytics
+            $loginStmt = $pdo->prepare("SELECT twitch_login FROM archive_applications WHERE id = ?");
+            $loginStmt->execute([$id]);
+            $streamerLogin = $loginStmt->fetchColumn();
+            if ($streamerLogin) {
+                track_event('streamer_setup_complete', [
+                    'streamer' => $streamerLogin,
+                    'approved_by' => $currentUser['login'],
+                ]);
+            }
 
             echo json_encode(['success' => true, 'message' => 'Application approved']);
         } catch (PDOException $e) {
