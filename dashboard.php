@@ -920,6 +920,52 @@ if ($currentUser) {
         </div>
         <?php endif; ?>
 
+        <!-- First-Run Setup Guide -->
+        <div id="setupGuide" style="display:none; margin: 12px 16px; padding: 20px 24px; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border: 1px solid #9147ff; border-radius: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
+                <div>
+                    <h2 style="color: #bf94ff; font-size: 18px; margin-bottom: 4px;">Welcome to ClipTV</h2>
+                    <p style="color: #adadb8; font-size: 13px;">Your clips are archived. Here's how to get the most out of them.</p>
+                </div>
+                <button onclick="dismissSetupGuide()" style="background: none; border: none; color: #666; cursor: pointer; font-size: 18px; padding: 4px 8px;" title="Dismiss">&times;</button>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+                <div class="setup-step" id="step-share" style="padding: 14px 16px; background: rgba(255,255,255,0.03); border: 1px solid #3a3a3d; border-radius: 6px;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                        <span class="setup-check" id="check-share" style="display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; border: 2px solid #3a3a3d; font-size: 11px; color: transparent;">&#10003;</span>
+                        <strong style="color: #efeff1; font-size: 13px;">Share your clip page</strong>
+                    </div>
+                    <p style="color: #adadb8; font-size: 12px; margin-bottom: 8px;">Your clips are live and browsable right now.</p>
+                    <div id="shareUrlBox" style="background: #0e0e10; padding: 8px 10px; border-radius: 4px; font-size: 11px; color: #9147ff; cursor: pointer; word-break: break-all;" onclick="copyShareUrl()">Loading...</div>
+                    <p style="color: #666; font-size: 10px; margin-top: 4px;">Click to copy</p>
+                </div>
+                <div class="setup-step" id="step-obs" style="padding: 14px 16px; background: rgba(255,255,255,0.03); border: 1px solid #3a3a3d; border-radius: 6px;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                        <span class="setup-check" id="check-obs" style="display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; border: 2px solid #3a3a3d; font-size: 11px; color: transparent;">&#10003;</span>
+                        <strong style="color: #efeff1; font-size: 13px;">Add to OBS</strong>
+                    </div>
+                    <p style="color: #adadb8; font-size: 12px;">Add the Player URL as a Browser Source in OBS. Clips play during BRB or as an overlay.</p>
+                    <p style="color: #666; font-size: 11px; margin-top: 6px;">See the <strong style="color: #adadb8;">Overlays</strong> tab for the URL and settings.</p>
+                </div>
+                <div class="setup-step" id="step-bot" style="padding: 14px 16px; background: rgba(255,255,255,0.03); border: 1px solid #3a3a3d; border-radius: 6px;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                        <span class="setup-check" id="check-bot" style="display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; border: 2px solid #3a3a3d; font-size: 11px; color: transparent;">&#10003;</span>
+                        <strong style="color: #efeff1; font-size: 13px;">Connect the chat bot</strong>
+                    </div>
+                    <p style="color: #adadb8; font-size: 12px;">Let viewers request clips in chat with <code style="background: #0e0e10; padding: 2px 5px; border-radius: 3px; font-size: 11px;">!clip</code> commands.</p>
+                    <p style="color: #666; font-size: 11px; margin-top: 6px;">See the <strong style="color: #adadb8;">Bot</strong> tab to configure.</p>
+                </div>
+                <div class="setup-step" id="step-discord" style="padding: 14px 16px; background: rgba(255,255,255,0.03); border: 1px solid #3a3a3d; border-radius: 6px;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                        <span class="setup-check" id="check-discord" style="display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; border: 2px solid #3a3a3d; font-size: 11px; color: transparent;">&#10003;</span>
+                        <strong style="color: #efeff1; font-size: 13px;">Add to Discord</strong>
+                    </div>
+                    <p style="color: #adadb8; font-size: 12px;">Your community can browse clips as a Discord activity.</p>
+                    <a href="https://discord.com/oauth2/authorize?client_id=1477451341776421046" target="_blank" style="display: inline-block; margin-top: 6px; padding: 6px 12px; background: #5865F2; color: white; border-radius: 4px; font-size: 11px; text-decoration: none;">Invite Bot</a>
+                </div>
+            </div>
+        </div>
+
         <div class="tabs">
             <div class="tab active" data-tab="overlays">Overlays</div>
             <div class="tab" data-tab="bot">Bot</div>
@@ -2325,9 +2371,76 @@ if ($currentUser) {
 
                 // Check bot status
                 checkBotStatus();
+
+                // Setup guide
+                updateSetupGuide(settings, data.stats);
             } catch (e) {
                 console.error('Error loading settings:', e);
             }
+        }
+
+        function updateSetupGuide(settings, stats) {
+            // Don't show if user dismissed it
+            if (localStorage.getItem('cliptv_setup_dismissed_' + authLogin)) return;
+
+            const guide = document.getElementById('setupGuide');
+            if (!guide) return;
+
+            // Share URL
+            const shareUrl = 'https://clips.gmgnrepeat.com/search/' + authLogin;
+            const shareBox = document.getElementById('shareUrlBox');
+            if (shareBox) shareBox.textContent = shareUrl;
+
+            // Mark share step as always complete (they have clips if they're here)
+            markStep('share', true);
+
+            // OBS: consider complete if they have any non-default overlay settings
+            // (banner config exists or hud_position changed from default)
+            const hasObs = settings.banner_config && Object.keys(settings.banner_config).length > 0;
+            markStep('obs', hasObs);
+
+            // Bot: check if bot has been used (command_settings modified or platform set)
+            const hasBot = settings.command_settings && Object.keys(settings.command_settings).length > 0;
+            markStep('bot', hasBot);
+
+            // Discord: can't detect from settings — leave unchecked
+            markStep('discord', false);
+
+            // Show the guide
+            guide.style.display = 'block';
+
+            // If all visible steps are done, auto-dismiss after a delay
+            if (hasObs && hasBot) {
+                setTimeout(() => { guide.style.display = 'none'; }, 3000);
+            }
+        }
+
+        function markStep(name, done) {
+            const check = document.getElementById('check-' + name);
+            if (!check) return;
+            if (done) {
+                check.style.borderColor = '#00b894';
+                check.style.background = '#00b894';
+                check.style.color = 'white';
+            } else {
+                check.style.borderColor = '#3a3a3d';
+                check.style.background = 'transparent';
+                check.style.color = 'transparent';
+            }
+        }
+
+        function dismissSetupGuide() {
+            const guide = document.getElementById('setupGuide');
+            if (guide) guide.style.display = 'none';
+            localStorage.setItem('cliptv_setup_dismissed_' + authLogin, '1');
+        }
+
+        function copyShareUrl() {
+            const url = 'https://clips.gmgnrepeat.com/search/' + authLogin;
+            navigator.clipboard.writeText(url).then(() => {
+                const box = document.getElementById('shareUrlBox');
+                if (box) { box.textContent = 'Copied!'; setTimeout(() => { box.textContent = url; }, 1500); }
+            });
         }
 
         // Command settings object - tracks current state
