@@ -3875,7 +3875,18 @@ if ($currentUser) {
         // Load weighting when tab is clicked
         document.querySelector('.tab[data-tab="weighting"]')?.addEventListener('click', loadWeighting);
     </script>
-    <div style="text-align:center; padding:16px 0 24px; opacity:0.5;">
+    <!-- Support ClipTV -->
+    <div style="text-align:center; padding:24px 0 8px; border-top:1px solid #2a2a2e; margin-top:24px;">
+        <p style="color:#adadb8; font-size:13px; margin-bottom:8px;">ClipTV is free for all streamers. Help keep it running.</p>
+        <a href="https://buy.stripe.com/6oU3cvaPYfUq0Ch5wz9Ve00"
+           target="_blank" rel="noopener"
+           style="display:inline-block; padding:10px 24px; background:#9147ff; color:#fff; border-radius:6px; text-decoration:none; font-weight:600; font-size:14px; transition:background 0.2s;"
+           onmouseover="this.style.background='#7c3aed'" onmouseout="this.style.background='#9147ff'">
+            Support ClipTV
+        </a>
+        <p style="color:#666; font-size:11px; margin-top:8px;">One-time tip via Stripe. No subscription, no locked features.</p>
+    </div>
+    <div style="text-align:center; padding:8px 0 24px; opacity:0.5;">
         <a href="mailto:contact@gmgnrepeat.com?subject=Bug%20Report%20-%20Dashboard" style="color:#adadb8; font-size:12px; text-decoration:none;">Report a Bug</a>
     </div>
 </body>
