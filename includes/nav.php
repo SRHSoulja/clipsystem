@@ -102,6 +102,7 @@ $navCurrentPath = $_SERVER['REQUEST_URI'] ?? '/';
                 <?php if ($navHasAccess): ?>
                 <a href="/channels" class="nav-link <?= $navCurrentPage === 'my_channels' ? 'active' : '' ?>">Dashboard</a>
                 <?php endif; ?>
+                <a href="https://buy.stripe.com/6oU3cvaPYfUq0Ch5wz9Ve00" target="_blank" rel="noopener" class="nav-link nav-support-link">Support</a>
                 <?php if ($navIsSuperAdmin): ?>
                 <a href="/admin.php" class="nav-link <?= $navCurrentPage === 'admin' ? 'active' : '' ?>">Admin</a>
                 <?php endif; ?>
@@ -212,6 +213,8 @@ $navCurrentPath = $_SERVER['REQUEST_URI'] ?? '/';
         <?php endforeach; ?>
         <?php endif; ?>
         <div class="nav-mobile-divider"></div>
+        <a href="https://buy.stripe.com/6oU3cvaPYfUq0Ch5wz9Ve00" target="_blank" rel="noopener" style="color:#bf94ff;">Support ClipTV</a>
+        <div class="nav-mobile-divider"></div>
         <?php if ($navUser): ?>
         <a href="/auth/logout.php?return=<?= urlencode($navCurrentPath) ?>">Logout (<?= htmlspecialchars($navUser['display_name'] ?? $navUser['login']) ?>)</a>
         <?php else: ?>
@@ -290,6 +293,16 @@ $navCurrentPath = $_SERVER['REQUEST_URI'] ?? '/';
 
 .nav-link.active {
     color: #efeff1;
+    background: rgba(145, 71, 255, 0.2);
+}
+
+.nav-support-link {
+    color: #bf94ff !important;
+    font-size: 13px;
+}
+
+.nav-support-link:hover {
+    color: #fff !important;
     background: rgba(145, 71, 255, 0.2);
 }
 
