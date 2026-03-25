@@ -960,6 +960,28 @@ if ($hasArchivedClips && $pdo) {
       font-size: 12px;
       color: #efeff1;
     }
+    .clip-thumb video {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      background: #000;
+      z-index: 2;
+    }
+    .clip-thumb .clip-loading {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: #fff;
+      font-size: 13px;
+      z-index: 3;
+      background: rgba(0,0,0,0.7);
+      padding: 6px 14px;
+      border-radius: 6px;
+    }
     .play-overlay {
       position: absolute;
       top: 50%;
@@ -974,6 +996,8 @@ if ($hasArchivedClips && $pdo) {
       justify-content: center;
       opacity: 0;
       transition: opacity 0.2s;
+      cursor: pointer;
+      z-index: 1;
     }
     .play-overlay::after {
       content: '';
@@ -984,6 +1008,37 @@ if ($hasArchivedClips && $pdo) {
     }
     .clip-thumb:hover .play-overlay {
       opacity: 1;
+    }
+    .clip-thumb.playing .play-overlay,
+    .clip-thumb.playing .clip-seq,
+    .clip-thumb.playing .clip-duration {
+      display: none;
+    }
+    .clip-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 6px;
+    }
+    .clip-action-btn {
+      background: none;
+      border: 1px solid #3a3a3d;
+      color: #adadb8;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .clip-action-btn:hover {
+      color: #efeff1;
+      border-color: #9147ff;
+    }
+    .clip-action-btn.copied {
+      color: #00c853;
+      border-color: #00c853;
     }
     .clip-info {
       padding: 12px;
@@ -1468,7 +1523,7 @@ if ($hasArchivedClips && $pdo) {
     </div>
     <?php else: ?>
     <div class="info-msg">
-      Click any clip to watch on Twitch. Search by title or clip number (e.g. "1234").
+      Click any clip to play it. Search by title or clip number (e.g. "1234").
     </div>
     <?php endif; ?>
 
@@ -1521,7 +1576,7 @@ if ($hasArchivedClips && $pdo) {
         }
       ?>
       <div class="clip-card">
-        <a href="<?= htmlspecialchars($twitchUrl) ?>" target="_blank" class="clip-thumb">
+        <div class="clip-thumb" data-clip-id="<?= htmlspecialchars($clipId) ?>" data-platform="<?= htmlspecialchars($clipPlatform) ?>" onclick="playInline(this)">
           <img src="<?= htmlspecialchars($thumbUrl) ?>" alt="" loading="lazy"
                onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 480 272%22><rect fill=%22%2326262c%22 width=%22480%22 height=%22272%22/><text x=%22240%22 y=%22140%22 fill=%22%23666%22 text-anchor=%22middle%22>No Preview</text></svg>'">
           <?php if ($seq > 0): ?><span class="clip-seq">#<?= $seq ?></span><?php endif; ?>
@@ -1529,7 +1584,7 @@ if ($hasArchivedClips && $pdo) {
           <span class="clip-duration"><?= $duration ?></span>
           <?php endif; ?>
           <span class="play-overlay"></span>
-        </a>
+        </div>
         <div class="clip-info">
           <div class="clip-title"><?= htmlspecialchars($title) ?></div>
           <div class="clip-meta">
@@ -1551,6 +1606,16 @@ if ($hasArchivedClips && $pdo) {
             <span class="clip-game" title="<?= htmlspecialchars($gameName) ?>"><?= htmlspecialchars($gameName) ?></span>
           </div>
           <?php endif; ?>
+          <div class="clip-actions">
+            <button type="button" class="clip-action-btn" onclick="shareClip(this, '<?= htmlspecialchars($twitchUrl, ENT_QUOTES) ?>', '<?= htmlspecialchars($title, ENT_QUOTES) ?>')" title="Share this clip">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/></svg>
+              Share
+            </button>
+            <a href="<?= htmlspecialchars($twitchUrl) ?>" target="_blank" class="clip-action-btn" title="View on <?= $clipPlatform === 'kick' ? 'Kick' : 'Twitch' ?>">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M21 13v10h-6v-6h-6v6h-6v-10h-3l12-12 12 12h-3zm-1-5.907v-5.093h-3v2.093l3 3z"/></svg>
+              <?= $clipPlatform === 'kick' ? 'Kick' : 'Twitch' ?>
+            </a>
+          </div>
           <?php if ($seq > 0): // Only show votes for archived clips ?>
           <div class="clip-votes" data-seq="<?= $seq ?>">
             <button type="button" class="vote-btn like-btn" data-vote="like" title="Like this clip">
@@ -1829,6 +1894,104 @@ if ($hasArchivedClips && $pdo) {
       el.textContent = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     }
   });
+
+  // Inline clip playback
+  let activePlayer = null; // track the currently playing thumb element
+
+  async function playInline(thumb) {
+    // If this thumb is already playing, pause/stop
+    if (thumb.classList.contains('playing')) {
+      stopInline(thumb);
+      return;
+    }
+
+    // Stop any other playing clip first
+    if (activePlayer && activePlayer !== thumb) {
+      stopInline(activePlayer);
+    }
+
+    const clipId = thumb.dataset.clipId;
+    const platform = thumb.dataset.platform || 'twitch';
+
+    // Show loading state
+    const loading = document.createElement('div');
+    loading.className = 'clip-loading';
+    loading.textContent = 'Loading...';
+    thumb.appendChild(loading);
+
+    try {
+      const res = await fetch(`/clip_mp4_url.php?slug=${encodeURIComponent(clipId)}&platform=${encodeURIComponent(platform)}`);
+      const data = await res.json();
+
+      const mp4Url = data.url || (data.qualities && data.qualities.length > 0 ? data.qualities[0].url : null);
+      if (!mp4Url) {
+        loading.textContent = 'No video available';
+        setTimeout(() => loading.remove(), 2000);
+        return;
+      }
+
+      // Remove loading indicator
+      loading.remove();
+
+      // Create video element
+      const video = document.createElement('video');
+      video.src = mp4Url;
+      video.controls = true;
+      video.autoplay = true;
+      video.playsInline = true;
+      video.volume = 0.7;
+
+      video.addEventListener('ended', () => stopInline(thumb));
+      video.addEventListener('error', () => {
+        stopInline(thumb);
+      });
+
+      thumb.appendChild(video);
+      thumb.classList.add('playing');
+      activePlayer = thumb;
+
+    } catch (e) {
+      loading.textContent = 'Failed to load';
+      setTimeout(() => loading.remove(), 2000);
+    }
+  }
+
+  function stopInline(thumb) {
+    const video = thumb.querySelector('video');
+    if (video) {
+      video.pause();
+      video.src = '';
+      video.remove();
+    }
+    thumb.classList.remove('playing');
+    if (activePlayer === thumb) activePlayer = null;
+  }
+
+  // Share clip
+  async function shareClip(btn, url, title) {
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: title, url: url });
+        return;
+      } catch (e) {
+        if (e.name === 'AbortError') return;
+      }
+    }
+    // Fallback: copy to clipboard
+    try {
+      await navigator.clipboard.writeText(url);
+      btn.classList.add('copied');
+      const original = btn.innerHTML;
+      btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg> Copied!';
+      setTimeout(() => {
+        btn.classList.remove('copied');
+        btn.innerHTML = original;
+      }, 2000);
+    } catch (e) {
+      // Last resort: select text in a prompt
+      prompt('Copy this link:', url);
+    }
+  }
   </script>
 
   </div>
