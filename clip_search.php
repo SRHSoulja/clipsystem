@@ -638,6 +638,7 @@ if ($hasArchivedClips && $pdo) {
       background: #0e0e10;
       min-height: 100%;
       overflow-x: hidden;
+      overflow-y: scroll;
     }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -908,10 +909,10 @@ if ($hasArchivedClips && $pdo) {
       color: #adadb8;
     }
 
-    /* Clip grid */
+    /* Clip grid — 5 columns on desktop (250*5 + 16*4 = 1314 < 1400 max-width) */
     .results-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
       gap: 16px;
     }
     .clip-card {
