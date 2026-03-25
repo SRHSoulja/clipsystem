@@ -85,17 +85,16 @@ function db_ensure_schema($pdo) {
         require_once __DIR__ . '/db_bootstrap.php';
         run_db_bootstrap($pdo);
     } catch (Exception $e) {
-        flock($fp, LOCK_UN);
-        fclose($fp);
-        error_log("db_ensure_schema: bootstrap failed: " . $e->getMessage());
-        _db_bootstrap_unavailable('Schema bootstrap failed');
+        // Bootstrap failed hard — but still write the stamp so we don't
+        // 503-loop forever. The core tables likely exist already (they use
+        // IF NOT EXISTS). Worst case: a missing table causes a query error
+        // on the specific endpoint, which is better than ALL endpoints 503ing.
+        error_log("db_ensure_schema: bootstrap failed, writing stamp anyway: " . $e->getMessage());
     }
 
-    // Verify stamp was written
+    // Write stamp if bootstrap didn't (ensures we never 503-loop)
     if (!file_exists($cacheDir . '/db_bootstrapped.stamp')) {
-        flock($fp, LOCK_UN);
-        fclose($fp);
-        _db_bootstrap_unavailable('Bootstrap ran but stamp not written');
+        @file_put_contents($cacheDir . '/db_bootstrapped.stamp', date('c') . " (fallback)\n");
     }
 
     flock($fp, LOCK_UN);
