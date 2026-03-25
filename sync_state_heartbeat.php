@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/includes/metrics.php';
 /**
  * sync_state_heartbeat.php - Controller heartbeat for sync state
  *

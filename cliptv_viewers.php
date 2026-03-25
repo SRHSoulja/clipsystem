@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/includes/metrics.php';
 /**
  * cliptv_viewers.php - Track ClipTV viewers and handle skip voting
  *
@@ -10,12 +11,13 @@
  * GET: Get current viewer count and skip vote status
  *   - login: channel login
  *
- * Returns:
+ * Returns (POST):
  *   - viewer_count: number of active viewers
  *   - skip_votes: number of viewers who want to skip
  *   - skip_needed: votes needed for majority
  *   - should_skip: true if majority reached
- *   - my_skip_vote: true if this viewer voted to skip (POST only)
+ *   - my_skip_vote: true if this viewer voted to skip
+ *   - clip_request: active clip request data (piggybacked from cliptv_requests table), or null
  */
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
@@ -42,35 +44,11 @@ if (!$pdo) {
   exit;
 }
 
-// Create table if needed
-try {
-  $pdo->exec("CREATE TABLE IF NOT EXISTS cliptv_viewers (
-    id SERIAL PRIMARY KEY,
-    login VARCHAR(50) NOT NULL,
-    viewer_id VARCHAR(64) NOT NULL,
-    last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    wants_skip BOOLEAN DEFAULT FALSE,
-    clip_id VARCHAR(100),
-    UNIQUE(login, viewer_id)
-  )");
-  // Add clip_id column if missing (for existing tables)
-  try {
-    $pdo->exec("ALTER TABLE cliptv_viewers ADD COLUMN IF NOT EXISTS clip_id VARCHAR(100)");
-  } catch (PDOException $e) {
-    // ignore
-  }
-  // Add index on last_seen for efficient stale viewer cleanup
-  try {
-    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_cliptv_viewers_last_seen ON cliptv_viewers(last_seen)");
-  } catch (PDOException $e) {
-    // ignore
-  }
-} catch (PDOException $e) {
-  // Table exists
-}
+// Schema is handled by db_bootstrap (runs once per deploy)
+db_ensure_schema($pdo);
 
-// Viewer timeout - 12 seconds of no heartbeat = gone (matches 3s heartbeat interval)
-$VIEWER_TIMEOUT = 12;
+// Viewer timeout - 18 seconds of no heartbeat = gone (matches 5s heartbeat interval, 3 missed = safe)
+$VIEWER_TIMEOUT = 18;
 
 // Clean up stale viewers
 try {
@@ -156,6 +134,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $myVote = $stmt->fetch();
     $mySkipVote = $myVote ? (bool)$myVote['wants_skip'] : false;
 
+    // Piggyback active clip request data (saves a separate GET to cliptv_request.php)
+    $clipRequest = null;
+    try {
+      $reqStmt = $pdo->prepare("
+        SELECT clip_id, clip_seq, clip_title, clip_game, clip_creator, clip_duration, requester_id,
+               EXTRACT(EPOCH FROM (NOW() - created_at)) as age_seconds
+        FROM cliptv_requests
+        WHERE login = ? AND played = FALSE
+          AND created_at > NOW() - INTERVAL '15 seconds'
+      ");
+      $reqStmt->execute([$login]);
+      $reqRow = $reqStmt->fetch(PDO::FETCH_ASSOC);
+      if ($reqRow) {
+        $clipRequest = [
+          "has_request" => true,
+          "clip_id" => $reqRow['clip_id'],
+          "clip_seq" => intval($reqRow['clip_seq']),
+          "clip_title" => $reqRow['clip_title'],
+          "clip_game" => $reqRow['clip_game'],
+          "clip_creator" => $reqRow['clip_creator'],
+          "clip_duration" => floatval($reqRow['clip_duration']),
+          "requester_id" => $reqRow['requester_id'],
+          "age_seconds" => floatval($reqRow['age_seconds'])
+        ];
+      }
+    } catch (PDOException $e) {
+      // Non-critical — frontend treats null as no active request
+    }
+
     echo json_encode([
       "ok" => true,
       "login" => $login,
@@ -163,7 +170,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       "skip_votes" => $skipVotes,
       "skip_needed" => $skipNeeded,
       "should_skip" => $shouldSkip,
-      "my_skip_vote" => $mySkipVote
+      "my_skip_vote" => $mySkipVote,
+      "clip_request" => $clipRequest
     ]);
 
   } catch (PDOException $e) {

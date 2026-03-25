@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/includes/metrics.php';
 /**
  * sync_state.php - Global synchronized playback state for TV channel mode
  *
@@ -32,31 +33,8 @@ if (!$pdo) {
   exit;
 }
 
-// Ensure sync_state table exists
-try {
-  $pdo->exec("CREATE TABLE IF NOT EXISTS sync_state (
-    login VARCHAR(50) PRIMARY KEY,
-    clip_id VARCHAR(100),
-    clip_url TEXT,
-    clip_title TEXT,
-    clip_curator VARCHAR(100),
-    clip_duration FLOAT DEFAULT 30,
-    clip_seq INT DEFAULT 0,
-    started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    playlist_index INT DEFAULT 0,
-    playlist_ids TEXT DEFAULT '[]',
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  )");
-  // Add clip_seq column if it doesn't exist (for existing tables)
-  try {
-    $pdo->exec("ALTER TABLE sync_state ADD COLUMN IF NOT EXISTS clip_seq INT DEFAULT 0");
-    $pdo->exec("ALTER TABLE sync_state ADD COLUMN IF NOT EXISTS clip_created_at TIMESTAMP");
-  } catch (PDOException $e) {
-    // Column might already exist, ignore
-  }
-} catch (PDOException $e) {
-  // Table exists, continue
-}
+// Schema is handled by db_bootstrap (runs once per deploy)
+db_ensure_schema($pdo);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   // Update current playing clip

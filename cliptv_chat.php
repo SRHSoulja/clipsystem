@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/includes/metrics.php';
 /**
  * cliptv_chat.php - Chat for ClipTV (stream-specific or global)
  *
@@ -46,31 +47,8 @@ if (!$pdo) {
   exit;
 }
 
-// Create table if needed
-try {
-  $pdo->exec("CREATE TABLE IF NOT EXISTS cliptv_chat (
-    id SERIAL PRIMARY KEY,
-    login VARCHAR(50) NOT NULL,
-    user_id VARCHAR(50),
-    username VARCHAR(64) NOT NULL,
-    display_name VARCHAR(64) NOT NULL,
-    message TEXT NOT NULL,
-    scope VARCHAR(10) NOT NULL DEFAULT 'stream',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  )");
-  $pdo->exec("CREATE INDEX IF NOT EXISTS idx_cliptv_chat_login ON cliptv_chat(login, id)");
-  $pdo->exec("CREATE INDEX IF NOT EXISTS idx_cliptv_chat_cleanup ON cliptv_chat(created_at)");
-  $pdo->exec("CREATE INDEX IF NOT EXISTS idx_cliptv_chat_scope ON cliptv_chat(scope, id)");
-} catch (PDOException $e) {
-  // Table/index exists
-}
-
-// Add scope column if missing (migration for existing tables)
-try {
-  $pdo->exec("ALTER TABLE cliptv_chat ADD COLUMN IF NOT EXISTS scope VARCHAR(10) NOT NULL DEFAULT 'stream'");
-} catch (PDOException $e) {
-  // Column already exists
-}
+// Schema is handled by db_bootstrap (runs once per deploy)
+db_ensure_schema($pdo);
 
 // Archive and cleanup old messages (older than 24 hours)
 try {

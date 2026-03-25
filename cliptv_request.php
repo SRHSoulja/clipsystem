@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/includes/metrics.php';
 /**
  * cliptv_request.php - Clip request system for ClipTV
  *
@@ -10,8 +11,10 @@
  *   - action: 'request' (default) or 'clear'
  *   - clip_id, clip_seq, clip_title, clip_game, clip_creator, clip_duration, requester_id
  *
- * GET: Check for active requests
+ * GET: Check for active requests (debug/manual use only)
  *   - login: channel login
+ *   Note: Clients no longer poll this endpoint. Active request data is
+ *   piggybacked on the cliptv_viewers.php heartbeat response instead.
  */
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
@@ -38,23 +41,8 @@ if (!$pdo) {
   exit;
 }
 
-// Create table if needed
-try {
-  $pdo->exec("CREATE TABLE IF NOT EXISTS cliptv_requests (
-    login VARCHAR(50) PRIMARY KEY,
-    clip_id VARCHAR(100) NOT NULL,
-    clip_seq INT DEFAULT 0,
-    clip_title TEXT,
-    clip_game TEXT,
-    clip_creator VARCHAR(100),
-    clip_duration FLOAT DEFAULT 30,
-    requester_id VARCHAR(64),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    played BOOLEAN DEFAULT FALSE
-  )");
-} catch (PDOException $e) {
-  // Table exists
-}
+// Schema is handled by db_bootstrap (runs once per deploy)
+db_ensure_schema($pdo);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $action = $_POST['action'] ?? 'request';

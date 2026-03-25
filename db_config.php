@@ -6,6 +6,120 @@
  * Format: postgresql://user:password@host:port/database
  */
 
+/**
+ * Check if database schema has been bootstrapped this deploy.
+ * Returns true if the stamp file exists (schema is ready).
+ */
+function db_is_bootstrapped() {
+    static $confirmed = false;
+    // Once we've seen the stamp, it will never disappear within this
+    // request (filesystem is not cleared mid-request). Cache true only;
+    // false must re-check so concurrent waiters see the stamp as soon
+    // as the bootstrap runner writes it.
+    if ($confirmed) return true;
+    if (file_exists(__DIR__ . '/cache/db_bootstrapped.stamp')) {
+        $confirmed = true;
+        return true;
+    }
+    return false;
+}
+
+/**
+ * Ensure schema is ready before any query runs.
+ *
+ * Behavior on the FIRST request(s) after deploy:
+ *   - One process acquires flock(LOCK_EX), runs bootstrap, writes stamp.
+ *   - Concurrent processes block on flock(LOCK_EX) until the winner finishes,
+ *     then see the stamp and return immediately.
+ *   - If bootstrap fails, the winner sends 503 and exits. Blocked processes
+ *     re-check the stamp (still missing) and also send 503. Next request
+ *     retries the bootstrap from scratch.
+ *   - Timeout: 10 seconds. If the lock is held longer than that (stuck
+ *     bootstrap), the waiter gives up and sends 503 rather than proceeding
+ *     into missing tables.
+ *
+ * Behavior on all subsequent requests:
+ *   - file_exists() returns true → function returns immediately (~0ms).
+ */
+function db_ensure_schema($pdo) {
+    if (!$pdo || db_is_bootstrapped()) return;
+
+    $cacheDir = __DIR__ . '/cache';
+    if (!is_dir($cacheDir)) @mkdir($cacheDir, 0755, true);
+
+    $lockFile = $cacheDir . '/db_bootstrap.lock';
+    $fp = @fopen($lockFile, 'c+');
+    if (!$fp) {
+        _db_bootstrap_unavailable('Could not open lock file');
+    }
+
+    // Blocking lock with timeout — all concurrent requests queue here.
+    // PHP's flock() has no native timeout, so we poll with LOCK_NB.
+    $deadline = microtime(true) + 10.0; // 10 second timeout
+    $acquired = false;
+    while (microtime(true) < $deadline) {
+        if (flock($fp, LOCK_EX | LOCK_NB)) {
+            $acquired = true;
+            break;
+        }
+        usleep(50000); // 50ms between polls
+    }
+
+    if (!$acquired) {
+        fclose($fp);
+        // Check stamp one more time — bootstrap may have finished between
+        // our last poll and the timeout.
+        if (db_is_bootstrapped()) return;
+        _db_bootstrap_unavailable('Schema bootstrap timed out (10s)');
+    }
+
+    // Lock acquired. Re-check stamp — a prior holder may have finished.
+    if (db_is_bootstrapped()) {
+        flock($fp, LOCK_UN);
+        fclose($fp);
+        return;
+    }
+
+    // We are the bootstrap runner.
+    try {
+        require_once __DIR__ . '/db_bootstrap.php';
+        run_db_bootstrap($pdo);
+    } catch (Exception $e) {
+        flock($fp, LOCK_UN);
+        fclose($fp);
+        error_log("db_ensure_schema: bootstrap failed: " . $e->getMessage());
+        _db_bootstrap_unavailable('Schema bootstrap failed');
+    }
+
+    // Verify stamp was written
+    if (!file_exists($cacheDir . '/db_bootstrapped.stamp')) {
+        flock($fp, LOCK_UN);
+        fclose($fp);
+        _db_bootstrap_unavailable('Bootstrap ran but stamp not written');
+    }
+
+    flock($fp, LOCK_UN);
+    fclose($fp);
+}
+
+/**
+ * Fail closed: send 503 and exit. Never proceed into a request with
+ * missing tables — that would produce confusing SQL errors for the user.
+ */
+function _db_bootstrap_unavailable($reason) {
+    error_log("db_ensure_schema: " . $reason);
+    if (!headers_sent()) {
+        http_response_code(503);
+        header('Content-Type: application/json');
+        header('Retry-After: 2');
+    }
+    echo json_encode([
+        'error' => 'Service starting up, please retry in a moment.',
+        'retry_after' => 2
+    ]);
+    exit;
+}
+
 function get_db_connection() {
     static $cached = null;
 
@@ -52,10 +166,12 @@ function get_db_connection() {
 }
 
 /**
- * Initialize the votes tables if they don't exist
+ * Initialize the votes tables if they don't exist.
+ * Skipped when db_bootstrap has already run (stamp file exists).
  */
 function init_votes_tables($pdo) {
     if (!$pdo) return false;
+    if (db_is_bootstrapped()) return true;
 
     try {
         // Votes table - stores aggregate vote counts per clip

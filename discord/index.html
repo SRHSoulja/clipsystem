@@ -2402,9 +2402,9 @@ if (window.__discordResolve) window.__discordResolve();
     }
   }
 
-  // Poll position immediately and every 5 seconds
+  // Poll position immediately and periodically (rarely changes — streamer sets once)
   pollHudPosition();
-  setInterval(pollHudPosition, 5000);
+  setInterval(pollHudPosition, HUD_POLL_MS);
 
   function formatDuration(s) {
     if (!s || s <= 0) return "";
@@ -3305,11 +3305,15 @@ if (window.__discordResolve) window.__discordResolve();
           triggerSkip();
         }
       }
+      // Handle piggybacked clip request data (avoids separate GET to cliptv_request.php)
+      if (data.clip_request) {
+        handleClipRequestData(data.clip_request);
+      } else {
+        handleClipRequestData({ has_request: false });
+      }
     } catch (e) {
       debugLog("Heartbeat error: " + e.message, "err");
     }
-    // Check for clip requests from other viewers
-    checkClipRequests();
   }
 
   function resetSkipVotes() {
@@ -3934,29 +3938,24 @@ if (window.__discordResolve) window.__discordResolve();
     }).catch(() => {});
   }
 
-  // Poll for clip requests from other viewers
-  async function checkClipRequests() {
-    if (pendingRequest) return; // I'm the requester, skip polling
-    try {
-      const res = await fetch(`${API_BASE}/cliptv_request.php?login=${encodeURIComponent(login)}`, { cache: 'no-store' });
-      const data = await res.json();
-      if (data.has_request && data.requester_id !== viewerId) {
-        const remaining = Math.max(0, REQUEST_TIMEOUT - data.age_seconds);
-        if (remaining > 0.5) {
-          // Show notification if not already showing for this clip
-          if (activeRequestId !== data.clip_id) {
-            showRequestBanner(data, remaining, false);
-          }
-        } else {
-          hideRequestBanner();
+  // Process clip request data received via heartbeat piggyback (cliptv_viewers.php response)
+  function handleClipRequestData(data) {
+    if (pendingRequest) return; // I'm the requester, skip
+    if (data.has_request && data.requester_id !== viewerId) {
+      const remaining = Math.max(0, REQUEST_TIMEOUT - data.age_seconds);
+      if (remaining > 0.5) {
+        // Show notification if not already showing for this clip
+        if (activeRequestId !== data.clip_id) {
+          showRequestBanner(data, remaining, false);
         }
-      } else if (!data.has_request && activeRequestId) {
+      } else {
         hideRequestBanner();
       }
-    } catch (e) {
-      // Silently fail
+    } else if (!data.has_request && activeRequestId) {
+      hideRequestBanner();
     }
   }
+
 
   // Play Now button - any viewer can click to play immediately
   document.getElementById('reqPlayNow').addEventListener('click', async () => {
@@ -4265,7 +4264,7 @@ if (window.__discordResolve) window.__discordResolve();
 
   function startChatPoll() {
     stopChatPoll();
-    chatPollInterval = setInterval(pollChat, 3000);
+    chatPollInterval = setInterval(pollChat, CHAT_ACTIVE_MS);
     // Stop background poll when active poll is running
     if (chatBgPollInterval) { clearInterval(chatBgPollInterval); chatBgPollInterval = null; }
   }
@@ -4277,12 +4276,12 @@ if (window.__discordResolve) window.__discordResolve();
     }
     // Resume background poll when chat is closed
     if (!chatBgPollInterval) {
-      chatBgPollInterval = setInterval(pollChat, 10000);
+      chatBgPollInterval = setInterval(pollChat, CHAT_BG_MS);
     }
   }
 
   // Start background poll immediately (picks up messages for badge)
-  chatBgPollInterval = setInterval(pollChat, 10000);
+  chatBgPollInterval = setInterval(pollChat, CHAT_BG_MS);
   // Initial fetch after short delay (let init() complete first)
   setTimeout(pollChat, 2000);
 
@@ -4552,13 +4551,20 @@ if (window.__discordResolve) window.__discordResolve();
     return div.innerHTML;
   }
 
+  // === Polling intervals (tuned for Railway cost vs UX balance) ===
+  const SYNC_POLL_MS       = isSlowConnection ? 5000 : 3000;
+  const HEARTBEAT_MS       = 5000;  // viewer heartbeat (backend timeout=18s)
+  const CTRL_HEARTBEAT_MS  = 5000;  // controller heartbeat (backend stale=8s)
+  const CHAT_ACTIVE_MS     = 5000;  // chat poll when panel open
+  const CHAT_BG_MS         = 15000; // chat poll when panel closed
+  const HUD_POLL_MS        = 30000; // HUD position (rarely changes)
+
   // Start heartbeat interval
   function startHeartbeat() {
     // Send initial heartbeat
     sendHeartbeat();
-    // Then every 3 seconds (reduced from 10s for more responsive skip voting)
     if (heartbeatInterval) clearInterval(heartbeatInterval);
-    heartbeatInterval = setInterval(() => sendHeartbeat(), 3000);
+    heartbeatInterval = setInterval(() => sendHeartbeat(), HEARTBEAT_MS);
   }
 
   // Controller heartbeat - keeps sync state updated_at fresh
@@ -4575,11 +4581,10 @@ if (window.__discordResolve) window.__discordResolve();
 
   function startControllerHeartbeat() {
     if (controllerHeartbeatInterval) clearInterval(controllerHeartbeatInterval);
-    // Send heartbeat every 5 seconds
     sendControllerHeartbeat();
-    controllerHeartbeatInterval = setInterval(sendControllerHeartbeat, 5000);
+    controllerHeartbeatInterval = setInterval(sendControllerHeartbeat, CTRL_HEARTBEAT_MS);
     // Also start in Web Worker (survives browser throttling in PiP/hidden)
-    if (bgWorker) bgWorker.postMessage({ action: 'start', id: 'controllerHeartbeat', interval: 5000 });
+    if (bgWorker) bgWorker.postMessage({ action: 'start', id: 'controllerHeartbeat', interval: CTRL_HEARTBEAT_MS });
     debugLog("Controller heartbeat started", "ok");
   }
 
@@ -4640,8 +4645,8 @@ if (window.__discordResolve) window.__discordResolve();
   // and takes over when the browser throttles them (PiP, hidden, minimized)
   bgWorker = createBgWorker();
   if (bgWorker) {
-    bgWorker.postMessage({ action: 'start', id: 'heartbeat', interval: 5000 });
-    bgWorker.postMessage({ action: 'start', id: 'syncPoll', interval: 3000 });
+    bgWorker.postMessage({ action: 'start', id: 'heartbeat', interval: HEARTBEAT_MS });
+    bgWorker.postMessage({ action: 'start', id: 'syncPoll', interval: SYNC_POLL_MS });
     debugLog("Background worker started", "ok");
   }
 
@@ -4733,7 +4738,7 @@ if (window.__discordResolve) window.__discordResolve();
 
       // Resume chat polling
       if (!chatOpen && !chatBgPollInterval) {
-        chatBgPollInterval = setInterval(pollChat, 10000);
+        chatBgPollInterval = setInterval(pollChat, CHAT_BG_MS);
       }
 
       // Re-sync with server
@@ -4891,7 +4896,7 @@ if (window.__discordResolve) window.__discordResolve();
       // Restart sync polling if it died during suspend
       if (!syncInterval && currentClipId) {
         debugLog("Restarting sync poll after visibility restore", "ok");
-        syncInterval = setInterval(pollSyncState, 3000);
+        syncInterval = setInterval(pollSyncState, SYNC_POLL_MS);
       }
 
       // If video paused during hidden (browser suspended it), try to resume
@@ -4990,9 +4995,8 @@ if (window.__discordResolve) window.__discordResolve();
     }
 
     // Start sync polling AFTER initial clip is loaded (prevents brief flash of wrong clip)
-    const pollInterval = isSlowConnection ? 4000 : 2000;
-    syncInterval = setInterval(pollSyncState, pollInterval);
-    debugLog(`Sync poll: ${pollInterval}ms`);
+    syncInterval = setInterval(pollSyncState, SYNC_POLL_MS);
+    debugLog(`Sync poll: ${SYNC_POLL_MS}ms`);
 
     // Start viewer heartbeat
     startHeartbeat();
