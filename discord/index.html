@@ -1856,6 +1856,14 @@ if (window.__discordResolve) window.__discordResolve();
   let activeRequestId = null; // clip_id of currently displayed request
   const REQUEST_TIMEOUT = 6; // seconds before clip plays
 
+  // === Polling intervals (tuned for Railway cost vs UX balance) ===
+  // Constants used at top-level (eager setInterval calls) must be declared
+  // here. Connection-dependent constants are declared later, after
+  // isSlowConnection is set, and only referenced inside functions.
+  const CHAT_ACTIVE_MS     = 5000;  // chat poll when panel open
+  const CHAT_BG_MS         = 15000; // chat poll when panel closed (badge only)
+  const HUD_POLL_MS        = 30000; // HUD position (rarely changes)
+
   // Hide unmute overlay initially
   unmuteOverlay.classList.add("hide");
 
@@ -4551,13 +4559,10 @@ if (window.__discordResolve) window.__discordResolve();
     return div.innerHTML;
   }
 
-  // === Polling intervals (tuned for Railway cost vs UX balance) ===
+  // === Connection-dependent polling intervals (must be after isSlowConnection is set) ===
   const SYNC_POLL_MS       = isSlowConnection ? 5000 : 3000;
   const HEARTBEAT_MS       = 5000;  // viewer heartbeat (backend timeout=18s)
   const CTRL_HEARTBEAT_MS  = 5000;  // controller heartbeat (backend stale=8s)
-  const CHAT_ACTIVE_MS     = 5000;  // chat poll when panel open
-  const CHAT_BG_MS         = 15000; // chat poll when panel closed
-  const HUD_POLL_MS        = 30000; // HUD position (rarely changes)
 
   // Start heartbeat interval
   function startHeartbeat() {
