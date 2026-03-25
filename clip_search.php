@@ -668,13 +668,45 @@ if ($hasArchivedClips && $pdo) {
       align-items: center;
       gap: 16px;
     }
+    .streamer-avatar-link {
+      flex-shrink: 0;
+      position: relative;
+      display: block;
+      border-radius: 50%;
+      transition: transform 0.15s;
+    }
+    .streamer-avatar-link:hover {
+      transform: scale(1.05);
+    }
+    .streamer-avatar-link:hover .streamer-avatar {
+      border-color: #bf94ff;
+    }
+    .streamer-avatar-link:hover .avatar-twitch-hint {
+      opacity: 1;
+    }
+    .avatar-twitch-hint {
+      position: absolute;
+      bottom: -2px;
+      right: -2px;
+      background: #9147ff;
+      color: #fff;
+      font-size: 9px;
+      font-weight: 700;
+      padding: 1px 4px;
+      border-radius: 4px;
+      line-height: 1.2;
+      opacity: 0;
+      transition: opacity 0.15s;
+      pointer-events: none;
+    }
     .streamer-avatar {
       width: 56px;
       height: 56px;
       border-radius: 50%;
       object-fit: cover;
       border: 3px solid #9147ff;
-      flex-shrink: 0;
+      display: block;
+      transition: border-color 0.15s;
     }
     .streamer-avatar-placeholder {
       display: flex;
@@ -734,8 +766,9 @@ if ($hasArchivedClips && $pdo) {
     }
     .streamer-links {
       display: flex;
-      gap: 15px;
-      margin-top: 4px;
+      align-items: center;
+      gap: 6px;
+      margin-top: 6px;
     }
     .streamer-links a {
       color: #adadb8;
@@ -744,7 +777,16 @@ if ($hasArchivedClips && $pdo) {
       transition: color 0.2s;
     }
     .streamer-links a:hover {
-      color: #9147ff;
+      color: #bf94ff;
+    }
+    .twitch-icon {
+      width: 14px;
+      height: 14px;
+      vertical-align: -2px;
+      opacity: 0.6;
+    }
+    .streamer-links a:hover .twitch-icon {
+      opacity: 1;
     }
     .header-right {
       display: flex;
@@ -1230,11 +1272,14 @@ if ($hasArchivedClips && $pdo) {
   <div class="container">
     <header>
       <div class="header-left">
-        <?php if ($streamerProfileImage): ?>
-        <img src="<?= htmlspecialchars($streamerProfileImage) ?>" alt="<?= htmlspecialchars($login) ?>" class="streamer-avatar">
-        <?php else: ?>
-        <div class="streamer-avatar streamer-avatar-placeholder"><?= strtoupper(substr($login, 0, 1)) ?></div>
-        <?php endif; ?>
+        <a href="https://twitch.tv/<?= htmlspecialchars(urlencode($login)) ?>" target="_blank" class="streamer-avatar-link" title="Visit <?= htmlspecialchars($login) ?> on Twitch">
+          <?php if ($streamerProfileImage): ?>
+          <img src="<?= htmlspecialchars($streamerProfileImage) ?>" alt="<?= htmlspecialchars($login) ?>" class="streamer-avatar">
+          <?php else: ?>
+          <div class="streamer-avatar streamer-avatar-placeholder"><?= strtoupper(substr($login, 0, 1)) ?></div>
+          <?php endif; ?>
+          <span class="avatar-twitch-hint">Twitch</span>
+        </a>
         <div>
           <h1><?= htmlspecialchars($login) ?>'s Clips</h1>
           <p class="subtitle"><?= $hasArchivedClips ? 'Archived' : 'Live from Twitch' ?></p>
@@ -1243,7 +1288,7 @@ if ($hasArchivedClips && $pdo) {
             <span class="cta-tagline">Synchronized community viewing, voting, and clip requests</span>
           </div>
           <div class="streamer-links">
-            <a href="https://twitch.tv/<?= htmlspecialchars(urlencode($login)) ?>" target="_blank">Twitch Channel</a>
+            <a href="https://twitch.tv/<?= htmlspecialchars(urlencode($login)) ?>" target="_blank"><svg class="twitch-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714Z"/></svg> Twitch Channel</a>
           </div>
         </div>
       </div>
