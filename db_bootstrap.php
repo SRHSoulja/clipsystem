@@ -102,12 +102,13 @@ function run_db_bootstrap($pdo) {
     }
 
     // ── Write stamp file ────────────────────────────────────────────
-
-    $stampDir = dirname(__FILE__) . '/cache';
-    if (!is_dir($stampDir)) {
-        @mkdir($stampDir, 0755, true);
+    // Stamp is written by db_ensure_schema after verifying core tables.
+    // When run from CLI, write it here directly.
+    if (php_sapi_name() === 'cli') {
+        $stampDir = defined('CLIPTV_RUNTIME_DIR') ? CLIPTV_RUNTIME_DIR : '/tmp/cliptv';
+        if (!is_dir($stampDir)) @mkdir($stampDir, 0755, true);
+        file_put_contents($stampDir . '/db_bootstrapped.stamp', date('c') . "\n");
     }
-    file_put_contents($stampDir . '/db_bootstrapped.stamp', date('c') . "\n");
 }
 
 // CLI mode: run directly with `php db_bootstrap.php`

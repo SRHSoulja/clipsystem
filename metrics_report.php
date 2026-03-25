@@ -11,7 +11,7 @@ require_once __DIR__ . '/includes/helpers.php';
 $hours = min(max((int)($_GET['hours'] ?? 24), 1), 72);
 $format = $_GET['format'] ?? 'text';
 
-$metrics_dir = __DIR__ . '/cache/metrics';
+$metrics_dir = '/tmp/cliptv/metrics';
 if (!is_dir($metrics_dir)) {
     if ($format === 'json') {
         header('Content-Type: application/json');

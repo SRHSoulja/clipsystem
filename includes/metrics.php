@@ -3,17 +3,17 @@
  * metrics.php - Lightweight request instrumentation
  *
  * Include at the top of any endpoint to track request count and latency.
- * Data is stored in cache/metrics/ as hourly JSON bucket files.
+ * Data is stored in /tmp/cliptv/metrics/ as hourly JSON bucket files.
  *
  * Usage: require_once __DIR__ . '/includes/metrics.php';
  *   (automatically detects endpoint from SCRIPT_FILENAME)
  *
- * Reading data: visit metrics_report.php or read cache/metrics/*.json
+ * Reading data: visit metrics_report.php or read /tmp/cliptv/metrics/*.json
  *
- * Retention: 72 hours (auto-purged on write)
+ * Retention: 72 hours (auto-purged on write). Lost on container restart (ephemeral).
  */
 
-define('METRICS_DIR', __DIR__ . '/../cache/metrics');
+define('METRICS_DIR', '/tmp/cliptv/metrics');
 define('METRICS_START', microtime(true));
 define('METRICS_RETENTION_HOURS', 72);
 

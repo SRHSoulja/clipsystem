@@ -6,6 +6,10 @@
  * Format: postgresql://user:password@host:port/database
  */
 
+// Runtime directory for lock/stamp files. /tmp is writable on Railway
+// (the app directory /app is read-only after build).
+define('CLIPTV_RUNTIME_DIR', '/tmp/cliptv');
+
 /**
  * Check if database schema has been bootstrapped this deploy.
  * Returns true if the stamp file exists (schema is ready).
@@ -17,7 +21,7 @@ function db_is_bootstrapped() {
     // false must re-check so concurrent waiters see the stamp as soon
     // as the bootstrap runner writes it.
     if ($confirmed) return true;
-    if (file_exists(__DIR__ . '/cache/db_bootstrapped.stamp')) {
+    if (file_exists(CLIPTV_RUNTIME_DIR . '/db_bootstrapped.stamp')) {
         $confirmed = true;
         return true;
     }
@@ -44,10 +48,10 @@ function db_is_bootstrapped() {
 function db_ensure_schema($pdo) {
     if (!$pdo || db_is_bootstrapped()) return;
 
-    $cacheDir = __DIR__ . '/cache';
-    if (!is_dir($cacheDir)) @mkdir($cacheDir, 0755, true);
+    $runtimeDir = CLIPTV_RUNTIME_DIR;
+    if (!is_dir($runtimeDir)) @mkdir($runtimeDir, 0755, true);
 
-    $lockFile = $cacheDir . '/db_bootstrap.lock';
+    $lockFile = $runtimeDir . '/db_bootstrap.lock';
     $fp = @fopen($lockFile, 'c+');
     if (!$fp) {
         _db_bootstrap_unavailable('Could not open lock file');
@@ -110,8 +114,8 @@ function db_ensure_schema($pdo) {
 
     // Core tables verified — write stamp. Optional table failures
     // (init_votes_tables etc.) were logged but don't block.
-    if (!file_exists($cacheDir . '/db_bootstrapped.stamp')) {
-        @file_put_contents($cacheDir . '/db_bootstrapped.stamp', date('c') . "\n");
+    if (!file_exists($runtimeDir . '/db_bootstrapped.stamp')) {
+        file_put_contents($runtimeDir . '/db_bootstrapped.stamp', date('c') . "\n");
     }
 
     flock($fp, LOCK_UN);
