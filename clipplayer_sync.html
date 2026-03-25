@@ -3008,15 +3008,15 @@
       return;
     }
 
-    // Controller skips immediately (consistent with remote skip control)
-    if (isController) {
-      debugLog("Controller skip - advancing immediately", "ok");
+    // Solo viewer: skip immediately, no vote needed
+    if (viewerCount <= 1) {
+      debugLog("Solo skip - advancing immediately", "ok");
       triggerSkip();
       showControls();
       return;
     }
 
-    // Non-controller: toggle skip vote
+    // Multi-viewer: toggle skip vote (majority required)
     const newVote = !mySkipVote;
     mySkipVote = newVote;
     skipBtn.classList.toggle('voted', newVote);
@@ -3366,9 +3366,10 @@
   // === Controls ===
   document.getElementById('ctrlSkip').addEventListener('click', () => {
     if (canSkipClip()) {
-      if (isController) {
-        controllerAdvance();
+      if (viewerCount <= 1) {
+        triggerSkip();
       } else {
+        // Multi-viewer: toggle skip vote (majority required)
         const newVote = !mySkipVote;
         mySkipVote = newVote;
         sendHeartbeat(newVote);
