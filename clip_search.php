@@ -701,15 +701,46 @@ if ($hasArchivedClips && $pdo) {
       color: #adadb8;
       font-size: 14px;
     }
+    .streamer-cta {
+      margin-top: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .streamer-cta .cta-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: linear-gradient(135deg, #9147ff, #772ce8);
+      color: #fff;
+      font-size: 15px;
+      font-weight: 600;
+      padding: 10px 20px;
+      border-radius: 8px;
+      text-decoration: none;
+      transition: transform 0.15s, box-shadow 0.15s;
+      width: fit-content;
+    }
+    .streamer-cta .cta-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 16px rgba(145, 71, 255, 0.35);
+    }
+    .streamer-cta .cta-btn:active {
+      transform: translateY(0);
+    }
+    .streamer-cta .cta-tagline {
+      color: #adadb8;
+      font-size: 12px;
+    }
     .streamer-links {
       display: flex;
       gap: 15px;
-      margin-top: 6px;
+      margin-top: 4px;
     }
     .streamer-links a {
       color: #adadb8;
       text-decoration: none;
-      font-size: 13px;
+      font-size: 12px;
       transition: color 0.2s;
     }
     .streamer-links a:hover {
@@ -1183,8 +1214,8 @@ if ($hasArchivedClips && $pdo) {
       header { flex-direction: column; align-items: flex-start; }
       .header-left { flex-wrap: wrap; }
       h1 { font-size: 20px; }
-      .streamer-links { gap: 12px; }
-      .streamer-links a { color: #9147ff; font-size: 14px; }
+      .streamer-cta .cta-btn { font-size: 14px; padding: 10px 18px; }
+      .streamer-links a { font-size: 12px; }
       .filters { flex-direction: column; }
       .filter-group { width: 100%; }
       .filter-group input,
@@ -1207,8 +1238,11 @@ if ($hasArchivedClips && $pdo) {
         <div>
           <h1><?= htmlspecialchars($login) ?>'s Clips</h1>
           <p class="subtitle"><?= $hasArchivedClips ? 'Archived' : 'Live from Twitch' ?></p>
+          <div class="streamer-cta">
+            <a href="/tv/<?= htmlspecialchars(urlencode($login)) ?>" class="cta-btn">&#9654; Start Watching on ClipTV</a>
+            <span class="cta-tagline">Synchronized community viewing, voting, and clip requests</span>
+          </div>
           <div class="streamer-links">
-            <a href="/tv/<?= htmlspecialchars(urlencode($login)) ?>">Watch on ClipTV</a>
             <a href="https://twitch.tv/<?= htmlspecialchars(urlencode($login)) ?>" target="_blank">Twitch Channel</a>
           </div>
         </div>
