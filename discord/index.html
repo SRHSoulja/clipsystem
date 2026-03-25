@@ -3390,7 +3390,15 @@ if (window.__discordResolve) window.__discordResolve();
       return;
     }
 
-    // Toggle skip vote
+    // Controller skips immediately (consistent with remote skip control)
+    if (isController) {
+      debugLog("Controller skip - advancing immediately", "ok");
+      triggerSkip();
+      showControls();
+      return;
+    }
+
+    // Non-controller: toggle skip vote
     const newVote = !mySkipVote;
     mySkipVote = newVote;
     skipBtn.classList.toggle('voted', newVote);
