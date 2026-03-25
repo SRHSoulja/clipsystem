@@ -85,16 +85,33 @@ function db_ensure_schema($pdo) {
         require_once __DIR__ . '/db_bootstrap.php';
         run_db_bootstrap($pdo);
     } catch (Exception $e) {
-        // Bootstrap failed hard — but still write the stamp so we don't
-        // 503-loop forever. The core tables likely exist already (they use
-        // IF NOT EXISTS). Worst case: a missing table causes a query error
-        // on the specific endpoint, which is better than ALL endpoints 503ing.
-        error_log("db_ensure_schema: bootstrap failed, writing stamp anyway: " . $e->getMessage());
+        error_log("db_ensure_schema: bootstrap exception: " . $e->getMessage());
     }
 
-    // Write stamp if bootstrap didn't (ensures we never 503-loop)
+    // Verify core tables exist before writing stamp.
+    // Only these 4 tables are required for hot endpoints.
+    $coreTables = ['sync_state', 'cliptv_viewers', 'cliptv_chat', 'cliptv_requests'];
+    $missing = [];
+    foreach ($coreTables as $table) {
+        try {
+            $pdo->query("SELECT 1 FROM {$table} LIMIT 0");
+        } catch (PDOException $e) {
+            $missing[] = $table;
+        }
+    }
+
+    if ($missing) {
+        flock($fp, LOCK_UN);
+        fclose($fp);
+        $list = implode(', ', $missing);
+        error_log("db_ensure_schema: core tables missing after bootstrap: {$list}");
+        _db_bootstrap_unavailable("Core tables missing: {$list}");
+    }
+
+    // Core tables verified — write stamp. Optional table failures
+    // (init_votes_tables etc.) were logged but don't block.
     if (!file_exists($cacheDir . '/db_bootstrapped.stamp')) {
-        @file_put_contents($cacheDir . '/db_bootstrapped.stamp', date('c') . " (fallback)\n");
+        @file_put_contents($cacheDir . '/db_bootstrapped.stamp', date('c') . "\n");
     }
 
     flock($fp, LOCK_UN);
